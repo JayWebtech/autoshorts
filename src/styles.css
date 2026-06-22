@@ -120,6 +120,11 @@ button:disabled {
   grid-template-columns: 36px 1fr;
   gap: 12px;
   align-items: center;
+  transition: opacity 0.2s ease;
+}
+
+.brand-row:hover {
+  opacity: 0.85;
 }
 
 .brand-mark {

@@ -346,7 +346,12 @@ function App() {
     <div className="app-shell-container">
       <main className="app-shell">
         <aside className="sidebar">
-          <div className="brand-row">
+          <div 
+            className="brand-row" 
+            onClick={() => setDetail(null)} 
+            style={{ cursor: "pointer" }} 
+            title="Go to Home Dashboard"
+          >
             <div className="brand-mark">
               <Clapperboard size={20} />
             </div>
@@ -362,6 +367,15 @@ function App() {
           </button>
 
           <section className="project-list" aria-label="Projects">
+            <button
+              className={`project-row ${!detail ? "active" : ""}`}
+              onClick={() => setDetail(null)}
+            >
+              <Clapperboard size={15} />
+              <span>All Projects</span>
+              <ChevronRight size={14} />
+            </button>
+
             {projects.map((project) => (
               <button
                 key={project.id}
