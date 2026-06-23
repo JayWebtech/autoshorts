@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import * as api from "./api";
 import {
   AudioLines,
   BadgeCheck,
@@ -144,15 +143,15 @@ function App() {
   async function refresh(nextProjectId?: string) {
     setError(null);
     const [env, projectList] = await Promise.all([
-      invoke<EnvironmentStatus>("environment_status"),
-      invoke<Project[]>("list_projects"),
+      api.getEnvironmentStatus(),
+      api.listProjects(),
     ]);
     setEnvironment(env);
     setProjects(projectList);
 
     if (nextProjectId) {
-      const nextDetail = await invoke<ProjectDetail>("get_project_detail", { projectId: nextProjectId });
-      setDetail(nextDetail);
+      const nextDetail = await api.getProjectDetail(nextProjectId);
+      setDetail(nextDetail as any);
     } else {
       setDetail(null);
     }
@@ -173,20 +172,9 @@ function App() {
   async function importMedia() {
     let newProjectId: string | null = null;
     await run("import", async () => {
-      const selected = await open({
-        multiple: false,
-        filters: [
-          {
-            name: "Media",
-            extensions: ["mp4", "mov", "mp3", "wav", "m4a"],
-          },
-        ],
-      });
-      if (typeof selected !== "string") return;
-      const project = await invoke<Project>("create_project_from_path", {
-        path: selected,
-        transcriptionMode: "cloud",
-      });
+      const selected = await api.openFileDialog();
+      if (!selected) return;
+      const project = await api.createProject(selected);
       newProjectId = project.id;
       await refresh(project.id);
     });
@@ -198,7 +186,7 @@ function App() {
 
   async function runAutoPipeline(projectId: string) {
     setError(null);
-    const env = await invoke<EnvironmentStatus>("environment_status");
+    const env = await api.getEnvironmentStatus();
     const hasDG = env.hasDeepgramKey || deepgramKey.trim().length > 0;
     const activeLlm = env.llmProvider || "deepseek";
     const hasActiveLlm = activeLlm === "claude"
@@ -213,11 +201,7 @@ function App() {
     // 1. Transcription
     try {
       setBusy("transcribe");
-      await invoke<Transcript>("transcribe_project", {
-        projectId,
-        provider: "deepgram",
-        apiKey: deepgramKey.trim() || null,
-      });
+      await api.transcribeProject(projectId, deepgramKey.trim() || null);
       await refresh(projectId);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -235,11 +219,7 @@ function App() {
     try {
       setBusy("moments");
       const activeKey = activeLlm === "claude" ? anthropicKey.trim() : deepseekKey.trim();
-      await invoke<Candidate[]>("generate_candidates", {
-        projectId,
-        apiKey: activeKey || null,
-        allowDemo: false,
-      });
+      await api.generateCandidates(projectId, activeKey || null);
       await refresh(projectId);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -258,7 +238,7 @@ function App() {
     if (!trimmed) return;
 
     try {
-      await invoke("rename_project", { projectId, name: trimmed });
+      await api.renameProject(projectId, trimmed);
       await refresh(detail?.project.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -272,7 +252,7 @@ function App() {
     if (!window.confirm(`Are you sure you want to delete the project "${name}"?`)) return;
 
     try {
-      await invoke("delete_project", { projectId });
+      await api.deleteProject(projectId);
       const nextActiveId = detail?.project.id === projectId ? null : detail?.project.id;
       await refresh(nextActiveId ?? undefined);
     } catch (err) {
@@ -282,19 +262,15 @@ function App() {
 
   async function selectProject(projectId: string) {
     await run("idle", async () => {
-      const nextDetail = await invoke<ProjectDetail>("get_project_detail", { projectId });
-      setDetail(nextDetail);
+      const nextDetail = await api.getProjectDetail(projectId);
+      setDetail(nextDetail as any);
     });
   }
 
   async function transcribe() {
     if (!detail) return;
     await run("transcribe", async () => {
-      await invoke<Transcript>("transcribe_project", {
-        projectId: detail.project.id,
-        provider: "deepgram",
-        apiKey: deepgramKey.trim() || null,
-      });
+      await api.transcribeProject(detail.project.id, deepgramKey.trim() || null);
       await refresh(detail.project.id);
     });
   }
@@ -303,11 +279,7 @@ function App() {
     if (!detail) return;
     await run("moments", async () => {
       const activeKey = activeLlmProvider === "claude" ? anthropicKey.trim() : deepseekKey.trim();
-      await invoke<Candidate[]>("generate_candidates", {
-        projectId: detail.project.id,
-        apiKey: activeKey || null,
-        allowDemo,
-      });
+      await api.generateCandidates(detail.project.id, activeKey || null);
       await refresh(detail.project.id);
     });
   }
@@ -315,18 +287,15 @@ function App() {
   async function updateClipCount(count: number) {
     if (!detail) return;
     await run("clipCount", async () => {
-      const candidates = await invoke<Candidate[]>("set_selected_clip_count", {
-        projectId: detail.project.id,
-        count,
-      });
-      setDetail({ ...detail, candidates });
+      const candidates = await api.setSelectedClipCount(detail.project.id, count);
+      setDetail({ ...detail, candidates: candidates as any });
     });
   }
 
   async function cutCandidate(candidateId: string) {
     if (!detail) return;
     await run("cut", async () => {
-      await invoke<string>("render_flat_clip_for_candidate", { candidateId });
+      await api.renderClip(candidateId);
       await refresh(detail.project.id);
     });
   }
@@ -335,7 +304,7 @@ function App() {
     if (!detail) return;
     await run("cut", async () => {
       for (const candidate of selectedCandidates) {
-        await invoke<string>("render_flat_clip_for_candidate", { candidateId: candidate.id });
+        await api.renderClip(candidate.id);
       }
       await refresh(detail.project.id);
     });

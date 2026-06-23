@@ -5,3 +5,7 @@ src-tauri/target
 .env
 .DS_Store
 *.log
+graphify-out/
+graph.html
+__pycache__/
+*.pyc
