@@ -432,6 +432,7 @@ async fn generate_candidates(
     api_key: Option<String>,
     provider: Option<String>,
     model_name: Option<String>,
+    target_seconds: Option<f64>,
     _allow_demo: bool,
 ) -> Result<Vec<Candidate>, String> {
     let db = state.db.clone();
@@ -441,6 +442,11 @@ async fn generate_candidates(
         .ok_or_else(|| "Transcribe the project before detecting moments.".to_string())?;
     let normalized: NormalizedTranscript =
         serde_json::from_str(&transcript.raw_json).map_err(to_command_error)?;
+
+    // Desired clip length from the UI, with a ±25% tolerance band for the model.
+    let target = target_seconds.unwrap_or(60.0).clamp(10.0, 600.0);
+    let min_seconds = (target * 0.75).max(5.0);
+    let max_seconds = target * 1.25;
 
     let active_provider = provider
         .or_else(|| std::env::var("LLM_PROVIDER").ok())
@@ -452,7 +458,7 @@ async fn generate_candidates(
             let key = api_key
                 .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
                 .ok_or_else(|| "Set ANTHROPIC_API_KEY or supply Claude API Key to generate candidates.".to_string())?;
-            llm::detect_candidates_with_claude(&normalized, &key)
+            llm::detect_candidates_with_claude(&normalized, &key, min_seconds, max_seconds)
                 .await
                 .map_err(to_command_error)?
         }
@@ -460,7 +466,7 @@ async fn generate_candidates(
             let model = model_name
                 .or_else(|| std::env::var("OLLAMA_MODEL").ok())
                 .unwrap_or_else(|| "llama3.2".to_string());
-            llm::detect_candidates_with_local_llm(&normalized, &model)
+            llm::detect_candidates_with_local_llm(&normalized, &model, min_seconds, max_seconds)
                 .await
                 .map_err(to_command_error)?
         }
@@ -468,7 +474,7 @@ async fn generate_candidates(
             let key = api_key
                 .or_else(|| std::env::var("DEEPSEEK_API_KEY").ok())
                 .ok_or_else(|| "Set DEEPSEEK_API_KEY or supply DeepSeek API Key to generate candidates.".to_string())?;
-            llm::detect_candidates_with_deepseek(&normalized, &key)
+            llm::detect_candidates_with_deepseek(&normalized, &key, min_seconds, max_seconds)
                 .await
                 .map_err(to_command_error)?
         }
@@ -874,7 +880,10 @@ fn build_drawtext_filters(
         let mut font_option = String::new();
         for path in &font_paths {
             if std::path::Path::new(path).exists() {
-                font_option = format!("fontfile='{}':", path);
+                // Escape the colon in Windows drive-letter paths (e.g. C:/...).
+                // Single quotes protect filtergraph-level separators (commas) but NOT
+                // drawtext's own option separator (':'), so the colon must be backslash-escaped.
+                font_option = format!("fontfile='{}':", path.replace(':', "\\:"));
                 break;
             }
         }

@@ -34,12 +34,15 @@ struct DeepseekResponse {
 pub async fn detect_candidates_with_deepseek(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    min_seconds: f64,
+    max_seconds: f64,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
+    let dur = format!("{:.0}-{:.0}", min_seconds, max_seconds);
     let prompt = format!(
         "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
 For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
-30-90 seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
+{dur} seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
 strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
 Avoid rambling setup, context-dependent references, and pure filler. Return up to 10 candidates as JSON matching this schema: \
 {{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
@@ -78,11 +81,7 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
         .map(|c| c.message.content.clone())
         .ok_or_else(|| anyhow!("DeepSeek response did not include choices content"))?;
 
-    let min_duration = if transcript.duration < 60.0 {
-        (transcript.duration * 0.5).max(5.0)
-    } else {
-        30.0
-    };
+    let min_duration = min_clip_duration(transcript.duration, min_seconds);
     parse_candidate_json(&text, min_duration)
 }
 
@@ -95,12 +94,15 @@ struct ClaudeMessage<'a> {
 pub async fn detect_candidates_with_claude(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    min_seconds: f64,
+    max_seconds: f64,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
+    let dur = format!("{:.0}-{:.0}", min_seconds, max_seconds);
     let prompt = format!(
         "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
 For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
-30-90 seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
+{dur} seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
 strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
 Avoid rambling setup, context-dependent references, and pure filler. Return up to 10 candidates as JSON only: \
 {{\"candidates\":[{{\"start\":0,\"end\":0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
@@ -141,11 +143,7 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
         .find_map(|content| content.text)
         .ok_or_else(|| anyhow!("Claude response did not include text content"))?;
 
-    let min_duration = if transcript.duration < 60.0 {
-        (transcript.duration * 0.5).max(5.0)
-    } else {
-        30.0
-    };
+    let min_duration = min_clip_duration(transcript.duration, min_seconds);
     parse_candidate_json(&text, min_duration)
 }
 
@@ -162,18 +160,20 @@ struct OllamaResponse {
 pub async fn detect_candidates_with_local_llm(
     transcript: &NormalizedTranscript,
     model_name: &str,
+    min_seconds: f64,
+    max_seconds: f64,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
-    
-    let system_instructions = "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
+
+    let system_instructions = format!("You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
 For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
-30-90 seconds long, and cut at clean sentence/thought boundaries. \
-CRITICAL: Each clip candidate MUST have a duration between 30 and 90 seconds (i.e. 'end' minus 'start' must be between 30.0 and 90.0). \
-Do NOT return short clips of less than 30 seconds. Combine multiple adjacent sentences to build a meaningful segment of 30-90 seconds. \
+{min_seconds:.0}-{max_seconds:.0} seconds long, and cut at clean sentence/thought boundaries. \
+CRITICAL: Each clip candidate MUST have a duration between {min_seconds:.0} and {max_seconds:.0} seconds (i.e. 'end' minus 'start' must be between {min_seconds:.1} and {max_seconds:.1}). \
+Do NOT return short clips of less than {min_seconds:.0} seconds. Combine multiple adjacent sentences to build a meaningful segment of {min_seconds:.0}-{max_seconds:.0} seconds. \
 Favor highly shareable content: concrete stories, strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
 Avoid rambling setup, context-dependent references, and pure filler. \
 You MUST identify and return at least 3-5 candidates (up to 10 candidates). Do not return an empty candidates list. \
-Ensure the 'start' and 'end' values correspond to actual timestamps in the transcript. Do not output 0.0 for start and end times.";
+Ensure the 'start' and 'end' values correspond to actual timestamps in the transcript. Do not output 0.0 for start and end times.");
 
     let user_content = format!("Transcript:\n{}", segments);
 
@@ -227,12 +227,19 @@ Ensure the 'start' and 'end' values correspond to actual timestamps in the trans
     }
 
     let res_body: OllamaResponse = response.json().await.context("parsing local Ollama response")?;
-    let min_duration = if transcript.duration < 60.0 {
-        (transcript.duration * 0.5).max(5.0)
-    } else {
-        30.0
-    };
+    let min_duration = min_clip_duration(transcript.duration, min_seconds);
     parse_candidate_json(&res_body.message.content, min_duration)
+}
+
+/// Minimum acceptable clip length, relaxed for transcripts shorter than the
+/// requested band so very short sources still yield candidates.
+// ponytail: simple heuristic; revisit if users want a hard floor regardless of source length
+fn min_clip_duration(transcript_duration: f64, min_seconds: f64) -> f64 {
+    if transcript_duration < min_seconds * 2.0 {
+        (transcript_duration * 0.5).max(5.0)
+    } else {
+        min_seconds
+    }
 }
 
 pub fn demo_candidates(transcript: &NormalizedTranscript) -> Vec<CandidateDraft> {

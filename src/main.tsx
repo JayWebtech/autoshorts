@@ -131,6 +131,9 @@ function App() {
   const [localLlmModel, setLocalLlmModel] = useState(() => {
     return localStorage.getItem("autoshorts_local_llm_model") || "llama3.2";
   });
+  const [clipLength, setClipLength] = useState(() => {
+    return Number(localStorage.getItem("autoshorts_clip_length")) || 60;
+  });
   const [deepgramKey, setDeepgramKey] = useState(() => {
     return localStorage.getItem("autoshorts_deepgram_key") || "";
   });
@@ -200,6 +203,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("autoshorts_local_llm_model", localLlmModel);
   }, [localLlmModel]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_clip_length", String(clipLength));
+  }, [clipLength]);
 
   useEffect(() => {
     localStorage.setItem("autoshorts_deepgram_key", deepgramKey);
@@ -365,6 +372,7 @@ function App() {
         apiKey: activeKey || null,
         provider: llmEngine,
         modelName: llmEngine === "local" ? localLlmModel.trim() : null,
+        targetSeconds: clipLength,
         allowDemo: false,
       });
       await refresh(projectId);
@@ -447,6 +455,7 @@ function App() {
           apiKey: activeKey || null,
           provider: llmEngine,
           modelName: llmEngine === "local" ? localLlmModel.trim() : null,
+          targetSeconds: clipLength,
           allowDemo,
         });
         await refresh(detail.project.id);
@@ -633,6 +642,17 @@ function App() {
                         <option value="claude">Claude (Cloud)</option>
                         <option value="deepseek">DeepSeek (Cloud)</option>
                       </select>
+                    </label>
+                    <label>
+                      <span>Clip Length (seconds)</span>
+                      <input
+                        value={clipLength}
+                        onChange={(event) => setClipLength(Number(event.target.value) || 0)}
+                        onBlur={() => setClipLength((v) => Math.min(600, Math.max(10, v || 60)))}
+                        type="number"
+                        min={10}
+                        max={600}
+                      />
                     </label>
                     {transcriptionEngine === "deepgram" && (
                       <label>
