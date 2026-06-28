@@ -106,7 +106,7 @@ pub fn render_flat_clip(
     start_sec: f64,
     end_sec: f64,
     output_path: &Path,
-    drawtext_filters: Option<&str>,
+    video_filter: Option<&str>,
 ) -> Result<PathBuf> {
     if !command_exists("ffmpeg") {
         return Err(anyhow!("ffmpeg is not installed or not available on PATH"));
@@ -123,13 +123,13 @@ pub fn render_flat_clip(
     let has_video = probe.map(|p| p.has_video).unwrap_or(false);
 
     let mut cmd = Command::new("ffmpeg");
-    cmd.args(["-y", "-i", source_path, "-ss", &start, "-to", &end]);
+    cmd.args(["-y", "-ss", &start, "-to", &end, "-i", source_path]);
 
     if has_video {
         let mut filter = "crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)'".to_string();
-        if let Some(drawtext) = drawtext_filters {
-            if !drawtext.is_empty() {
-                filter = format!("{},{}", filter, drawtext);
+        if let Some(extra_filter) = video_filter {
+            if !extra_filter.is_empty() {
+                filter = format!("{},{}", filter, extra_filter);
             }
         }
         cmd.args(["-vf", &filter]);
