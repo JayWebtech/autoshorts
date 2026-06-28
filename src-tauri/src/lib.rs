@@ -4,7 +4,7 @@ mod media;
 mod models;
 mod transcription;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use tauri::{Emitter, Manager};
@@ -515,9 +515,13 @@ fn render_flat_clip_for_candidate(
     let output_path = documents_project_dir(&project)?
         .join("clips")
         .join(format!("clip-{:02}_flat.mp4", candidate.rank));
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create output dir: {}", e))?;
+    }
 
     let mut srt_path = None;
-    let mut drawtext_filters = None;
+    let mut video_filter = None;
 
     let probe = media::probe_media(&project.source_path).ok();
     let cropped_width = if let Some(p) = &probe {
@@ -532,20 +536,18 @@ fn render_flat_clip_for_candidate(
     if let Ok(Some(transcript_record)) = state.db.latest_transcript(&project.id) {
         if let Ok(normalized) = serde_json::from_str::<NormalizedTranscript>(&transcript_record.raw_json) {
             let srt_content = generate_srt(&normalized.words, candidate.start_sec, candidate.end_sec);
-            let clip_srt_path = project_dir(&state, &project.id).join(format!("clip-{}.srt", candidate.id));
+            #[cfg(target_os = "windows")]
+            let subtitles_dir = PathBuf::from(r"D:\AS\raw\subtitles");
+            #[cfg(not(target_os = "windows"))]
+            let subtitles_dir = project_dir(&state, &project.id);
+            std::fs::create_dir_all(&subtitles_dir)
+                .map_err(|e| format!("Failed to create subtitles dir: {}", e))?;
+            let clip_srt_path = subtitles_dir.join(format!("clip-{}.srt", candidate.id));
             if std::fs::write(&clip_srt_path, srt_content).is_ok() {
                 srt_path = Some(clip_srt_path);
             }
-            let style = project.caption_style.as_deref().unwrap_or("modern-box");
-            let drawtext = build_drawtext_filters(
-                &normalized.words,
-                candidate.start_sec,
-                candidate.end_sec,
-                cropped_width,
-                style,
-            );
-            if !drawtext.is_empty() {
-                drawtext_filters = Some(drawtext);
+            if let Some(ref subtitle_path) = srt_path {
+                video_filter = Some(build_subtitles_filter(subtitle_path));
             }
         }
     }
@@ -555,7 +557,7 @@ fn render_flat_clip_for_candidate(
         candidate.start_sec,
         candidate.end_sec,
         &output_path,
-        drawtext_filters.as_deref(),
+        video_filter.as_deref(),
     ) {
         Ok(path) => {
             let path_string = path.to_string_lossy().to_string();
@@ -670,11 +672,21 @@ fn project_dir(state: &AppState, project_id: &str) -> PathBuf {
 }
 
 fn documents_project_dir(project: &Project) -> Result<PathBuf, String> {
-    let documents_dir = dirs::document_dir()
-        .ok_or_else(|| "Could not find your Documents folder for clip output.".to_string())?;
-    Ok(documents_dir
-        .join("AutoShorts")
-        .join(project_output_slug(project)))
+    #[cfg(target_os = "windows")]
+    let base = PathBuf::from("D:\\AS\\raw");
+
+    #[cfg(not(target_os = "windows"))]
+    let base = {
+        let documents_dir = dirs::document_dir()
+            .ok_or_else(|| "Could not find your Documents folder for clip output.".to_string())?;
+        documents_dir.join("AutoShorts").join(project_output_slug(project))
+    };
+
+    #[cfg(target_os = "windows")]
+    let _ = project; // suppress unused warning on Windows
+
+    std::fs::create_dir_all(&base).map_err(|e| format!("Failed to create output dir: {}", e))?;
+    Ok(base)
 }
 
 fn project_output_slug(project: &Project) -> String {
@@ -812,6 +824,16 @@ fn format_srt_time(start: f64, end: f64) -> String {
     format!("{} --> {}", format_time(start), format_time(end))
 }
 
+fn build_subtitles_filter(subtitle_path: &Path) -> String {
+    let path = subtitle_path
+        .to_string_lossy()
+        .replace('\\', "/");
+    let escaped_path = path
+        .replace(':', "\\\\:")
+        .replace(' ', "\\\\ ");
+    format!("subtitles={}", escaped_path)
+}
+
 fn build_drawtext_filters(
     words: &[TranscriptWord],
     start_sec: f64,
@@ -856,80 +878,59 @@ fn build_drawtext_filters(
         let fontsize = ((cropped_width as f64) * 0.075).clamp(16.0, 80.0).round() as i64;
         let padding = ((fontsize as f64) * 0.3).clamp(4.0, 24.0).round() as i64;
 
-        // Premium system font hierarchy
-        let font_paths = [
-            // macOS
-            "/System/Library/Fonts/Supplemental/Futura.ttc",
-            "/System/Library/Fonts/Avenir Next.ttc",
-            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            // Windows
-            "C:/Windows/Fonts/SegoeUIb.ttf",
-            "C:/Windows/Fonts/arialbd.ttf",
-            "C:/Windows/Fonts/arial.ttf",
-            // Linux
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-        ];
-        let mut font_option = String::new();
-        for path in &font_paths {
-            if std::path::Path::new(path).exists() {
-                font_option = format!("fontfile='{}':", path.replace(':', "\:"));
-                break;
-            }
-        }
-        
+        let escaped_text = clean_text.replace('\'', "\\'");
+
         let drawtext = match caption_style {
             "classic-outline" => {
                 // Classic yellow text with a bold outline (CapCut style)
                 let borderw = ((fontsize as f64) * 0.1).clamp(2.0, 8.0).round() as i64;
                 format!(
-                    "drawtext={}text='{}':x=(w-text_w)/2:y=h*0.65:fontsize={}:fontcolor=yellow:borderw={}:bordercolor=black:enable='between(t,{:.3},{:.3})'",
-                    font_option, clean_text, fontsize, borderw, start_rel, end_rel
+                    "drawtext=text='{}':x=(w-text_w)/2:y=h*0.65:fontsize={}:fontcolor=yellow:borderw={}:bordercolor=black:enable='between(t,{:.3},{:.3})'",
+                    escaped_text, fontsize, borderw, start_rel, end_rel
                 )
             }
             "minimal-shadow" => {
                 // Sleek white text with a soft drop shadow (Minimalist)
                 format!(
-                    "drawtext={}text='{}':x=(w-text_w)/2:y=h*0.7:fontsize={}:fontcolor=white:shadowcolor=black@0.5:shadowx=2:shadowy=2:enable='between(t,{:.3},{:.3})'",
-                    font_option, clean_text, fontsize, start_rel, end_rel
+                    "drawtext=text='{}':x=(w-text_w)/2:y=h*0.7:fontsize={}:fontcolor=white:shadowcolor=black@0.5:shadowx=2:shadowy=2:enable='between(t,{:.3},{:.3})'",
+                    escaped_text, fontsize, start_rel, end_rel
                 )
             }
             "vibrant-cyan" => {
                 // Modern Avenir Next look with clean cyan color and thin shadow
                 format!(
-                    "drawtext={}text='{}':x=(w-text_w)/2:y=h*0.7:fontsize={}:fontcolor=0x00FFFF:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='between(t,{:.3},{:.3})'",
-                    font_option, clean_text, fontsize, start_rel, end_rel
+                    "drawtext=text='{}':x=(w-text_w)/2:y=h*0.7:fontsize={}:fontcolor=0x00FFFF:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='between(t,{:.3},{:.3})'",
+                    escaped_text, fontsize, start_rel, end_rel
                 )
             }
             "vibrant-yellow-box" => {
                 // Vibrant black text inside a solid yellow background box (Motivational/TikTok style)
                 format!(
-                    "drawtext={}text='{}':x=(w-text_w)/2:y=h*0.72:fontsize={}:fontcolor=black:box=1:boxcolor=0xffff00e0:boxborderw={}:enable='between(t,{:.3},{:.3})'",
-                    font_option, clean_text, fontsize, padding, start_rel, end_rel
+                    "drawtext=text='{}':x=(w-text_w)/2:y=h*0.72:fontsize={}:fontcolor=black:box=1:boxcolor=0xffff00e0:boxborderw={}:enable='between(t,{:.3},{:.3})'",
+                    escaped_text, fontsize, padding, start_rel, end_rel
                 )
             }
             "vibrant-green" => {
                 // High-energy neon green text with outline & drop shadow (Hormozi style)
                 let borderw = ((fontsize as f64) * 0.08).clamp(1.5, 6.0).round() as i64;
                 format!(
-                    "drawtext={}text='{}':x=(w-text_w)/2:y=h*0.7:fontsize={}:fontcolor=0x39FF14:borderw={}:bordercolor=black:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='between(t,{:.3},{:.3})'",
-                    font_option, clean_text, fontsize, borderw, start_rel, end_rel
+                    "drawtext=text='{}':x=(w-text_w)/2:y=h*0.7:fontsize={}:fontcolor=0x39FF14:borderw={}:bordercolor=black:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='between(t,{:.3},{:.3})'",
+                    escaped_text, fontsize, borderw, start_rel, end_rel
                 )
             }
             "vibrant-red" => {
                 // Dramatic red text with outline & drop shadow (Gaming/Drama style)
                 let borderw = ((fontsize as f64) * 0.08).clamp(1.5, 6.0).round() as i64;
                 format!(
-                    "drawtext={}text='{}':x=(w-text_w)/2:y=h*0.7:fontsize={}:fontcolor=0xFF3B30:borderw={}:bordercolor=black:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='between(t,{:.3},{:.3})'",
-                    font_option, clean_text, fontsize, borderw, start_rel, end_rel
+                    "drawtext=text='{}':x=(w-text_w)/2:y=h*0.7:fontsize={}:fontcolor=0xFF3B30:borderw={}:bordercolor=black:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='between(t,{:.3},{:.3})'",
+                    escaped_text, fontsize, borderw, start_rel, end_rel
                 )
             }
             _ => {
                 // modern-box (Default): white text with clean box background
                 format!(
-                    "drawtext={}text='{}':x=(w-text_w)/2:y=h*0.72:fontsize={}:fontcolor=white:box=1:boxcolor=0x000000b0:boxborderw={}:enable='between(t,{:.3},{:.3})'",
-                    font_option, clean_text, fontsize, padding, start_rel, end_rel
+                    "drawtext=text='{}':x=(w-text_w)/2:y=h*0.72:fontsize={}:fontcolor=white:box=1:boxcolor=0x000000b0:boxborderw={}:enable='between(t,{:.3},{:.3})'",
+                    escaped_text, fontsize, padding, start_rel, end_rel
                 )
             }
         };
