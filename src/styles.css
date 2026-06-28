@@ -1714,3 +1714,222 @@ button:disabled {
   font-weight: 700;
   color: var(--accent-primary);
 }
+
+/* ─── YouTube Caption Panel ─────────────────────────────────────────────────── */
+
+.yt-caption-panel {
+  margin-top: 10px;
+  border: 1px solid rgba(255, 0, 0, 0.18);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 0, 0, 0.03);
+}
+
+.yt-panel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 12px;
+  background: transparent;
+  border: none;
+  color: #ff7070;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
+  border-radius: 0;
+}
+
+.yt-panel-toggle:active {
+  transform: none;
+}
+
+.yt-panel-toggle:hover {
+  background: rgba(255, 60, 60, 0.08);
+  color: #ff9090;
+}
+
+.yt-panel-toggle.open {
+  background: rgba(255, 60, 60, 0.08);
+  color: #ffaaaa;
+  border-bottom: 1px solid rgba(255, 0, 0, 0.15);
+}
+
+.yt-panel-toggle span {
+  flex: 1;
+}
+
+.yt-panel-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: slideInDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.yt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.yt-field-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.yt-field-header > span:first-of-type {
+  flex: 1;
+}
+
+.yt-char-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  flex: none !important;
+}
+
+.yt-char-count.warn {
+  color: #f87171;
+}
+
+.yt-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--accent-primary);
+  background: rgba(142, 230, 199, 0.08);
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex: none !important;
+}
+
+.yt-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid rgba(255, 0, 0, 0.15);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  transition: border-color 0.2s ease;
+  cursor: text;
+}
+
+.yt-textarea:focus {
+  border-color: rgba(255, 60, 60, 0.4);
+  color: var(--text-primary);
+}
+
+.yt-textarea-sm {
+  font-size: 11.5px;
+}
+
+.yt-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  min-height: 22px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.yt-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+}
+
+.yt-copy-btn:active {
+  transform: scale(0.95);
+}
+
+.yt-upload-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(255, 0, 0, 0.04);
+  border: 1px dashed rgba(255, 0, 0, 0.2);
+  border-radius: 6px;
+  color: #ff8080;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.yt-upload-hint svg {
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+/* ─── YouTube Import Sidebar & Buttons ────────────────────────────────────── */
+
+.sidebar .yt-import-btn {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
+
+.sidebar .yt-import-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ff8080;
+}
+
+.empty-dashboard-state .yt-import-btn {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
+
+.empty-dashboard-state .yt-import-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ff8080;
+}
+
+.yt-modal-input, .yt-modal-select {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.yt-modal-input:focus, .yt-modal-select:focus {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.15);
+}
+
+.btn-youtube {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #dc2626 !important;
+}
+
+.btn-youtube:hover:not(:disabled) {
+  background: #dc2626 !important;
+  border-color: #b91c1c !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+}
+
+.btn-youtube:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+

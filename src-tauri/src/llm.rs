@@ -81,7 +81,7 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
     let min_duration = if transcript.duration < 60.0 {
         (transcript.duration * 0.5).max(5.0)
     } else {
-        30.0
+        15.0
     };
     parse_candidate_json(&text, min_duration)
 }
@@ -144,7 +144,7 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
     let min_duration = if transcript.duration < 60.0 {
         (transcript.duration * 0.5).max(5.0)
     } else {
-        30.0
+        15.0
     };
     parse_candidate_json(&text, min_duration)
 }
@@ -230,7 +230,7 @@ Ensure the 'start' and 'end' values correspond to actual timestamps in the trans
     let min_duration = if transcript.duration < 60.0 {
         (transcript.duration * 0.5).max(5.0)
     } else {
-        30.0
+        15.0
     };
     parse_candidate_json(&res_body.message.content, min_duration)
 }
@@ -286,14 +286,24 @@ fn compact_segments(segments: &[TranscriptSegment]) -> String {
 }
 
 fn parse_candidate_json(text: &str, min_duration: f64) -> Result<Vec<CandidateDraft>> {
-    let trimmed = text
-        .trim()
-        .trim_start_matches("```json")
-        .trim_start_matches("```")
-        .trim_end_matches("```")
-        .trim();
+    let mut trimmed = text.trim();
+    
+    let start_idx = trimmed.find(|c| c == '{' || c == '[');
+    let end_idx = trimmed.rfind(|c| c == '}' || c == ']');
+    
+    if let (Some(s), Some(e)) = (start_idx, end_idx) {
+        if e >= s {
+            trimmed = &trimmed[s..=e];
+        }
+    }
 
-    let val: serde_json::Value = serde_json::from_str(trimmed).context("parsing candidate JSON")?;
+    // Fix common LLM hallucination where it forgets the colon
+    let fixed_json = trimmed
+        .replace("\"rationale\" \"", "\"rationale\": \"")
+        .replace("\"rationale \"", "\"rationale\": \"")
+        .replace("\"rationale\"\"", "\"rationale\": \"");
+
+    let val: serde_json::Value = serde_json::from_str(&fixed_json).context(format!("parsing candidate JSON. Trimmed: {}", fixed_json))?;
     
     let candidates_arr = if val.is_array() {
         val.as_array().cloned()

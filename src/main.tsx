@@ -22,6 +22,12 @@ import {
   Copy,
   Database,
   Cloud,
+  Youtube,
+  ChevronDown,
+  ChevronUp,
+  Hash,
+  Type,
+  AlignLeft,
 } from "lucide-react";
 import "./styles.css";
 
@@ -119,6 +125,13 @@ function App() {
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState("modern-box");
   const [mediaPathToImport, setMediaPathToImport] = useState<string | null>(null);
+  
+  const [showYouTubeModal, setShowYouTubeModal] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [youtubeResolution, setYoutubeResolution] = useState("1080p");
+  const [youtubeDownloadProgress, setYoutubeDownloadProgress] = useState(0);
+  const [youtubeDownloadStatus, setYoutubeDownloadStatus] = useState("");
+  const [isDownloadingYouTube, setIsDownloadingYouTube] = useState(false);
 
   // Persistence logic from localStorage
   const [isOnboarded, setIsOnboarded] = useState<boolean | null>(null);
@@ -305,6 +318,61 @@ function App() {
 
     if (newProjectId) {
       await runAutoPipeline(newProjectId);
+    }
+  }
+
+  async function handleYouTubeDownloadAndImport() {
+    if (!youtubeUrl.trim()) return;
+    const url = youtubeUrl.trim();
+    const resolution = youtubeResolution;
+    const style = selectedStyle;
+    
+    setShowYouTubeModal(false);
+    setYoutubeUrl("");
+    setIsDownloadingYouTube(true);
+    setYoutubeDownloadProgress(0);
+    setYoutubeDownloadStatus("Starting YouTube download...");
+    
+    let localPath: string | null = null;
+    try {
+      const unlisten = await listen<{
+        status: string;
+        percentage: number;
+      }>("youtube-download-progress", (event) => {
+        const payload = event.payload;
+        setYoutubeDownloadStatus(payload.status);
+        setYoutubeDownloadProgress(Math.round(payload.percentage));
+      });
+      
+      const downloadedPath = await invoke<string>("download_youtube_video", {
+        url,
+        resolution,
+      });
+      unlisten();
+      localPath = downloadedPath;
+    } catch (err) {
+      alert("YouTube download failed: " + String(err));
+      setIsDownloadingYouTube(false);
+      return;
+    }
+    
+    setIsDownloadingYouTube(false);
+    
+    if (localPath) {
+      let newProjectId: string | null = null;
+      await run("import", async () => {
+        const project = await invoke<Project>("create_project_from_path", {
+          path: localPath,
+          transcriptionMode: transcriptionEngine === "local" ? "local" : "cloud",
+          captionStyle: style,
+        });
+        newProjectId = project.id;
+        await refresh(project.id);
+      });
+
+      if (newProjectId) {
+        await runAutoPipeline(newProjectId);
+      }
     }
   }
 
@@ -561,6 +629,16 @@ function App() {
           <button className="primary-action" onClick={importMedia} disabled={busy !== "idle"}>
             {busy === "import" ? <Loader2 className="spin" size={18} /> : <FileVideo size={18} />}
             Import recording
+          </button>
+
+          <button 
+            className="primary-action yt-import-btn" 
+            onClick={() => setShowYouTubeModal(true)} 
+            disabled={busy !== "idle"}
+            style={{ marginTop: "8px" }}
+          >
+            <Youtube size={18} />
+            Import from YouTube
           </button>
 
           <section className="project-list" aria-label="Projects">
@@ -847,6 +925,15 @@ function App() {
                               </div>
                             )}
                             {clip?.renderLog && <div className="render-log">{clip.renderLog}</div>}
+                            {isCut && (
+                              <YouTubeCaptionPanel
+                                hook={candidate.hook}
+                                rationale={candidate.rationale}
+                                startSec={candidate.startSec}
+                                endSec={candidate.endSec}
+                                rank={candidate.rank}
+                              />
+                            )}
                           </div>
                         </article>
                       );
@@ -903,7 +990,15 @@ function App() {
                 <div className="empty-dashboard-state">
                   <Clapperboard size={48} className="empty-state-icon" />
                   <h3>No projects found</h3>
-                  <p>Import your first recording to begin creating shorts.</p>
+                  <p>Import your first recording or import directly from YouTube to begin creating shorts.</p>
+                  <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
+                    <button className="primary-action" onClick={importMedia} disabled={busy !== "idle"}>
+                      <FileVideo size={18} /> Import local recording
+                    </button>
+                    <button className="primary-action yt-import-btn" onClick={() => setShowYouTubeModal(true)} disabled={busy !== "idle"}>
+                      <Youtube size={18} /> Import from YouTube
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1026,26 +1121,153 @@ function App() {
           </div>
         </div>
       )}
-      {downloadingModelName && (
+      {showYouTubeModal && (
+        <div className="style-modal-overlay" style={{ zIndex: 10000 }}>
+          <div className="style-modal" style={{ maxWidth: '540px' }}>
+            <div className="style-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Youtube size={24} color="#ff4d4d" />
+                <h3>Import from YouTube</h3>
+              </div>
+              <p>Paste a YouTube URL, choose the max resolution, and select caption style to import.</p>
+            </div>
+            
+            <div className="yt-modal-body" style={{ padding: '16px 0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="yt-modal-field" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>YouTube Video URL</label>
+                <input
+                  type="text"
+                  className="yt-modal-input"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    color: 'var(--text-primary)',
+                    outline: 'none'
+                  }}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                />
+              </div>
+
+              <div className="yt-modal-field" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Max Resolution</label>
+                <select
+                  className="yt-modal-select"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    color: 'var(--text-primary)',
+                    outline: 'none'
+                  }}
+                  value={youtubeResolution}
+                  onChange={(e) => setYoutubeResolution(e.target.value)}
+                >
+                  <option value="best">Best Quality</option>
+                  <option value="2160p">4K (2160p)</option>
+                  <option value="1080p">1080p</option>
+                  <option value="720p">720p</option>
+                  <option value="480p">480p</option>
+                </select>
+              </div>
+
+              <div className="yt-modal-field" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Caption Style</label>
+                <div className="style-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
+                  <div 
+                    className={`style-card compact ${selectedStyle === "modern-box" ? "selected" : ""}`}
+                    onClick={() => setSelectedStyle("modern-box")}
+                    style={{ padding: '8px', cursor: 'pointer' }}
+                  >
+                    <div className="style-card-title" style={{ fontSize: '12px', fontWeight: 600 }}>Modern Box</div>
+                  </div>
+                  <div 
+                    className={`style-card compact ${selectedStyle === "classic-outline" ? "selected" : ""}`}
+                    onClick={() => setSelectedStyle("classic-outline")}
+                    style={{ padding: '8px', cursor: 'pointer' }}
+                  >
+                    <div className="style-card-title" style={{ fontSize: '12px', fontWeight: 600 }}>Classic Outline</div>
+                  </div>
+                  <div 
+                    className={`style-card compact ${selectedStyle === "minimal-shadow" ? "selected" : ""}`}
+                    onClick={() => setSelectedStyle("minimal-shadow")}
+                    style={{ padding: '8px', cursor: 'pointer' }}
+                  >
+                    <div className="style-card-title" style={{ fontSize: '12px', fontWeight: 600 }}>Minimal Shadow</div>
+                  </div>
+                  <div 
+                    className={`style-card compact ${selectedStyle === "vibrant-cyan" ? "selected" : ""}`}
+                    onClick={() => setSelectedStyle("vibrant-cyan")}
+                    style={{ padding: '8px', cursor: 'pointer' }}
+                  >
+                    <div className="style-card-title" style={{ fontSize: '12px', fontWeight: 600 }}>Vibrant Cyan</div>
+                  </div>
+                  <div 
+                    className={`style-card compact ${selectedStyle === "vibrant-yellow-box" ? "selected" : ""}`}
+                    onClick={() => setSelectedStyle("vibrant-yellow-box")}
+                    style={{ padding: '8px', cursor: 'pointer' }}
+                  >
+                    <div className="style-card-title" style={{ fontSize: '12px', fontWeight: 600 }}>Vibrant Yellow Box</div>
+                  </div>
+                  <div 
+                    className={`style-card compact ${selectedStyle === "vibrant-green" ? "selected" : ""}`}
+                    onClick={() => setSelectedStyle("vibrant-green")}
+                    style={{ padding: '8px', cursor: 'pointer' }}
+                  >
+                    <div className="style-card-title" style={{ fontSize: '12px', fontWeight: 600 }}>Vibrant Green</div>
+                  </div>
+                  <div 
+                    className={`style-card compact ${selectedStyle === "vibrant-red" ? "selected" : ""}`}
+                    onClick={() => setSelectedStyle("vibrant-red")}
+                    style={{ padding: '8px', cursor: 'pointer' }}
+                  >
+                    <div className="style-card-title" style={{ fontSize: '12px', fontWeight: 600 }}>Vibrant Red</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="style-modal-actions">
+              <button className="btn-cancel" onClick={() => { setShowYouTubeModal(false); setYoutubeUrl(""); }}>
+                Cancel
+              </button>
+              <button 
+                className="btn-confirm btn-youtube" 
+                onClick={handleYouTubeDownloadAndImport}
+                disabled={!youtubeUrl.trim()}
+              >
+                Download & Import
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isDownloadingYouTube && (
         <div className="onboarding-overlay" style={{ zIndex: 20000 }}>
           <div className="onboarding-card" style={{ maxWidth: '480px', textAlign: 'center' }}>
             <div className="onboarding-header compact" style={{ textAlign: 'center' }}>
-              <h2>Downloading Ollama Model</h2>
-              <p>Downloading model weights for "{downloadingModelName}". Please do not close the app.</p>
+              <h2>Downloading YouTube Video</h2>
+              <p>Downloading video format via yt-dlp. Please do not close the app.</p>
             </div>
 
             <div className="download-progress-container">
               <div className="download-loader">
-                <Loader2 className="spin" size={48} />
+                <Loader2 className="spin" size={48} style={{ color: '#ff4d4d' }} />
               </div>
               
               <div className="progress-bar-container">
-                <div className="progress-bar-fill" style={{ width: `${modelDownloadProgress}%` }}></div>
+                <div className="progress-bar-fill" style={{ width: `${youtubeDownloadProgress}%`, backgroundColor: '#ff4d4d' }}></div>
               </div>
               
               <div className="download-stats">
-                <span className="download-status">{modelDownloadStatus}</span>
-                <span className="download-percentage">{modelDownloadProgress}%</span>
+                <span className="download-status">{youtubeDownloadStatus}</span>
+                <span className="download-percentage" style={{ color: '#ff4d4d' }}>{youtubeDownloadProgress}%</span>
               </div>
             </div>
           </div>
@@ -1060,6 +1282,145 @@ function StatusPill({ label, active }: { label: string; active?: boolean }) {
     <div className={`status-pill ${active ? "active" : ""}`}>
       <BadgeCheck size={14} />
       {label}
+    </div>
+  );
+}
+
+// ─── YouTube Caption Panel ───────────────────────────────────────────────────
+
+function generateYouTubeCaption(hook: string, rationale: string, rank: number) {
+  // Build YouTube title (do not auto-truncate, let user edit)
+  const title = hook.replace(/["']/g, "").trim();
+
+  // Hashtags extracted from rationale keywords + generic shorts tags
+  const rationaleWords = rationale
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 4)
+    .slice(0, 5)
+    .map((w) => `#${w}`);
+  const genericTags = ["#Shorts", "#viral", "#fyp", "#trending", "#reels"];
+  const hashtags = [...new Set([...rationaleWords, ...genericTags])].slice(0, 8).join(" ");
+
+  // Description
+  const description =
+    `${rationale}\n\n` +
+    `🔥 Clip #${rank} | AutoShorts\n\n` +
+    hashtags;
+
+  return { title, description, hashtags };
+}
+
+type CopyButtonProps = { text: string; label?: string };
+function CopyButton({ text, label }: CopyButtonProps) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      className="yt-copy-btn"
+      onClick={handleCopy}
+      title={`Copy ${label ?? ""}`}
+    >
+      {copied ? <Check size={13} /> : <Copy size={13} />}
+      {copied ? "Copied!" : `Copy ${label ?? ""}`}
+    </button>
+  );
+}
+
+function YouTubeCaptionPanel({
+  hook,
+  rationale,
+  startSec,
+  endSec,
+  rank,
+}: {
+  hook: string;
+  rationale: string;
+  startSec: number;
+  endSec: number;
+  rank: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const { title, description, hashtags } = generateYouTubeCaption(hook, rationale, rank);
+  const duration = Math.round(endSec - startSec);
+
+  return (
+    <div className="yt-caption-panel">
+      <button
+        className={`yt-panel-toggle ${open ? "open" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+        id={`yt-panel-toggle-${rank}`}
+      >
+        <Youtube size={14} />
+        <span>YouTube Caption Suggestions</span>
+        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+      </button>
+
+      {open && (
+        <div className="yt-panel-body">
+          {/* Title */}
+          <div className="yt-field">
+            <div className="yt-field-header">
+              <Type size={13} />
+              <span>Title</span>
+              <span className={`yt-char-count ${title.length > 90 ? "warn" : ""}`}>
+                {title.length}/100
+              </span>
+              <CopyButton text={title} label="title" />
+            </div>
+            <textarea
+              className="yt-textarea"
+              value={title}
+              readOnly
+              rows={2}
+              id={`yt-title-${rank}`}
+            />
+          </div>
+
+          {/* Description */}
+          <div className="yt-field">
+            <div className="yt-field-header">
+              <AlignLeft size={13} />
+              <span>Description</span>
+              <CopyButton text={description} label="description" />
+            </div>
+            <textarea
+              className="yt-textarea"
+              value={description}
+              readOnly
+              rows={6}
+              id={`yt-description-${rank}`}
+            />
+          </div>
+
+          {/* Hashtags */}
+          <div className="yt-field">
+            <div className="yt-field-header">
+              <Hash size={13} />
+              <span>Hashtags</span>
+              <span className="yt-meta">{duration}s clip</span>
+              <CopyButton text={hashtags} label="hashtags" />
+            </div>
+            <textarea
+              className="yt-textarea yt-textarea-sm"
+              value={hashtags}
+              readOnly
+              rows={2}
+              id={`yt-hashtags-${rank}`}
+            />
+          </div>
+
+          <div className="yt-upload-hint">
+            <Youtube size={12} />
+            <span>Tip: Upload the clip file, paste these captions, and publish as a YouTube Short (≤60s).</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
