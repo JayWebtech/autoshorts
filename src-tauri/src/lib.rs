@@ -630,6 +630,158 @@ fn rename_project(
     state.db.rename_project(&project_id, &name).map_err(to_command_error)
 }
 
+#[derive(Clone, serde::Serialize)]
+struct DownloadProgressPayload {
+    status: String,
+    percentage: f64,
+}
+
+fn extract_youtube_id(url: &str) -> Option<String> {
+    if let Some(pos) = url.find("v=") {
+        let after_v = &url[pos + 2..];
+        let end = after_v.find('&').unwrap_or(after_v.len());
+        return Some(after_v[..end].to_string());
+    }
+    if let Some(pos) = url.find("youtu.be/") {
+        let after_slash = &url[pos + 9..];
+        let end = after_slash.find('?').unwrap_or(after_slash.len());
+        return Some(after_slash[..end].to_string());
+    }
+    if let Some(pos) = url.find("youtube.com/shorts/") {
+        let after_shorts = &url[pos + 19..];
+        let end = after_shorts.find('?').unwrap_or(after_shorts.len());
+        return Some(after_shorts[..end].to_string());
+    }
+    None
+}
+
+#[tauri::command]
+async fn download_youtube_video(
+    app: tauri::AppHandle,
+    url: String,
+    resolution: String,
+) -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    let base = PathBuf::from("D:\\AS\\raw\\youtube_downloads");
+
+    #[cfg(not(target_os = "windows"))]
+    let base = {
+        let documents_dir = dirs::document_dir()
+            .ok_or_else(|| "Could not find your Documents folder for download output.".to_string())?;
+        documents_dir.join("AutoShorts").join("youtube_downloads")
+    };
+
+    std::fs::create_dir_all(&base).map_err(|e| format!("Failed to create download directory: {}", e))?;
+
+    let format_selector = match resolution.as_str() {
+        "480p" => "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best",
+        "720p" => "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best",
+        "1080p" => "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best",
+        "2160p" => "bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best",
+        _ => "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best",
+    };
+
+    let fallback_id = format!(
+        "ts-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+    );
+    let final_id = extract_youtube_id(&url).unwrap_or(fallback_id);
+    let output_template = base.join(format!("yt-{}.%(ext)s", final_id));
+    let expected_file = base.join(format!("yt-{}.mp4", final_id));
+
+    if expected_file.exists() {
+        let _ = app.emit(
+            "youtube-download-progress",
+            DownloadProgressPayload {
+                status: "Already downloaded. Loading...".to_string(),
+                percentage: 100.0,
+            },
+        );
+        return Ok(expected_file.to_string_lossy().to_string());
+    }
+
+    let mut cmd = std::process::Command::new("yt-dlp");
+    cmd.args([
+        "-f",
+        format_selector,
+        "--merge-output-format",
+        "mp4",
+        "--output",
+        &output_template.to_string_lossy(),
+        "--newline",
+        &url,
+    ]);
+
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| {
+        format!(
+            "Failed to start yt-dlp. Please check that yt-dlp is installed and in your PATH. Error: {}",
+            e
+        )
+    })?;
+
+    let stdout = child.stdout.take().ok_or("Failed to capture yt-dlp stdout")?;
+    let reader = std::io::BufReader::new(stdout);
+
+    use std::io::BufRead;
+    for line_result in reader.lines() {
+        if let Ok(line) = line_result {
+            if line.contains("[download]") {
+                if let Some(pct_pos) = line.find('%') {
+                    let text_before = &line[..pct_pos];
+                    if let Some(last_space) = text_before.rfind(' ') {
+                        let pct_str = &text_before[last_space + 1..];
+                        if let Ok(pct) = pct_str.trim().parse::<f64>() {
+                            let speed_eta = line[pct_pos + 1..].trim().to_string();
+                            let _ = app.emit(
+                                "youtube-download-progress",
+                                DownloadProgressPayload {
+                                    status: format!("Downloading: {}% ({})", pct, speed_eta),
+                                    percentage: pct,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let status = child.wait().map_err(|e| format!("Failed to wait for yt-dlp: {}", e))?;
+    if !status.success() {
+        let mut err_str = String::new();
+        if let Some(mut stderr) = child.stderr.take() {
+            use std::io::Read;
+            let _ = stderr.read_to_string(&mut err_str);
+        }
+        let clean_err = err_str.trim();
+        if clean_err.is_empty() {
+            return Err("yt-dlp exited with an error. Please verify the URL and your internet connection.".to_string());
+        } else {
+            return Err(format!("yt-dlp error: {}", clean_err));
+        }
+    }
+
+    if expected_file.exists() {
+        Ok(expected_file.to_string_lossy().to_string())
+    } else {
+        if let Ok(entries) = std::fs::read_dir(&base) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with(&format!("yt-{}", final_id)) {
+                    return Ok(entry.path().to_string_lossy().to_string());
+                }
+            }
+        }
+        Err("Download completed but the expected output file could not be found.".to_string())
+    }
+}
+
 pub fn run() {
     let _ = dotenvy::dotenv();
 
@@ -661,7 +813,8 @@ pub fn run() {
             set_selected_clip_count,
             render_flat_clip_for_candidate,
             delete_project,
-            rename_project
+            rename_project,
+            download_youtube_video
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoShorts");

@@ -1880,3 +1880,56 @@ button:disabled {
   flex-shrink: 0;
 }
 
+/* ─── YouTube Import Sidebar & Buttons ────────────────────────────────────── */
+
+.sidebar .yt-import-btn {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
+
+.sidebar .yt-import-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ff8080;
+}
+
+.empty-dashboard-state .yt-import-btn {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
+
+.empty-dashboard-state .yt-import-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ff8080;
+}
+
+.yt-modal-input, .yt-modal-select {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.yt-modal-input:focus, .yt-modal-select:focus {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.15);
+}
+
+.btn-youtube {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #dc2626 !important;
+}
+
+.btn-youtube:hover:not(:disabled) {
+  background: #dc2626 !important;
+  border-color: #b91c1c !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+}
+
+.btn-youtube:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
