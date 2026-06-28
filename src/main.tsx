@@ -1082,11 +1082,8 @@ function StatusPill({ label, active }: { label: string; active?: boolean }) {
 // ─── YouTube Caption Panel ───────────────────────────────────────────────────
 
 function generateYouTubeCaption(hook: string, rationale: string, rank: number) {
-  // Build YouTube title (≤100 chars, punchy)
-  const cleanHook = hook.replace(/["']/g, "").trim();
-  const title = cleanHook.length <= 100
-    ? cleanHook
-    : cleanHook.slice(0, 97) + "...";
+  // Build YouTube title (do not auto-truncate, let user edit)
+  const title = hook.replace(/["']/g, "").trim();
 
   // Hashtags extracted from rationale keywords + generic shorts tags
   const rationaleWords = rationale
