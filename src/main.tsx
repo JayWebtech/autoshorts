@@ -22,6 +22,12 @@ import {
   Copy,
   Database,
   Cloud,
+  Youtube,
+  ChevronDown,
+  ChevronUp,
+  Hash,
+  Type,
+  AlignLeft,
 } from "lucide-react";
 import "./styles.css";
 
@@ -847,6 +853,15 @@ function App() {
                               </div>
                             )}
                             {clip?.renderLog && <div className="render-log">{clip.renderLog}</div>}
+                            {isCut && (
+                              <YouTubeCaptionPanel
+                                hook={candidate.hook}
+                                rationale={candidate.rationale}
+                                startSec={candidate.startSec}
+                                endSec={candidate.endSec}
+                                rank={candidate.rank}
+                              />
+                            )}
                           </div>
                         </article>
                       );
@@ -1060,6 +1075,148 @@ function StatusPill({ label, active }: { label: string; active?: boolean }) {
     <div className={`status-pill ${active ? "active" : ""}`}>
       <BadgeCheck size={14} />
       {label}
+    </div>
+  );
+}
+
+// ─── YouTube Caption Panel ───────────────────────────────────────────────────
+
+function generateYouTubeCaption(hook: string, rationale: string, rank: number) {
+  // Build YouTube title (≤100 chars, punchy)
+  const cleanHook = hook.replace(/["']/g, "").trim();
+  const title = cleanHook.length <= 100
+    ? cleanHook
+    : cleanHook.slice(0, 97) + "...";
+
+  // Hashtags extracted from rationale keywords + generic shorts tags
+  const rationaleWords = rationale
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 4)
+    .slice(0, 5)
+    .map((w) => `#${w}`);
+  const genericTags = ["#Shorts", "#viral", "#fyp", "#trending", "#reels"];
+  const hashtags = [...new Set([...rationaleWords, ...genericTags])].slice(0, 8).join(" ");
+
+  // Description
+  const description =
+    `${rationale}\n\n` +
+    `🔥 Clip #${rank} | AutoShorts\n\n` +
+    hashtags;
+
+  return { title, description, hashtags };
+}
+
+type CopyButtonProps = { text: string; label?: string };
+function CopyButton({ text, label }: CopyButtonProps) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      className="yt-copy-btn"
+      onClick={handleCopy}
+      title={`Copy ${label ?? ""}`}
+    >
+      {copied ? <Check size={13} /> : <Copy size={13} />}
+      {copied ? "Copied!" : `Copy ${label ?? ""}`}
+    </button>
+  );
+}
+
+function YouTubeCaptionPanel({
+  hook,
+  rationale,
+  startSec,
+  endSec,
+  rank,
+}: {
+  hook: string;
+  rationale: string;
+  startSec: number;
+  endSec: number;
+  rank: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const { title, description, hashtags } = generateYouTubeCaption(hook, rationale, rank);
+  const duration = Math.round(endSec - startSec);
+
+  return (
+    <div className="yt-caption-panel">
+      <button
+        className={`yt-panel-toggle ${open ? "open" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+        id={`yt-panel-toggle-${rank}`}
+      >
+        <Youtube size={14} />
+        <span>YouTube Caption Suggestions</span>
+        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+      </button>
+
+      {open && (
+        <div className="yt-panel-body">
+          {/* Title */}
+          <div className="yt-field">
+            <div className="yt-field-header">
+              <Type size={13} />
+              <span>Title</span>
+              <span className={`yt-char-count ${title.length > 90 ? "warn" : ""}`}>
+                {title.length}/100
+              </span>
+              <CopyButton text={title} label="title" />
+            </div>
+            <textarea
+              className="yt-textarea"
+              value={title}
+              readOnly
+              rows={2}
+              id={`yt-title-${rank}`}
+            />
+          </div>
+
+          {/* Description */}
+          <div className="yt-field">
+            <div className="yt-field-header">
+              <AlignLeft size={13} />
+              <span>Description</span>
+              <CopyButton text={description} label="description" />
+            </div>
+            <textarea
+              className="yt-textarea"
+              value={description}
+              readOnly
+              rows={6}
+              id={`yt-description-${rank}`}
+            />
+          </div>
+
+          {/* Hashtags */}
+          <div className="yt-field">
+            <div className="yt-field-header">
+              <Hash size={13} />
+              <span>Hashtags</span>
+              <span className="yt-meta">{duration}s clip</span>
+              <CopyButton text={hashtags} label="hashtags" />
+            </div>
+            <textarea
+              className="yt-textarea yt-textarea-sm"
+              value={hashtags}
+              readOnly
+              rows={2}
+              id={`yt-hashtags-${rank}`}
+            />
+          </div>
+
+          <div className="yt-upload-hint">
+            <Youtube size={12} />
+            <span>Tip: Upload the clip file, paste these captions, and publish as a YouTube Short (≤60s).</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
