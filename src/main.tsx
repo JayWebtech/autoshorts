@@ -648,7 +648,7 @@ function App() {
                       <input
                         value={clipLength}
                         onChange={(event) => setClipLength(Number(event.target.value) || 0)}
-                        onBlur={() => setClipLength((v) => Math.min(600, Math.max(10, v || 60)))}
+                        onBlur={() => setClipLength((v) => Math.min(600, Math.max(10, Number.isFinite(v) ? v : 60)))}
                         type="number"
                         min={10}
                         max={600}
