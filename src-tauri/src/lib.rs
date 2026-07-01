@@ -35,11 +35,7 @@ async fn environment_status(state: tauri::State<'_, AppState>) -> Result<Environ
         .unwrap_or_else(|_| "deepseek".to_string())
         .to_lowercase();
 
-    let has_local_whisper_model = std::process::Command::new("python3")
-        .args(["-c", "import whisper"])
-        .output()
-        .map(|out| out.status.success())
-        .unwrap_or(false);
+    let has_local_whisper_model = transcription::whisper_cli_exists() || transcription::whisper_python_exists();
 
     let has_ollama = reqwest::Client::new()
         .get("http://localhost:11434")
@@ -373,13 +369,9 @@ async fn transcribe_project(
                 .map_err(to_command_error)?
         }
         "local" => {
-            let has_python_whisper = std::process::Command::new("python3")
-                .args(["-c", "import whisper"])
-                .output()
-                .map(|out| out.status.success())
-                .unwrap_or(false);
-            if !has_python_whisper {
-                return Err("Python package 'openai-whisper' is not installed. Please run 'pip3 install openai-whisper' in your terminal.".to_string());
+            let has_whisper = transcription::whisper_cli_exists() || transcription::whisper_python_exists();
+            if !has_whisper {
+                return Err("Whisper is not installed. Please install it (e.g., via Homebrew 'brew install whisper-cli' or via Python 'pip3 install openai-whisper').".to_string());
             }
             let audio_path = media::extract_audio(
                 &project.source_path,
@@ -874,7 +866,7 @@ fn build_drawtext_filters(
         let mut font_option = String::new();
         for path in &font_paths {
             if std::path::Path::new(path).exists() {
-                font_option = format!("fontfile='{}':", path.replace(':', "\:"));
+                font_option = format!("fontfile='{}':", path.replace(':', "\\:"));
                 break;
             }
         }

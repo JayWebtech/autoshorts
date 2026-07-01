@@ -137,18 +137,134 @@ pub fn build_segments(words: &[TranscriptWord]) -> Vec<TranscriptSegment> {
     segments
 }
 
+pub fn whisper_cli_exists() -> bool {
+    std::process::Command::new("whisper")
+        .arg("--help")
+        .output()
+        .map(|out| out.status.success())
+        .unwrap_or(false)
+}
+
+pub fn whisper_python_exists() -> bool {
+    std::process::Command::new("python3")
+        .args(["-c", "import whisper"])
+        .output()
+        .map(|out| out.status.success())
+        .unwrap_or(false)
+}
+
+fn normalize_whisper_raw_json(raw: serde_json::Value) -> Result<NormalizedTranscript> {
+    let language = raw.get("language")
+        .and_then(|v| v.as_str())
+        .unwrap_or("en")
+        .to_string();
+
+    let segments_arr = raw.get("segments")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| anyhow!("Missing 'segments' in Whisper JSON"))?;
+
+    let duration = segments_arr.last()
+        .and_then(|s| s.get("end").and_then(|e| e.as_f64()))
+        .unwrap_or(0.0);
+
+    let mut segments = Vec::new();
+    let mut words = Vec::new();
+
+    for seg in segments_arr {
+        let start = seg.get("start").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let end = seg.get("end").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let text = seg.get("text").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+
+        segments.push(TranscriptSegment {
+            start,
+            end,
+            speaker: Some("S1".to_string()),
+            text,
+        });
+
+        if let Some(words_arr) = seg.get("words").and_then(|v| v.as_array()) {
+            for w in words_arr {
+                let word_text = w.get("word").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                let word_start = w.get("start").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let word_end = w.get("end").and_then(|v| v.as_f64()).unwrap_or(0.0);
+
+                words.push(TranscriptWord {
+                    text: word_text,
+                    start: word_start,
+                    end: word_end,
+                    speaker: Some("S1".to_string()),
+                });
+            }
+        }
+    }
+
+    Ok(NormalizedTranscript {
+        language,
+        duration,
+        speakers: vec!["S1".to_string()],
+        words,
+        segments,
+    })
+}
+
 pub async fn transcribe_local(audio_path: &str, model_path: &str) -> Result<NormalizedTranscript> {
     let audio_path = audio_path.to_string();
     let model_path = model_path.to_string();
-    
-    // Resolve the directory where the model lives. We'll put transcribe.py there.
-    let model_dir = std::path::Path::new(&model_path)
-        .parent()
-        .ok_or_else(|| anyhow!("Invalid model path"))?;
-    
-    let script_path = model_dir.join("transcribe.py");
-    if !script_path.exists() {
-        let script_content = r#"import sys
+
+    if whisper_cli_exists() {
+        let audio_path_buf = std::path::Path::new(&audio_path);
+        let audio_dir = audio_path_buf.parent().ok_or_else(|| anyhow!("Invalid audio path parent"))?;
+        let audio_stem = audio_path_buf.file_stem().ok_or_else(|| anyhow!("Invalid audio file stem"))?.to_string_lossy();
+        
+        let output_json_path = audio_dir.join(format!("{}.json", audio_stem));
+        let output_json_path_str = output_json_path.to_string_lossy().to_string();
+        let audio_dir_str = audio_dir.to_string_lossy().to_string();
+        let audio_dir_clone = audio_dir.to_path_buf();
+        let audio_stem_clone = audio_stem.to_string();
+
+        tokio::task::spawn_blocking(move || {
+            let output = std::process::Command::new("whisper")
+                .arg(&audio_path)
+                .args(["--model", "base"])
+                .args(["--output_format", "json"])
+                .args(["--output_dir", &audio_dir_str])
+                .args(["--word_timestamps", "True"])
+                .output()
+                .context("executing whisper CLI")?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                return Err(anyhow!("Whisper CLI failed:\nStderr: {}\nStdout: {}", stderr, stdout));
+            }
+
+            let json_bytes = std::fs::read(&output_json_path_str).context("reading output transcript JSON from CLI")?;
+            let raw_json: serde_json::Value = serde_json::from_slice(&json_bytes).context("parsing output transcript JSON")?;
+            
+            // Clean up the output JSON file
+            let _ = std::fs::remove_file(&output_json_path_str);
+            
+            // Clean up any extra formats whisper CLI might have written (it sometimes generates them by default)
+            for ext in &["txt", "srt", "vtt", "tsv"] {
+                let extra_file = audio_dir_clone.join(format!("{}.{}", audio_stem_clone, ext));
+                if extra_file.exists() {
+                    let _ = std::fs::remove_file(extra_file);
+                }
+            }
+
+            normalize_whisper_raw_json(raw_json)
+        })
+        .await
+        .context("spawn_blocking failed")?
+    } else {
+        // Resolve the directory where the model lives. We'll put transcribe.py there.
+        let model_dir = std::path::Path::new(&model_path)
+            .parent()
+            .ok_or_else(|| anyhow!("Invalid model path"))?;
+        
+        let script_path = model_dir.join("transcribe.py");
+        if !script_path.exists() {
+            let script_content = r#"import sys
 import json
 import whisper
 
@@ -198,36 +314,37 @@ def main():
 if __name__ == "__main__":
     main()
 "#;
-        std::fs::write(&script_path, script_content).context("writing transcribe.py script")?;
-    }
-
-    let output_json_path = model_dir.join(format!("temp_transcript_{}.json", uuid::Uuid::new_v4()));
-    let script_path_str = script_path.to_string_lossy().to_string();
-    let output_json_path_str = output_json_path.to_string_lossy().to_string();
-
-    tokio::task::spawn_blocking(move || {
-        let output = std::process::Command::new("python3")
-            .arg(&script_path_str)
-            .arg(&audio_path)
-            .arg(&output_json_path_str)
-            .arg("base") // default model size
-            .output()
-            .context("executing python3 transcribe.py")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            return Err(anyhow!("Python transcription script failed:\nStderr: {}\nStdout: {}", stderr, stdout));
+            std::fs::write(&script_path, script_content).context("writing transcribe.py script")?;
         }
 
-        let json_bytes = std::fs::read(&output_json_path_str).context("reading output transcript JSON")?;
-        let transcript: NormalizedTranscript = serde_json::from_slice(&json_bytes).context("parsing output transcript JSON")?;
-        
-        // Cleanup temp file
-        let _ = std::fs::remove_file(&output_json_path_str);
+        let output_json_path = model_dir.join(format!("temp_transcript_{}.json", uuid::Uuid::new_v4()));
+        let script_path_str = script_path.to_string_lossy().to_string();
+        let output_json_path_str = output_json_path.to_string_lossy().to_string();
 
-        Ok(transcript)
-    })
-    .await
-    .context("spawn_blocking failed")?
+        tokio::task::spawn_blocking(move || {
+            let output = std::process::Command::new("python3")
+                .arg(&script_path_str)
+                .arg(&audio_path)
+                .arg(&output_json_path_str)
+                .arg("base") // default model size
+                .output()
+                .context("executing python3 transcribe.py")?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                return Err(anyhow!("Python transcription script failed:\nStderr: {}\nStdout: {}", stderr, stdout));
+            }
+
+            let json_bytes = std::fs::read(&output_json_path_str).context("reading output transcript JSON")?;
+            let transcript: NormalizedTranscript = serde_json::from_slice(&json_bytes).context("parsing output transcript JSON")?;
+            
+            // Cleanup temp file
+            let _ = std::fs::remove_file(&output_json_path_str);
+
+            Ok(transcript)
+        })
+        .await
+        .context("spawn_blocking failed")?
+    }
 }
