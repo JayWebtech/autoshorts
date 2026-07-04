@@ -160,7 +160,7 @@ function App() {
     return localStorage.getItem("autoshorts_openai_model") || "gpt-4o-mini";
   });
   const [geminiModel, setGeminiModel] = useState(() => {
-    return localStorage.getItem("autoshorts_gemini_model") || "gemini-1.5-flash";
+    return localStorage.getItem("autoshorts_gemini_model") || "gemini-2.5-flash";
   });
 
   const [downloadingModelName, setDownloadingModelName] = useState<string | null>(null);
@@ -755,7 +755,7 @@ function App() {
                           <input
                             value={geminiModel}
                             onChange={(event) => setGeminiModel(event.target.value)}
-                            placeholder="e.g. gemini-1.5-flash, gemini-1.5-pro"
+                            placeholder="e.g. gemini-2.5-flash, gemini-2.5-pro"
                             type="text"
                           />
                         </label>

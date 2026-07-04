@@ -483,7 +483,7 @@ async fn generate_candidates(
                 .ok_or_else(|| "Set GEMINI_API_KEY or supply Gemini API Key to generate candidates.".to_string())?;
             let model = model_name
                 .or_else(|| std::env::var("GEMINI_MODEL").ok())
-                .unwrap_or_else(|| "gemini-1.5-flash".to_string());
+                .unwrap_or_else(|| "gemini-2.5-flash".to_string());
             llm::detect_candidates_with_gemini(&normalized, &key, &model)
                 .await
                 .map_err(to_command_error)?
