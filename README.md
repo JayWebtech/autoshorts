@@ -12,7 +12,7 @@ This repository implements the desktop app foundation using **Tauri 2 + React + 
 
 ## Key Features
 
-- **Dynamic Multi-LLM Support**: Supports both **DeepSeek** (default) and **Claude** (anthropic) for viral moment detection and hooks analysis.
+- **Dynamic Multi-LLM Support**: Supports **DeepSeek** (default), **Claude** (anthropic), **OpenAI**, and **Google Gemini** for cloud-based viral moment detection and hooks analysis, plus **Ollama** for fully-local inference. Pick your provider and model in API Settings.
 - **Automated Pipeline**: Imports media, extracts audio, transcribes using Deepgram, and automatically analyzes and ranks moments in a single automated chain.
 - **Local SQLite Storage**: Saves transcripts, candidates, custom names, and rendering data locally.
 - **Native Project Manager**: Create, open, rename, and delete projects from the dashboard.

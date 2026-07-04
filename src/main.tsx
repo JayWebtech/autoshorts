@@ -32,6 +32,8 @@ type EnvironmentStatus = {
   hasDeepgramKey: boolean;
   hasAnthropicKey: boolean;
   hasDeepseekKey: boolean;
+  hasOpenaiKey: boolean;
+  hasGeminiKey: boolean;
   llmProvider: string;
   hasLocalWhisperModel: boolean;
   hasOllama: boolean;
@@ -108,6 +110,14 @@ type BusyState =
   | "clipCount"
   | "cut";
 
+function cloudLlmLabel(engine: string): string {
+  if (engine === "claude") return "Claude";
+  if (engine === "deepseek") return "DeepSeek";
+  if (engine === "openai") return "OpenAI";
+  if (engine === "gemini") return "Gemini";
+  return engine;
+}
+
 function App() {
   const [environment, setEnvironment] = useState<EnvironmentStatus | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -125,8 +135,8 @@ function App() {
   const [transcriptionEngine, setTranscriptionEngine] = useState<"deepgram" | "local">(() => {
     return (localStorage.getItem("autoshorts_transcription_engine") as "deepgram" | "local") || "local";
   });
-  const [llmEngine, setLlmEngine] = useState<"claude" | "deepseek" | "local">(() => {
-    return (localStorage.getItem("autoshorts_llm_engine") as "claude" | "deepseek" | "local") || "local";
+  const [llmEngine, setLlmEngine] = useState<"claude" | "deepseek" | "local" | "openai" | "gemini">(() => {
+    return (localStorage.getItem("autoshorts_llm_engine") as "claude" | "deepseek" | "local" | "openai" | "gemini") || "local";
   });
   const [localLlmModel, setLocalLlmModel] = useState(() => {
     return localStorage.getItem("autoshorts_local_llm_model") || "llama3.2";
@@ -139,6 +149,18 @@ function App() {
   });
   const [deepseekKey, setDeepseekKey] = useState(() => {
     return localStorage.getItem("autoshorts_deepseek_key") || "";
+  });
+  const [openaiKey, setOpenaiKey] = useState(() => {
+    return localStorage.getItem("autoshorts_openai_key") || "";
+  });
+  const [geminiKey, setGeminiKey] = useState(() => {
+    return localStorage.getItem("autoshorts_gemini_key") || "";
+  });
+  const [openaiModel, setOpenaiModel] = useState(() => {
+    return localStorage.getItem("autoshorts_openai_model") || "gpt-4o-mini";
+  });
+  const [geminiModel, setGeminiModel] = useState(() => {
+    return localStorage.getItem("autoshorts_gemini_model") || "gemini-1.5-flash";
   });
 
   const [downloadingModelName, setDownloadingModelName] = useState<string | null>(null);
@@ -170,6 +192,8 @@ function App() {
   const canUseCloudKey = environment?.hasDeepgramKey || deepgramKey.trim().length > 0;
   const canUseClaude = environment?.hasAnthropicKey || anthropicKey.trim().length > 0;
   const canUseDeepseek = environment?.hasDeepseekKey || deepseekKey.trim().length > 0;
+  const canUseOpenai = environment?.hasOpenaiKey || openaiKey.trim().length > 0;
+  const canUseGemini = environment?.hasGeminiKey || geminiKey.trim().length > 0;
 
   const canTranscribe = transcriptionEngine === "local"
     ? Boolean(environment?.hasLocalWhisperModel)
@@ -177,7 +201,10 @@ function App() {
 
   const canUseActiveLlm = llmEngine === "local"
     ? Boolean(environment?.hasOllama)
-    : (llmEngine === "claude" ? canUseClaude : canUseDeepseek);
+    : llmEngine === "claude" ? canUseClaude
+    : llmEngine === "deepseek" ? canUseDeepseek
+    : llmEngine === "openai" ? canUseOpenai
+    : canUseGemini;
 
   useEffect(() => {
     void refresh();
@@ -212,6 +239,22 @@ function App() {
   useEffect(() => {
     localStorage.setItem("autoshorts_deepseek_key", deepseekKey);
   }, [deepseekKey]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_openai_key", openaiKey);
+  }, [openaiKey]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_gemini_key", geminiKey);
+  }, [geminiKey]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_openai_model", openaiModel);
+  }, [openaiModel]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_gemini_model", geminiModel);
+  }, [geminiModel]);
 
   const pullModelDirectly = async (modelName: string) => {
     setDownloadingModelName(modelName);
@@ -331,12 +374,13 @@ function App() {
         return;
       }
     } else {
-      const activeKey = llmEngine === "claude" ? anthropicKey : deepseekKey;
-      const hasActiveKey = llmEngine === "claude"
-        ? (env.hasAnthropicKey || activeKey.trim().length > 0)
-        : (env.hasDeepseekKey || activeKey.trim().length > 0);
+      const hasActiveKey =
+        llmEngine === "claude" ? (env.hasAnthropicKey || anthropicKey.trim().length > 0)
+        : llmEngine === "deepseek" ? (env.hasDeepseekKey || deepseekKey.trim().length > 0)
+        : llmEngine === "openai" ? (env.hasOpenaiKey || openaiKey.trim().length > 0)
+        : (env.hasGeminiKey || geminiKey.trim().length > 0);
       if (!hasActiveKey) {
-        setError(`Transcription complete. ${llmEngine === "claude" ? "Claude" : "DeepSeek"} API Key is missing. Please add it in settings to analyze viral moments.`);
+        setError(`Transcription complete. ${cloudLlmLabel(llmEngine)} API Key is missing. Please add it in settings to analyze viral moments.`);
         return;
       }
     }
@@ -359,12 +403,12 @@ function App() {
     // 2. LLM Moments
     try {
       setBusy("moments");
-      const activeKey = llmEngine === "claude" ? anthropicKey.trim() : (llmEngine === "deepseek" ? deepseekKey.trim() : "");
+      const activeKey = llmEngine === "claude" ? anthropicKey.trim() : llmEngine === "deepseek" ? deepseekKey.trim() : llmEngine === "openai" ? openaiKey.trim() : llmEngine === "gemini" ? geminiKey.trim() : "";
       await invoke<Candidate[]>("generate_candidates", {
         projectId,
         apiKey: activeKey || null,
         provider: llmEngine,
-        modelName: llmEngine === "local" ? localLlmModel.trim() : null,
+        modelName: llmEngine === "local" ? localLlmModel.trim() : llmEngine === "openai" ? (openaiModel.trim() || null) : llmEngine === "gemini" ? (geminiModel.trim() || null) : null,
         allowDemo: false,
       });
       await refresh(projectId);
@@ -440,13 +484,13 @@ function App() {
   async function moments(allowDemo: boolean) {
     if (!detail) return;
     await run("moments", async () => {
-      const activeKey = llmEngine === "claude" ? anthropicKey.trim() : (llmEngine === "deepseek" ? deepseekKey.trim() : "");
+      const activeKey = llmEngine === "claude" ? anthropicKey.trim() : llmEngine === "deepseek" ? deepseekKey.trim() : llmEngine === "openai" ? openaiKey.trim() : llmEngine === "gemini" ? geminiKey.trim() : "";
       try {
         await invoke<Candidate[]>("generate_candidates", {
           projectId: detail.project.id,
           apiKey: activeKey || null,
           provider: llmEngine,
-          modelName: llmEngine === "local" ? localLlmModel.trim() : null,
+          modelName: llmEngine === "local" ? localLlmModel.trim() : llmEngine === "openai" ? (openaiModel.trim() || null) : llmEngine === "gemini" ? (geminiModel.trim() || null) : null,
           allowDemo,
         });
         await refresh(detail.project.id);
@@ -531,9 +575,13 @@ function App() {
         setDeepgramKey={setDeepgramKey}
         setAnthropicKey={setAnthropicKey}
         setDeepseekKey={setDeepseekKey}
+        setOpenaiKey={setOpenaiKey}
+        setGeminiKey={setGeminiKey}
         deepgramKey={deepgramKey}
         anthropicKey={anthropicKey}
         deepseekKey={deepseekKey}
+        openaiKey={openaiKey}
+        geminiKey={geminiKey}
         refreshEnv={() => refresh()}
       />
     );
@@ -627,11 +675,13 @@ function App() {
                       <span>LLM Engine</span>
                       <select
                         value={llmEngine}
-                        onChange={(event) => setLlmEngine(event.target.value as "claude" | "deepseek" | "local")}
+                        onChange={(event) => setLlmEngine(event.target.value as "claude" | "deepseek" | "local" | "openai" | "gemini")}
                       >
                         <option value="local">Ollama (Offline Local)</option>
                         <option value="claude">Claude (Cloud)</option>
                         <option value="deepseek">DeepSeek (Cloud)</option>
+                        <option value="openai">OpenAI (Cloud)</option>
+                        <option value="gemini">Gemini (Cloud)</option>
                       </select>
                     </label>
                     {transcriptionEngine === "deepgram" && (
@@ -666,6 +716,50 @@ function App() {
                           type="password"
                         />
                       </label>
+                    )}
+                    {llmEngine === "openai" && (
+                      <>
+                        <label>
+                          <span>OpenAI API Key</span>
+                          <input
+                            value={openaiKey}
+                            onChange={(event) => setOpenaiKey(event.target.value)}
+                            placeholder={environment?.hasOpenaiKey ? "Loaded from env" : "Optional (OpenAI API Key)"}
+                            type="password"
+                          />
+                        </label>
+                        <label>
+                          <span>OpenAI Model</span>
+                          <input
+                            value={openaiModel}
+                            onChange={(event) => setOpenaiModel(event.target.value)}
+                            placeholder="e.g. gpt-4o-mini, gpt-4o"
+                            type="text"
+                          />
+                        </label>
+                      </>
+                    )}
+                    {llmEngine === "gemini" && (
+                      <>
+                        <label>
+                          <span>Gemini API Key</span>
+                          <input
+                            value={geminiKey}
+                            onChange={(event) => setGeminiKey(event.target.value)}
+                            placeholder={environment?.hasGeminiKey ? "Loaded from env" : "Optional (Gemini API Key)"}
+                            type="password"
+                          />
+                        </label>
+                        <label>
+                          <span>Gemini Model</span>
+                          <input
+                            value={geminiModel}
+                            onChange={(event) => setGeminiModel(event.target.value)}
+                            placeholder="e.g. gemini-1.5-flash, gemini-1.5-pro"
+                            type="text"
+                          />
+                        </label>
+                      </>
                     )}
                     {llmEngine === "local" && (
                       <label>
@@ -772,7 +866,7 @@ function App() {
                     <div className="api-warning">
                       {llmEngine === "local"
                         ? "⚠️ Ollama local server is not running at http://localhost:11434. Moment detection will not work."
-                        : `⚠️ ${llmEngine === "claude" ? "Claude" : "DeepSeek"} API Key is missing. Viral moment identification will not work. Please add your key in API Settings.`}
+                        : `⚠️ ${cloudLlmLabel(llmEngine)} API Key is missing. Viral moment identification will not work. Please add your key in API Settings.`}
                     </div>
                   )}
 
@@ -924,6 +1018,8 @@ function App() {
             <span className={`indicator ${canUseCloudKey ? "active" : ""}`} title="Deepgram Key status">Deepgram</span>
             <span className={`indicator ${canUseClaude ? "active" : ""}`} title="Claude Key status">Claude</span>
             <span className={`indicator ${canUseDeepseek ? "active" : ""}`} title="DeepSeek Key status">DeepSeek</span>
+            <span className={`indicator ${canUseOpenai ? "active" : ""}`} title="OpenAI Key status">OpenAI</span>
+            <span className={`indicator ${canUseGemini ? "active" : ""}`} title="Gemini Key status">Gemini</span>
           </div>
         </div>
       </footer>
@@ -1096,14 +1192,18 @@ interface OnboardingProps {
   environment: EnvironmentStatus | null;
   onComplete: () => void;
   setTranscriptionEngine: (engine: "deepgram" | "local") => void;
-  setLlmEngine: (engine: "claude" | "deepseek" | "local") => void;
+  setLlmEngine: (engine: "claude" | "deepseek" | "local" | "openai" | "gemini") => void;
   setLocalLlmModel: (model: string) => void;
   setDeepgramKey: (key: string) => void;
   setAnthropicKey: (key: string) => void;
   setDeepseekKey: (key: string) => void;
+  setOpenaiKey: (key: string) => void;
+  setGeminiKey: (key: string) => void;
   deepgramKey: string;
   anthropicKey: string;
   deepseekKey: string;
+  openaiKey: string;
+  geminiKey: string;
   refreshEnv: () => Promise<void>;
 }
 
@@ -1116,9 +1216,13 @@ function Onboarding({
   setDeepgramKey,
   setAnthropicKey,
   setDeepseekKey,
+  setOpenaiKey,
+  setGeminiKey,
   deepgramKey: initialDeepgramKey,
   anthropicKey: initialAnthropicKey,
   deepseekKey: initialDeepseekKey,
+  openaiKey: initialOpenaiKey,
+  geminiKey: initialGeminiKey,
   refreshEnv,
 }: OnboardingProps) {
   const [setupMode, setSetupMode] = useState<"choose" | "local" | "cloud" | "downloading">("choose");
@@ -1127,6 +1231,8 @@ function Onboarding({
   const [dgKey, setDgKey] = useState(initialDeepgramKey);
   const [antKey, setAntKey] = useState(initialAnthropicKey);
   const [dsKey, setDsKey] = useState(initialDeepseekKey);
+  const [oaKey, setOaKey] = useState(initialOpenaiKey);
+  const [gemKey, setGemKey] = useState(initialGeminiKey);
   
   const [downloadStatus, setDownloadStatus] = useState("Initializing download...");
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -1146,8 +1252,8 @@ function Onboarding({
       setError("Deepgram API Key is required for cloud mode.");
       return;
     }
-    if (!antKey.trim() && !dsKey.trim()) {
-      setError("Please provide at least one LLM Key (Claude or DeepSeek).");
+    if (!antKey.trim() && !dsKey.trim() && !oaKey.trim() && !gemKey.trim()) {
+      setError("Please provide at least one LLM Key (Claude, DeepSeek, OpenAI, or Gemini).");
       return;
     }
     
@@ -1166,8 +1272,18 @@ function Onboarding({
       setDeepseekKey(dsKey.trim());
       localStorage.setItem("autoshorts_deepseek_key", dsKey.trim());
       localStorage.setItem("autoshorts_llm_engine", "deepseek");
+    } else if (oaKey.trim()) {
+      setLlmEngine("openai");
+      setOpenaiKey(oaKey.trim());
+      localStorage.setItem("autoshorts_openai_key", oaKey.trim());
+      localStorage.setItem("autoshorts_llm_engine", "openai");
+    } else if (gemKey.trim()) {
+      setLlmEngine("gemini");
+      setGeminiKey(gemKey.trim());
+      localStorage.setItem("autoshorts_gemini_key", gemKey.trim());
+      localStorage.setItem("autoshorts_llm_engine", "gemini");
     }
-    
+
     localStorage.setItem("autoshorts_onboarded", "true");
     onComplete();
   };
@@ -1404,14 +1520,34 @@ function Onboarding({
 
               <div className="input-group">
                 <label>DeepSeek API Key</label>
-                <input 
-                  type="password" 
-                  value={dsKey} 
+                <input
+                  type="password"
+                  value={dsKey}
                   onChange={(e) => setDsKey(e.target.value)}
                   placeholder="Insert your DeepSeek API Key (alternative moment detection)"
                 />
               </div>
-              <p className="form-help">* Deepgram Key + at least one LLM Key (Claude or DeepSeek) is required.</p>
+
+              <div className="input-group">
+                <label>OpenAI API Key</label>
+                <input
+                  type="password"
+                  value={oaKey}
+                  onChange={(e) => setOaKey(e.target.value)}
+                  placeholder="Insert your OpenAI API Key (moment detection)"
+                />
+              </div>
+
+              <div className="input-group">
+                <label>Gemini API Key</label>
+                <input
+                  type="password"
+                  value={gemKey}
+                  onChange={(e) => setGemKey(e.target.value)}
+                  placeholder="Insert your Google Gemini API Key (moment detection)"
+                />
+              </div>
+              <p className="form-help">* Deepgram Key + at least one LLM Key (Claude, DeepSeek, OpenAI, or Gemini) is required.</p>
             </div>
 
             <div className="onboarding-actions">

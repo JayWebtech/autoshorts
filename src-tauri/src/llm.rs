@@ -86,6 +86,161 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
     parse_candidate_json(&text, min_duration)
 }
 
+#[derive(Debug, Deserialize)]
+struct OpenAiMessage {
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiChoice {
+    message: OpenAiMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiResponse {
+    choices: Vec<OpenAiChoice>,
+}
+
+pub async fn detect_candidates_with_openai(
+    transcript: &NormalizedTranscript,
+    api_key: &str,
+    model: &str,
+) -> Result<Vec<CandidateDraft>> {
+    let segments = compact_segments(&transcript.segments);
+    let prompt = format!(
+        "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
+For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
+30-90 seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
+strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
+Avoid rambling setup, context-dependent references, and pure filler. Return up to 10 candidates as JSON matching this schema: \
+{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
+    );
+
+    let response = reqwest::Client::new()
+        .post("https://api.openai.com/v1/chat/completions")
+        .header("Authorization", format!("Bearer {api_key}"))
+        .json(&json!({
+            "model": model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            "temperature": 0.2,
+            "response_format": {
+                "type": "json_object"
+            }
+        }))
+        .send()
+        .await
+        .context("calling OpenAI")?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(anyhow!("OpenAI request failed ({status}): {body}"));
+    }
+
+    let res_body: OpenAiResponse = response.json().await.context("parsing OpenAI response")?;
+    let text = res_body
+        .choices
+        .first()
+        .map(|c| c.message.content.clone())
+        .ok_or_else(|| anyhow!("OpenAI response did not include choices content"))?;
+
+    let min_duration = if transcript.duration < 60.0 {
+        (transcript.duration * 0.5).max(5.0)
+    } else {
+        30.0
+    };
+    parse_candidate_json(&text, min_duration)
+}
+
+#[derive(Debug, Deserialize)]
+struct GeminiPart {
+    text: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeminiContent {
+    parts: Vec<GeminiPart>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeminiCandidate {
+    content: GeminiContent,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeminiResponse {
+    candidates: Vec<GeminiCandidate>,
+}
+
+pub async fn detect_candidates_with_gemini(
+    transcript: &NormalizedTranscript,
+    api_key: &str,
+    model: &str,
+) -> Result<Vec<CandidateDraft>> {
+    let segments = compact_segments(&transcript.segments);
+    let prompt = format!(
+        "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
+For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
+30-90 seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
+strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
+Avoid rambling setup, context-dependent references, and pure filler. Return up to 10 candidates as JSON matching this schema: \
+{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
+    );
+
+    let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
+
+    let response = reqwest::Client::new()
+        .post(&url)
+        .header("x-goog-api-key", api_key)
+        .json(&json!({
+            "contents": [
+                {
+                    "parts": [
+                        { "text": prompt }
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.2,
+                "responseMimeType": "application/json"
+            }
+        }))
+        .send()
+        .await
+        .context("calling Gemini")?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(anyhow!("Gemini request failed ({status}): {body}"));
+    }
+
+    let res_body: GeminiResponse = response.json().await.context("parsing Gemini response")?;
+    let text = res_body
+        .candidates
+        .into_iter()
+        .find_map(|candidate| {
+            candidate
+                .content
+                .parts
+                .into_iter()
+                .find_map(|part| part.text)
+        })
+        .ok_or_else(|| anyhow!("Gemini response did not include text content"))?;
+
+    let min_duration = if transcript.duration < 60.0 {
+        (transcript.duration * 0.5).max(5.0)
+    } else {
+        30.0
+    };
+    parse_candidate_json(&text, min_duration)
+}
+
 #[derive(Debug, Serialize)]
 struct ClaudeMessage<'a> {
     role: &'a str,

@@ -1,5 +1,8 @@
 node_modules
 dist
+bun.lock
+src-tauri/gen/schemas/*
+package-lock.json
 target
 src-tauri/target
 .env

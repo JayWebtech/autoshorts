@@ -55,6 +55,8 @@ async fn environment_status(state: tauri::State<'_, AppState>) -> Result<Environ
         has_deepgram_key: std::env::var("DEEPGRAM_API_KEY").is_ok(),
         has_anthropic_key: std::env::var("ANTHROPIC_API_KEY").is_ok(),
         has_deepseek_key: std::env::var("DEEPSEEK_API_KEY").is_ok(),
+        has_openai_key: std::env::var("OPENAI_API_KEY").is_ok(),
+        has_gemini_key: std::env::var("GEMINI_API_KEY").is_ok(),
         llm_provider,
         has_local_whisper_model,
         has_ollama,
@@ -461,6 +463,28 @@ async fn generate_candidates(
                 .or_else(|| std::env::var("OLLAMA_MODEL").ok())
                 .unwrap_or_else(|| "llama3.2".to_string());
             llm::detect_candidates_with_local_llm(&normalized, &model)
+                .await
+                .map_err(to_command_error)?
+        }
+        "openai" => {
+            let key = api_key
+                .or_else(|| std::env::var("OPENAI_API_KEY").ok())
+                .ok_or_else(|| "Set OPENAI_API_KEY or supply OpenAI API Key to generate candidates.".to_string())?;
+            let model = model_name
+                .or_else(|| std::env::var("OPENAI_MODEL").ok())
+                .unwrap_or_else(|| "gpt-4o-mini".to_string());
+            llm::detect_candidates_with_openai(&normalized, &key, &model)
+                .await
+                .map_err(to_command_error)?
+        }
+        "gemini" => {
+            let key = api_key
+                .or_else(|| std::env::var("GEMINI_API_KEY").ok())
+                .ok_or_else(|| "Set GEMINI_API_KEY or supply Gemini API Key to generate candidates.".to_string())?;
+            let model = model_name
+                .or_else(|| std::env::var("GEMINI_MODEL").ok())
+                .unwrap_or_else(|| "gemini-1.5-flash".to_string());
+            llm::detect_candidates_with_gemini(&normalized, &key, &model)
                 .await
                 .map_err(to_command_error)?
         }
@@ -874,7 +898,7 @@ fn build_drawtext_filters(
         let mut font_option = String::new();
         for path in &font_paths {
             if std::path::Path::new(path).exists() {
-                font_option = format!("fontfile='{}':", path.replace(':', "\:"));
+                font_option = format!("fontfile='{}':", path.replace(':', r"\:"));
                 break;
             }
         }
