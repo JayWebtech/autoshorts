@@ -12,9 +12,11 @@ pub struct EnvironmentStatus {
     pub has_gemini_key: bool,
     pub has_openai_key: bool,
     pub has_openrouter_key: bool,
+    pub has_groq_key: bool,
     pub llm_provider: String,
     pub has_local_whisper_model: bool,
     pub has_ollama: bool,
+    pub has_ytdlp: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

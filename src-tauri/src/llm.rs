@@ -36,12 +36,16 @@ pub async fn detect_candidates_with_deepseek(
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
-        "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
-For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
-30-90 seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
-strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
-Avoid rambling setup, context-dependent references, and pure filler. Return up to 10 candidates as JSON matching this schema: \
-{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
+        "You are an elite, world-class social media strategist with a track record of generating viral multi-million-view Shorts, TikToks, and Reels. \
+Your sole objective is to identify the ABSOLUTE BEST, most highly-engaging, and trend-setting short-form clip candidates from the provided transcript. \
+Do NOT pick random or mediocre segments. Be ruthless in your selection, but extract AS MANY highly viral moments as possible. \
+Every candidate must have an insanely strong, curiosity-inducing hook in the first 3 seconds to stop the scroll. \
+Clips should be 30-90 seconds long, completely self-contained, cut at clean boundaries, and deliver a massive payoff (a mind-blowing fact, hilarious joke, highly controversial opinion, or deep emotional insight). \
+Return up to 25 candidates as JSON matching exactly this schema: \
+{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}
+
+Transcript:
+{segments}"
     );
 
     let response = reqwest::Client::new()
@@ -111,12 +115,16 @@ pub async fn detect_candidates_with_gemini(
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
-        "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
-For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
-30-90 seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
-strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
-Avoid rambling setup, context-dependent references, and pure filler. Return up to 10 candidates as JSON matching this schema: \
-{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
+        "You are an elite, world-class social media strategist with a track record of generating viral multi-million-view Shorts, TikToks, and Reels. \
+Your sole objective is to identify the ABSOLUTE BEST, most highly-engaging, and trend-setting short-form clip candidates from the provided transcript. \
+Do NOT pick random or mediocre segments. Be ruthless in your selection, but extract AS MANY highly viral moments as possible. \
+Every candidate must have an insanely strong, curiosity-inducing hook in the first 3 seconds to stop the scroll. \
+Clips should be 30-90 seconds long, completely self-contained, cut at clean boundaries, and deliver a massive payoff (a mind-blowing fact, hilarious joke, highly controversial opinion, or deep emotional insight). \
+Return up to 25 candidates as JSON matching exactly this schema: \
+{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}
+
+Transcript:
+{segments}"
     );
 
     let model = std::env::var("GEMINI_MODEL").unwrap_or_else(|_| "gemini-2.5-flash".to_string());
@@ -189,12 +197,16 @@ pub async fn detect_candidates_with_openai(
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
-        "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
-For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
-30-90 seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
-strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
-Avoid rambling setup, context-dependent references, and pure filler. Return up to 10 candidates as JSON matching this schema: \
-{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
+        "You are an elite, world-class social media strategist with a track record of generating viral multi-million-view Shorts, TikToks, and Reels. \
+Your sole objective is to identify the ABSOLUTE BEST, most highly-engaging, and trend-setting short-form clip candidates from the provided transcript. \
+Do NOT pick random or mediocre segments. Be ruthless in your selection, but extract AS MANY highly viral moments as possible. \
+Every candidate must have an insanely strong, curiosity-inducing hook in the first 3 seconds to stop the scroll. \
+Clips should be 30-90 seconds long, completely self-contained, cut at clean boundaries, and deliver a massive payoff (a mind-blowing fact, hilarious joke, highly controversial opinion, or deep emotional insight). \
+Return up to 25 candidates as JSON matching exactly this schema: \
+{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}
+
+Transcript:
+{segments}"
     );
 
     let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
@@ -247,12 +259,16 @@ pub async fn detect_candidates_with_openrouter(
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
-        "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
-For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
-30-90 seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
-strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
-Avoid rambling setup, context-dependent references, and pure filler. Return up to 10 candidates as JSON matching this schema: \
-{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
+        "You are an elite, world-class social media strategist with a track record of generating viral multi-million-view Shorts, TikToks, and Reels. \
+Your sole objective is to identify the ABSOLUTE BEST, most highly-engaging, and trend-setting short-form clip candidates from the provided transcript. \
+Do NOT pick random or mediocre segments. Be ruthless in your selection, but extract AS MANY highly viral moments as possible. \
+Every candidate must have an insanely strong, curiosity-inducing hook in the first 3 seconds to stop the scroll. \
+Clips should be 30-90 seconds long, completely self-contained, cut at clean boundaries, and deliver a massive payoff (a mind-blowing fact, hilarious joke, highly controversial opinion, or deep emotional insight). \
+Return up to 25 candidates as JSON matching exactly this schema: \
+{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}
+
+Transcript:
+{segments}"
     );
 
     let model =
@@ -302,6 +318,71 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
     parse_candidate_json(&text, min_duration)
 }
 
+pub async fn detect_candidates_with_groq(
+    transcript: &NormalizedTranscript,
+    api_key: &str,
+) -> Result<Vec<CandidateDraft>> {
+    let segments = compact_segments(&transcript.segments);
+    let prompt = format!(
+        "You are an elite, world-class social media strategist with a track record of generating viral multi-million-view Shorts, TikToks, and Reels. \
+Your sole objective is to identify the ABSOLUTE BEST, most highly-engaging, and trend-setting short-form clip candidates from the provided transcript. \
+Do NOT pick random or mediocre segments. Be ruthless in your selection, but extract AS MANY highly viral moments as possible. \
+Every candidate must have an insanely strong, curiosity-inducing hook in the first 3 seconds to stop the scroll. \
+Clips should be 30-90 seconds long, completely self-contained, cut at clean boundaries, and deliver a massive payoff (a mind-blowing fact, hilarious joke, highly controversial opinion, or deep emotional insight). \
+Return up to 25 candidates as JSON matching exactly this schema: \
+{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}
+
+Transcript:
+{segments}"
+    );
+
+    let model =
+        std::env::var("GROQ_MODEL").unwrap_or_else(|_| "llama-3.3-70b-versatile".to_string());
+
+    let response = reqwest::Client::new()
+        .post("https://api.groq.com/openai/v1/chat/completions")
+        .header("Authorization", format!("Bearer {api_key}"))
+        .json(&json!({
+            "model": model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            "temperature": 0.2,
+            "response_format": {
+                "type": "json_object"
+            }
+        }))
+        .send()
+        .await
+        .context("calling Groq")?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(anyhow!("Groq request failed ({status}): {body}"));
+    }
+
+    let res_body: ChatCompletionResponse = response
+        .json()
+        .await
+        .context("parsing Groq response")?;
+    let text = res_body
+        .choices
+        .first()
+        .map(|c| c.message.content.clone())
+        .ok_or_else(|| anyhow!("Groq response did not include choices content"))?;
+
+    let min_duration = if transcript.duration < 60.0 {
+        (transcript.duration * 0.5).max(5.0)
+    } else {
+        30.0
+    };
+    parse_candidate_json(&text, min_duration)
+}
+
 #[derive(Debug, Serialize)]
 struct ClaudeMessage<'a> {
     role: &'a str,
@@ -314,12 +395,16 @@ pub async fn detect_candidates_with_claude(
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
-        "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
-For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
-30-90 seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
-strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
-Avoid rambling setup, context-dependent references, and pure filler. Return up to 10 candidates as JSON only: \
-{{\"candidates\":[{{\"start\":0,\"end\":0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
+        "You are an elite, world-class social media strategist with a track record of generating viral multi-million-view Shorts, TikToks, and Reels. \
+Your sole objective is to identify the ABSOLUTE BEST, most highly-engaging, and trend-setting short-form clip candidates from the provided transcript. \
+Do NOT pick random or mediocre segments. Be ruthless in your selection, but extract AS MANY highly viral moments as possible. \
+Every candidate must have an insanely strong, curiosity-inducing hook in the first 3 seconds to stop the scroll. \
+Clips should be 30-90 seconds long, completely self-contained, cut at clean boundaries, and deliver a massive payoff (a mind-blowing fact, hilarious joke, highly controversial opinion, or deep emotional insight). \
+Return up to 25 candidates as JSON matching exactly this schema: \
+{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}
+
+Transcript:
+{segments}"
     );
 
     let model =
@@ -381,14 +466,14 @@ pub async fn detect_candidates_with_local_llm(
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
 
-    let system_instructions = "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
-For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
-30-90 seconds long, and cut at clean sentence/thought boundaries. \
+    let system_instructions = "You are an elite, world-class social media strategist with a track record of generating viral multi-million-view Shorts, TikToks, and Reels. \
+Your sole objective is to identify the ABSOLUTE BEST, most highly-engaging, and trend-setting short-form clip candidates from the provided transcript. \
+Do NOT pick random or mediocre segments. Be ruthless in your selection. \
+Every candidate must have an insanely strong, curiosity-inducing hook in the first 3 seconds to stop the scroll. \
 CRITICAL: Each clip candidate MUST have a duration between 30 and 90 seconds (i.e. 'end' minus 'start' must be between 30.0 and 90.0). \
 Do NOT return short clips of less than 30 seconds. Combine multiple adjacent sentences to build a meaningful segment of 30-90 seconds. \
 Favor highly shareable content: concrete stories, strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
-Avoid rambling setup, context-dependent references, and pure filler. \
-You MUST identify and return at least 3-5 candidates (up to 10 candidates). Do not return an empty candidates list. \
+You MUST identify and return at least 3-10 candidates. Do not return an empty candidates list. \
 Ensure the 'start' and 'end' values correspond to actual timestamps in the transcript. Do not output 0.0 for start and end times.";
 
     let user_content = format!("Transcript:\n{}", segments);
