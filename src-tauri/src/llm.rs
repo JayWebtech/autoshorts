@@ -86,106 +86,24 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
 }
 
 #[derive(Debug, Deserialize)]
-struct GeminiResponse {
-    candidates: Vec<GeminiCandidate>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GeminiCandidate {
-    content: GeminiContent,
-}
-
-#[derive(Debug, Deserialize)]
-struct GeminiContent {
-    parts: Vec<GeminiPart>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GeminiPart {
-    text: Option<String>,
-}
-
-pub async fn detect_candidates_with_gemini(
-    transcript: &NormalizedTranscript,
-    api_key: &str,
-) -> Result<Vec<CandidateDraft>> {
-    let segments = compact_segments(&transcript.segments);
-    let prompt = format!(
-        "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
-For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
-30-90 seconds long, and cut at clean sentence/thought boundaries. Favor highly shareable content: concrete stories, \
-strong opinions, emotional turns, surprising or counter-intuitive claims, clear payoffs, and high-energy/dramatic peaks. \
-Avoid rambling setup, context-dependent references, and pure filler. Return up to 10 candidates as JSON matching this schema: \
-{{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
-    );
-
-    let model = std::env::var("GEMINI_MODEL").unwrap_or_else(|_| "gemini-2.5-flash".to_string());
-    let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-        model, api_key
-    );
-
-    let response = reqwest::Client::new()
-        .post(&url)
-        .json(&json!({
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "text": prompt
-                        }
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "temperature": 0.2
-            }
-        }))
-        .send()
-        .await
-        .context("calling Gemini")?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!("Gemini request failed ({status}): {body}"));
-    }
-
-    let res_body: GeminiResponse = response.json().await.context("parsing Gemini response")?;
-    let text = res_body
-        .candidates
-        .first()
-        .and_then(|c| c.content.parts.first())
-        .and_then(|p| p.text.clone())
-        .ok_or_else(|| anyhow!("Gemini response did not include content text"))?;
-
-    let min_duration = if transcript.duration < 60.0 {
-        (transcript.duration * 0.5).max(5.0)
-    } else {
-        30.0
-    };
-    parse_candidate_json(&text, min_duration)
-}
-
-#[derive(Debug, Deserialize)]
-struct ChatCompletionResponse {
-    choices: Vec<ChatCompletionChoice>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ChatCompletionChoice {
-    message: ChatCompletionMessage,
-}
-
-#[derive(Debug, Deserialize)]
-struct ChatCompletionMessage {
+struct OpenAiMessage {
     content: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiChoice {
+    message: OpenAiMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiResponse {
+    choices: Vec<OpenAiChoice>,
 }
 
 pub async fn detect_candidates_with_openai(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    model: &str,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
@@ -196,8 +114,6 @@ strong opinions, emotional turns, surprising or counter-intuitive claims, clear 
 Avoid rambling setup, context-dependent references, and pure filler. Return up to 10 candidates as JSON matching this schema: \
 {{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
     );
-
-    let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
 
     let response = reqwest::Client::new()
         .post("https://api.openai.com/v1/chat/completions")
@@ -225,8 +141,7 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
         return Err(anyhow!("OpenAI request failed ({status}): {body}"));
     }
 
-    let res_body: ChatCompletionResponse =
-        response.json().await.context("parsing OpenAI response")?;
+    let res_body: OpenAiResponse = response.json().await.context("parsing OpenAI response")?;
     let text = res_body
         .choices
         .first()
@@ -241,9 +156,30 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
     parse_candidate_json(&text, min_duration)
 }
 
-pub async fn detect_candidates_with_openrouter(
+#[derive(Debug, Deserialize)]
+struct GeminiPart {
+    text: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeminiContent {
+    parts: Vec<GeminiPart>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeminiCandidate {
+    content: GeminiContent,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeminiResponse {
+    candidates: Vec<GeminiCandidate>,
+}
+
+pub async fn detect_candidates_with_gemini(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    model: &str,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
@@ -255,44 +191,46 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
 {{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
     );
 
-    let model =
-        std::env::var("OPENROUTER_MODEL").unwrap_or_else(|_| "google/gemini-2.5-flash".to_string());
+    let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
 
     let response = reqwest::Client::new()
-        .post("https://openrouter.ai/api/v1/chat/completions")
-        .header("Authorization", format!("Bearer {api_key}"))
+        .post(&url)
+        .header("x-goog-api-key", api_key)
         .json(&json!({
-            "model": model,
-            "messages": [
+            "contents": [
                 {
-                    "role": "user",
-                    "content": prompt,
+                    "parts": [
+                        { "text": prompt }
+                    ]
                 }
             ],
-            "temperature": 0.2,
-            "response_format": {
-                "type": "json_object"
+            "generationConfig": {
+                "temperature": 0.2,
+                "responseMimeType": "application/json"
             }
         }))
         .send()
         .await
-        .context("calling OpenRouter")?;
+        .context("calling Gemini")?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!("OpenRouter request failed ({status}): {body}"));
+        return Err(anyhow!("Gemini request failed ({status}): {body}"));
     }
 
-    let res_body: ChatCompletionResponse = response
-        .json()
-        .await
-        .context("parsing OpenRouter response")?;
+    let res_body: GeminiResponse = response.json().await.context("parsing Gemini response")?;
     let text = res_body
-        .choices
-        .first()
-        .map(|c| c.message.content.clone())
-        .ok_or_else(|| anyhow!("OpenRouter response did not include choices content"))?;
+        .candidates
+        .into_iter()
+        .find_map(|candidate| {
+            candidate
+                .content
+                .parts
+                .into_iter()
+                .find_map(|part| part.text)
+        })
+        .ok_or_else(|| anyhow!("Gemini response did not include text content"))?;
 
     let min_duration = if transcript.duration < 60.0 {
         (transcript.duration * 0.5).max(5.0)
