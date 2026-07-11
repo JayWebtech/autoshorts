@@ -354,7 +354,7 @@ function App() {
   async function runAutoPipeline(projectId: string) {
     setError(null);
     const env = await invoke<EnvironmentStatus>("environment_status");
-    
+
     if (transcriptionEngine === "local") {
       if (!env.hasLocalWhisperModel) {
         setError("Import successful. Local Whisper GGML model (ggml-base.bin) is missing in your models directory. Please add it to start transcription.");
@@ -591,10 +591,10 @@ function App() {
     <div className="app-shell-container">
       <main className="app-shell">
         <aside className="sidebar">
-          <div 
-            className="brand-row" 
-            onClick={() => setDetail(null)} 
-            style={{ cursor: "pointer" }} 
+          <div
+            className="brand-row"
+            onClick={() => setDetail(null)}
+            style={{ cursor: "pointer" }}
             title="Go to Home Dashboard"
           >
             <div className="brand-mark">
@@ -644,7 +644,7 @@ function App() {
                   <h2>{detail.project.name || fileName(detail.project.sourcePath)}</h2>
                 </div>
                 <div className="topbar-actions">
-                  <button 
+                  <button
                     className={`icon-button settings-toggle ${showSettings ? "active" : ""}`}
                     onClick={() => setShowSettings(!showSettings)}
                     title="API Settings"
@@ -670,8 +670,6 @@ function App() {
                         <option value="local">Local Whisper (Offline)</option>
                         <option value="deepgram">Deepgram (Cloud)</option>
                       </select>
-                    </label>
-                    <label>
                       <span>LLM Engine</span>
                       <select
                         value={llmEngine}
@@ -771,9 +769,9 @@ function App() {
                             placeholder="e.g. llama3.2, qwen2.5:7b"
                             type="text"
                           />
-                          <button 
-                            type="button" 
-                            className="icon-button" 
+                          <button
+                            type="button"
+                            className="icon-button"
                             style={{ minHeight: '36px', height: '36px' }}
                             onClick={() => pullModelDirectly(localLlmModel)}
                           >
@@ -784,9 +782,9 @@ function App() {
                     )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-                    <button 
-                      type="button" 
-                      className="icon-button" 
+                    <button
+                      type="button"
+                      className="icon-button"
                       style={{ background: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}
                       onClick={() => {
                         if (window.confirm("Are you sure you want to reset your configuration and restart onboarding from scratch?")) {
@@ -908,7 +906,7 @@ function App() {
                               {candidate.selected && <Check size={14} />}
                             </div>
                           </div>
-                          
+
                           <div className="candidate-body">
                             <div className="candidate-meta">
                               <span>{formatTime(candidate.startSec)} - {formatTime(candidate.endSec)}</span>
@@ -916,7 +914,7 @@ function App() {
                             </div>
                             <h4>{candidate.hook}</h4>
                             <p className="candidate-rationale">{candidate.rationale}</p>
-                            
+
                             <div className="candidate-actions">
                               <span className={`clip-status ${isCut ? "ready" : clip?.status === "error" ? "error" : ""}`}>
                                 {isCut ? "Cut ready" : clip?.status === "error" ? "Cut failed" : clip?.status ?? "Pending"}
@@ -1031,9 +1029,9 @@ function App() {
               <h3>Choose Caption Style</h3>
               <p>Select how your automated captions should look on the portrait short-form video clips.</p>
             </div>
-            
+
             <div className="style-grid">
-              <div 
+              <div
                 className={`style-card ${selectedStyle === "modern-box" ? "selected" : ""}`}
                 onClick={() => setSelectedStyle("modern-box")}
               >
@@ -1044,7 +1042,7 @@ function App() {
                 <div className="style-card-desc">Sleek white text inside a semi-transparent black background padding box. Highly readable.</div>
               </div>
 
-              <div 
+              <div
                 className={`style-card ${selectedStyle === "classic-outline" ? "selected" : ""}`}
                 onClick={() => setSelectedStyle("classic-outline")}
               >
@@ -1055,7 +1053,7 @@ function App() {
                 <div className="style-card-desc">Vibrant bold yellow text with a clean black outline. High-energy CapCut formatting.</div>
               </div>
 
-              <div 
+              <div
                 className={`style-card ${selectedStyle === "minimal-shadow" ? "selected" : ""}`}
                 onClick={() => setSelectedStyle("minimal-shadow")}
               >
@@ -1066,7 +1064,7 @@ function App() {
                 <div className="style-card-desc">Pure white text with a soft, elegant drop shadow. Unobtrusive and modern.</div>
               </div>
 
-              <div 
+              <div
                 className={`style-card ${selectedStyle === "vibrant-cyan" ? "selected" : ""}`}
                 onClick={() => setSelectedStyle("vibrant-cyan")}
               >
@@ -1077,7 +1075,7 @@ function App() {
                 <div className="style-card-desc">Vibrant tech cyan text with a black drop shadow for a clean look.</div>
               </div>
 
-              <div 
+              <div
                 className={`style-card ${selectedStyle === "vibrant-yellow-box" ? "selected" : ""}`}
                 onClick={() => setSelectedStyle("vibrant-yellow-box")}
               >
@@ -1088,7 +1086,7 @@ function App() {
                 <div className="style-card-desc">Bold black text inside a solid yellow padding box. Punchy and high visibility.</div>
               </div>
 
-              <div 
+              <div
                 className={`style-card ${selectedStyle === "vibrant-green" ? "selected" : ""}`}
                 onClick={() => setSelectedStyle("vibrant-green")}
               >
@@ -1099,7 +1097,7 @@ function App() {
                 <div className="style-card-desc">High-energy neon green text with black borders and a drop shadow (Hormozi style).</div>
               </div>
 
-              <div 
+              <div
                 className={`style-card ${selectedStyle === "vibrant-red" ? "selected" : ""}`}
                 onClick={() => setSelectedStyle("vibrant-red")}
               >
@@ -1134,11 +1132,11 @@ function App() {
               <div className="download-loader">
                 <Loader2 className="spin" size={48} />
               </div>
-              
+
               <div className="progress-bar-container">
                 <div className="progress-bar-fill" style={{ width: `${modelDownloadProgress}%` }}></div>
               </div>
-              
+
               <div className="download-stats">
                 <span className="download-status">{modelDownloadStatus}</span>
                 <span className="download-percentage">{modelDownloadProgress}%</span>
@@ -1227,7 +1225,7 @@ function Onboarding({
 }: OnboardingProps) {
   const [setupMode, setSetupMode] = useState<"choose" | "local" | "cloud" | "downloading">("choose");
   const [selectedModel, setSelectedModel] = useState<string>("llama3.2");
-  
+
   const [dgKey, setDgKey] = useState(initialDeepgramKey);
   const [antKey, setAntKey] = useState(initialAnthropicKey);
   const [dsKey, setDsKey] = useState(initialDeepseekKey);
@@ -1256,12 +1254,12 @@ function Onboarding({
       setError("Please provide at least one LLM Key (Claude, DeepSeek, OpenAI, or Gemini).");
       return;
     }
-    
+
     setTranscriptionEngine("deepgram");
     setDeepgramKey(dgKey.trim());
     localStorage.setItem("autoshorts_deepgram_key", dgKey.trim());
     localStorage.setItem("autoshorts_transcription_engine", "deepgram");
-    
+
     if (antKey.trim()) {
       setLlmEngine("claude");
       setAnthropicKey(antKey.trim());
@@ -1292,9 +1290,9 @@ function Onboarding({
     setError(null);
     setCheckingOllama(true);
     setDownloadProgress(0);
-    
+
     await refreshEnv();
-    
+
     let isOllamaRunning = false;
     try {
       const currentEnv = await invoke<EnvironmentStatus>("environment_status");
@@ -1302,13 +1300,13 @@ function Onboarding({
     } catch (e) {
       // ignore
     }
-    
+
     setCheckingOllama(false);
 
     if (!isOllamaRunning) {
       setSetupMode("downloading");
       setDownloadStatus("Ollama not found. Starting automatic installer...");
-      
+
       try {
         const unlistenInstall = await listen<string>("ollama-install-status", (event) => {
           setDownloadStatus(event.payload);
@@ -1341,18 +1339,18 @@ function Onboarding({
       });
 
       await invoke("pull_ollama_model", { modelName: selectedModel });
-      
+
       unlisten();
 
       setTranscriptionEngine("local");
       setLlmEngine("local");
       setLocalLlmModel(selectedModel);
-      
+
       localStorage.setItem("autoshorts_transcription_engine", "local");
       localStorage.setItem("autoshorts_llm_engine", "local");
       localStorage.setItem("autoshorts_local_llm_model", selectedModel);
       localStorage.setItem("autoshorts_onboarded", "true");
-      
+
       onComplete();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -1430,13 +1428,13 @@ function Onboarding({
                 <div className="step-body">
                   <h4>Set up local LLM (Ollama)</h4>
                   <p>
-                    Ollama must be installed and running on your machine. 
+                    Ollama must be installed and running on your machine.
                     If you don't have it installed, you can download it from <a href="https://ollama.com" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}>ollama.com</a>.
                   </p>
                   <p>Select a model to download:</p>
-                  
+
                   <div className="model-cards">
-                    <div 
+                    <div
                       className={`model-card ${selectedModel === "llama3.2" ? "active" : ""}`}
                       onClick={() => setSelectedModel("llama3.2")}
                     >
@@ -1447,7 +1445,7 @@ function Onboarding({
                       <p>Requires 8GB+ RAM. Recommended for standard setups. Fast and efficient.</p>
                     </div>
 
-                    <div 
+                    <div
                       className={`model-card ${selectedModel === "qwen2.5:3b" ? "active" : ""}`}
                       onClick={() => setSelectedModel("qwen2.5:3b")}
                     >
@@ -1458,7 +1456,7 @@ function Onboarding({
                       <p>Requires 8GB+ RAM. Excellent coding and logical reasoning abilities.</p>
                     </div>
 
-                    <div 
+                    <div
                       className={`model-card ${selectedModel === "qwen2.5:7b" ? "active" : ""}`}
                       onClick={() => setSelectedModel("qwen2.5:7b")}
                     >
@@ -1475,9 +1473,9 @@ function Onboarding({
 
             <div className="onboarding-actions">
               <button type="button" className="icon-button" onClick={() => setSetupMode("choose")}>Back</button>
-              <button 
+              <button
                 type="button"
-                className="primary-action compact" 
+                className="primary-action compact"
                 onClick={startLocalSetup}
                 disabled={checkingOllama}
               >
@@ -1500,9 +1498,9 @@ function Onboarding({
             <div className="form-stack">
               <div className="input-group">
                 <label>Deepgram API Key *</label>
-                <input 
-                  type="password" 
-                  value={dgKey} 
+                <input
+                  type="password"
+                  value={dgKey}
                   onChange={(e) => setDgKey(e.target.value)}
                   placeholder="Insert your Deepgram API Key (for transcription)"
                 />
@@ -1510,9 +1508,9 @@ function Onboarding({
 
               <div className="input-group">
                 <label>Claude API Key</label>
-                <input 
-                  type="password" 
-                  value={antKey} 
+                <input
+                  type="password"
+                  value={antKey}
                   onChange={(e) => setAntKey(e.target.value)}
                   placeholder="Insert your Anthropic API Key (moment detection)"
                 />
@@ -1568,11 +1566,11 @@ function Onboarding({
               <div className="download-loader">
                 <Loader2 className="spin" size={48} />
               </div>
-              
+
               <div className="progress-bar-container">
                 <div className="progress-bar-fill" style={{ width: `${downloadProgress}%` }}></div>
               </div>
-              
+
               <div className="download-stats">
                 <span className="download-status">{downloadStatus}</span>
                 <span className="download-percentage">{downloadProgress}%</span>

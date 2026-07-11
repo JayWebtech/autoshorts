@@ -4,7 +4,6 @@ use serde_json::json;
 
 use crate::models::{CandidateDraft, NormalizedTranscript, TranscriptSegment};
 
-
 #[derive(Debug, Deserialize)]
 struct AnthropicMessage {
     content: Vec<AnthropicContent>,
@@ -319,7 +318,7 @@ pub async fn detect_candidates_with_local_llm(
     model_name: &str,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
-    
+
     let system_instructions = "You are identifying the most viral moments and strongest short-form clip candidates from a long-form transcript. \
 For each candidate, the clip must be self-contained, starting with an extremely engaging hook within the first 3 seconds (to capture immediate attention on social feeds), \
 30-90 seconds long, and cut at clean sentence/thought boundaries. \
@@ -381,49 +380,16 @@ Ensure the 'start' and 'end' values correspond to actual timestamps in the trans
         return Err(anyhow!("Local Ollama request failed ({status}): {body}"));
     }
 
-    let res_body: OllamaResponse = response.json().await.context("parsing local Ollama response")?;
+    let res_body: OllamaResponse = response
+        .json()
+        .await
+        .context("parsing local Ollama response")?;
     let min_duration = if transcript.duration < 60.0 {
         (transcript.duration * 0.5).max(5.0)
     } else {
         30.0
     };
     parse_candidate_json(&res_body.message.content, min_duration)
-}
-
-pub fn demo_candidates(transcript: &NormalizedTranscript) -> Vec<CandidateDraft> {
-    transcript
-        .segments
-        .chunks(8)
-        .take(10)
-        .enumerate()
-        .filter_map(|(index, chunk)| {
-            let first = chunk.first()?;
-            let last = chunk.last()?;
-            let duration = last.end - first.start;
-            if duration < 12.0 {
-                return None;
-            }
-
-            let end = if duration > 90.0 {
-                first.start + 90.0
-            } else {
-                last.end
-            };
-
-            Some(CandidateDraft {
-                start: first.start,
-                end,
-                score: (0.86 - (index as f64 * 0.035)).max(0.55),
-                hook: first
-                    .text
-                    .split_whitespace()
-                    .take(12)
-                    .collect::<Vec<_>>()
-                    .join(" "),
-                rationale: "Demo ranking generated without Claude. Use ANTHROPIC_API_KEY for production-quality moment detection.".to_string(),
-            })
-        })
-        .collect()
 }
 
 fn compact_segments(segments: &[TranscriptSegment]) -> String {
@@ -449,12 +415,19 @@ fn parse_candidate_json(text: &str, min_duration: f64) -> Result<Vec<CandidateDr
         .trim();
 
     let val: serde_json::Value = serde_json::from_str(trimmed).context("parsing candidate JSON")?;
-    
+
     let candidates_arr = if val.is_array() {
         val.as_array().cloned()
     } else if val.is_object() {
         let mut found_arr = None;
-        for key in &["candidates", "Candidates", "moments", "clips", "segments", "results"] {
+        for key in &[
+            "candidates",
+            "Candidates",
+            "moments",
+            "clips",
+            "segments",
+            "results",
+        ] {
             if let Some(arr) = val.get(*key).and_then(|v| v.as_array()) {
                 found_arr = Some(arr.clone());
                 break;
@@ -545,12 +518,14 @@ fn parse_candidate_json(text: &str, min_duration: f64) -> Result<Vec<CandidateDr
             score = 0.0;
         }
 
-        let hook = item.get("hook")
+        let hook = item
+            .get("hook")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
 
-        let rationale = item.get("rationale")
+        let rationale = item
+            .get("rationale")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
@@ -568,8 +543,7 @@ fn parse_candidate_json(text: &str, min_duration: f64) -> Result<Vec<CandidateDr
         .clone()
         .into_iter()
         .filter(|candidate| {
-            (candidate.end - candidate.start) >= min_duration
-                && !candidate.hook.trim().is_empty()
+            (candidate.end - candidate.start) >= min_duration && !candidate.hook.trim().is_empty()
         })
         .collect::<Vec<_>>();
 
@@ -577,8 +551,7 @@ fn parse_candidate_json(text: &str, min_duration: f64) -> Result<Vec<CandidateDr
         candidates = drafts
             .into_iter()
             .filter(|candidate| {
-                (candidate.end - candidate.start) >= 5.0
-                    && !candidate.hook.trim().is_empty()
+                (candidate.end - candidate.start) >= 5.0 && !candidate.hook.trim().is_empty()
             })
             .collect::<Vec<_>>();
     }
