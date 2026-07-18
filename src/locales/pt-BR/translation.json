@@ -1,0 +1,240 @@
+{
+  "brand": {
+    "name": "AutoShorts",
+    "tagline": "Gravação longa entra. Clipes curtos saem."
+  },
+  "sidebar": {
+    "goHomeTitle": "Ir para o Painel Inicial",
+    "importRecording": "Importar gravação",
+    "allProjects": "Todos os Projetos"
+  },
+  "topbar": {
+    "apiSettings": "Configurações de API",
+    "refreshTitle": "Atualizar",
+    "languageSelector": "Idioma"
+  },
+  "settings": {
+    "transcriptionEngine": "Motor de Transcrição",
+    "transcriptionOptions": {
+      "local": "Whisper Local (Offline)",
+      "deepgram": "Deepgram (Nuvem)"
+    },
+    "llmEngine": "Motor de LLM",
+    "llmOptions": {
+      "local": "Ollama (Local Offline)",
+      "claude": "Claude (Nuvem)",
+      "deepseek": "DeepSeek (Nuvem)",
+      "gemini": "Google Gemini (Nuvem)",
+      "openai": "OpenAI (Nuvem)",
+      "openrouter": "OpenRouter (Nuvem)"
+    },
+    "deepgramKey": "Chave de API do Deepgram",
+    "claudeKey": "Chave de API do Claude",
+    "deepseekKey": "Chave de API do DeepSeek",
+    "geminiKey": "Chave de API do Gemini",
+    "openaiKey": "Chave de API do OpenAI",
+    "openrouterKey": "Chave de API do OpenRouter",
+    "loadedFromEnv": "Carregada do ambiente",
+    "optionalKey": "Opcional ({{label}})",
+    "ollamaModelName": "Nome do Modelo Ollama",
+    "ollamaModelPlaceholder": "ex: llama3.2, qwen2.5:7b",
+    "pull": "Baixar",
+    "resetConfig": "Redefinir Configurações do Aplicativo e Onboarding",
+    "resetConfirm": "Tem certeza de que deseja redefinir sua configuração e reiniciar o onboarding do zero?"
+  },
+  "pipeline": {
+    "transcript": "Transcrição",
+    "moments": "Momentos",
+    "cut": "Corte",
+    "captions": "Legendas",
+    "export": "Exportar"
+  },
+  "transcript": {
+    "title": "Transcrição",
+    "segments_one": "{{count}} segmento",
+    "segments_other": "{{count}} segmentos",
+    "empty": "Sem transcrição",
+    "transcribe": "Transcrever",
+    "pending": "Transcrição pendente",
+    "warningLocal": "O Whisper local (pacote Python 'openai-whisper') não está instalado. Execute 'pip3 install openai-whisper' no seu terminal.",
+    "warningCloud": "A chave de API do Deepgram está ausente. A transcrição não funcionará. Adicione sua chave nas Configurações de API."
+  },
+  "candidates": {
+    "title": "Candidatos a Clipes",
+    "selected_one": "{{count}} selecionado",
+    "selected_other": "{{count}} selecionados",
+    "empty": "Sem candidatos",
+    "cut": "Cortar",
+    "findMoments": "Encontrar Momentos Virais",
+    "warningLocal": "O servidor local do Ollama não está em execução em http://localhost:11434. A detecção de momentos não funcionará.",
+    "warningCloud": "A chave de API do {{engine}} está ausente. A identificação de momentos virais não funcionará. Adicione sua chave nas Configurações de API.",
+    "match": "Compatibilidade",
+    "cutReady": "Corte pronto",
+    "cutFailed": "Falha no corte",
+    "pending": "Pendente",
+    "cutting": "Cortando...",
+    "reCut": "Recortar",
+    "subtitles": "Legendas: {{path}}"
+  },
+  "home": {
+    "title": "Todos os Projetos",
+    "subtitle": "Selecione um projeto abaixo ou importe um novo arquivo de mídia para começar.",
+    "importRecording": "Importar gravação",
+    "noProjects": "Nenhum projeto encontrado",
+    "emptyHint": "Importe sua primeira gravação para começar a criar shorts.",
+    "duration": "Duração:",
+    "created": "Criado:",
+    "open": "Abrir",
+    "rename": "Renomear",
+    "delete": "Excluir"
+  },
+  "status": {
+    "systemReady": "Sistema Pronto",
+    "ffmpeg": "ffmpeg",
+    "ffprobe": "ffprobe",
+    "whisperModel": "Modelo Whisper",
+    "ollama": "Ollama",
+    "deepgram": "Deepgram",
+    "claude": "Claude",
+    "deepseek": "DeepSeek",
+    "ffmpegStatus": "Status do FFmpeg",
+    "ffprobeStatus": "Status do FFprobe",
+    "whisperModelStatus": "Status do Modelo Whisper",
+    "ollamaStatus": "Status do Ollama",
+    "deepgramKeyStatus": "Status da chave Deepgram",
+    "claudeKeyStatus": "Status da chave Claude",
+    "deepseekKeyStatus": "Status da chave DeepSeek"
+  },
+  "styleModal": {
+    "title": "Escolher Estilo de Legenda",
+    "subtitle": "Selecione como suas legendas automatizadas devem aparecer nos clipes verticais de short-form.",
+    "styles": {
+      "modernBox": {
+        "name": "Caixa Moderna",
+        "description": "Texto branco elegante dentro de uma caixa de preenchimento com fundo preto semitransparente. Altamente legível."
+      },
+      "classicOutline": {
+        "name": "Contorno Clássico",
+        "description": "Texto amarelo vibrante e negrito com um contorno preto limpo. Formatação de alta energia no estilo CapCut."
+      },
+      "minimalShadow": {
+        "name": "Sombra Minimalista",
+        "description": "Texto branco puro com uma sombra suave e elegante. Discreto e moderno."
+      },
+      "vibrantCyan": {
+        "name": "Ciano Vibrante",
+        "description": "Texto ciano tecnológico vibrante com sombra preta para um visual limpo."
+      },
+      "vibrantYellowBox": {
+        "name": "Caixa Amarela Vibrante",
+        "description": "Texto preto negrito dentro de uma caixa de preenchimento amarela sólida. Chamativo e de alta visibilidade."
+      },
+      "vibrantGreen": {
+        "name": "Verde Vibrante",
+        "description": "Texto verde neon de alta energia com bordas pretas e sombra (estilo Hormozi)."
+      },
+      "vibrantRed": {
+        "name": "Vermelho Vibrante",
+        "description": "Texto carmim neon dramático com contorno e sombra (estilo gaming/ação)."
+      }
+    },
+    "cancel": "Cancelar",
+    "confirm": "Confirmar e Importar"
+  },
+  "modelDownload": {
+    "title": "Baixando Modelo Ollama",
+    "description": "Baixando pesos do modelo \"{{modelName}}\". Por favor, não feche o aplicativo.",
+    "connecting": "Conectando ao Ollama...",
+    "complete": "Download concluído!"
+  },
+  "onboarding": {
+    "welcome": "Bem-vindo ao AutoShorts",
+    "tagline": "Gravação longa entra. Clipes curtos saem. Selecione como deseja executar o estúdio.",
+    "offline": {
+      "title": "Totalmente Offline e Privado",
+      "description": "Processe tudo localmente no seu computador. Privado, seguro e completamente gratuito.",
+      "badge": "Offline (Ollama)"
+    },
+    "cloud": {
+      "title": "APIs na Nuvem",
+      "description": "Use serviços em nuvem de alta velocidade para transcrição e análise. Não é necessária GPU local.",
+      "badge": "Chaves de API Necessárias"
+    },
+    "localSetup": {
+      "title": "Configurar Modo Offline",
+      "subtitle": "Siga estas etapas para configurar seu estúdio local.",
+      "step1": {
+        "title": "Instalar o Python Whisper",
+        "description": "Abra seu terminal e execute o seguinte comando para instalar o motor de transcrição:",
+        "command": "pip3 install -U openai-whisper",
+        "copy": "Copiar",
+        "copied": "Copiado!",
+        "installed": "Whisper instalado no Python!",
+        "notDetected": "Pacote Python 'whisper' ainda não detectado. Execute o comando acima."
+      },
+      "step2": {
+        "title": "Configurar LLM local (Ollama)",
+        "description": "O Ollama deve estar instalado e em execução na sua máquina. Se ainda não o tiver instalado, baixe-o em <a href=\"https://ollama.com\" target=\"_blank\" rel=\"noreferrer\">ollama.com</a>.",
+        "selectModel": "Selecione um modelo para baixar:",
+        "models": {
+          "llama32": {
+            "name": "LLaMA 3.2 3B",
+            "size": "1,9 GB",
+            "description": "Requer 8GB+ de RAM. Recomendado para configurações padrão. Rápido e eficiente."
+          },
+          "qwen3b": {
+            "name": "Qwen 2.5 3B",
+            "size": "2,0 GB",
+            "description": "Requer 8GB+ de RAM. Excelentes habilidades de codificação e raciocínio lógico."
+          },
+          "qwen7b": {
+            "name": "Qwen 2.5 7B",
+            "size": "4,7 GB",
+            "description": "Requer 16GB+ de RAM. Detecção de momentos de alta qualidade e precisão no gancho."
+          }
+        }
+      },
+      "back": "Voltar",
+      "downloadStart": "Baixar e Iniciar Configuração",
+      "checkingOllama": "Verificando Ollama..."
+    },
+    "cloudSetup": {
+      "title": "Configurar APIs na Nuvem",
+      "subtitle": "Adicione suas chaves abaixo. O AutoShorts direcionará transcrição e análise para a nuvem.",
+      "deepgramKey": "Chave de API do Deepgram *",
+      "deepgramPlaceholder": "Insira sua chave de API do Deepgram (para transcrição)",
+      "claudeKey": "Chave de API do Claude",
+      "claudePlaceholder": "Insira sua chave de API da Anthropic (detecção de momentos)",
+      "deepseekKey": "Chave de API do DeepSeek",
+      "deepseekPlaceholder": "Insira sua chave de API do DeepSeek (detecção de momentos alternativa)",
+      "help": "* Chave do Deepgram + pelo menos uma chave de LLM (Claude ou DeepSeek) são necessárias.",
+      "back": "Voltar",
+      "saveStart": "Salvar e Iniciar"
+    },
+    "downloading": {
+      "title": "Baixando Modelo Local",
+      "subtitle": "Aguarde enquanto seu ambiente local é baixado. Não feche o aplicativo."
+    },
+    "errors": {
+      "deepgramRequired": "A chave de API do Deepgram é obrigatória para o modo nuvem.",
+      "llmRequired": "Forneça pelo menos uma chave de LLM (Claude ou DeepSeek).",
+      "installFailed": "Falha na instalação automática: {{error}}. Instale manualmente em ollama.com.",
+      "ollamaNotFound": "Ollama não encontrado. Iniciando instalador automático...",
+      "ollamaConnected": "Ollama conectado. Iniciando download do modelo..."
+    }
+  },
+  "common": {
+    "fileFilterMedia": "Mídia",
+    "probing": "Sondando...",
+    "initializingDownload": "Inicializando download...",
+    "alertModelDownloadFailed": "Falha ao baixar o modelo: {{error}}", 
+    "renamePrompt": "Renomear Projeto:",
+    "deleteConfirm": "Tem certeza de que deseja excluir o projeto \"{{name}}\"?",
+    "downloadModelPrompt": "O modelo \"{{modelName}}\" do Ollama não está baixado. Deseja baixá-lo agora?",
+    "importSuccessWhisperMissing": "Importação bem-sucedida. O modelo GGML Whisper local (ggml-base.bin) está ausente no diretório de modelos. Adicione-o para iniciar a transcrição.",
+    "importSuccessDeepgramMissing": "Importação bem-sucedida. A chave do Deepgram está ausente. Adicione-a para iniciar a transcrição.",
+    "importSuccessOllamaMissing": "Importação bem-sucedida. O servidor local do Ollama não está em execução em http://localhost:11434. Inicie-o para encontrar momentos virais.",
+    "transcriptionCompleteKeyMissing": "Transcrição concluída. A chave de API do {{engine}} está ausente. Adicione-a nas configurações para analisar momentos virais.",
+    "selectProjectTitle": "Abrir projeto {{name}}"
+  }
+}

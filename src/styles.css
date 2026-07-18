@@ -1714,3 +1714,23 @@ button:disabled {
   font-weight: 700;
   color: var(--accent-primary);
 }
+
+.language-selector {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 6px 10px;
+  cursor: pointer;
+  outline: none;
+}
+
+.language-selector:focus {
+  border-color: var(--border-color-focus);
+}
+
+.language-selector option {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+}
