@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
+import { useTranslation } from "react-i18next";
+import "./i18n";
+import { LanguageSelector } from "./components/LanguageSelector";
 import {
   AudioLines,
   BadgeCheck,
@@ -112,6 +115,7 @@ type BusyState =
   | "cut";
 
 function App() {
+  const { t } = useTranslation();
   const [environment, setEnvironment] = useState<EnvironmentStatus | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
@@ -251,7 +255,7 @@ function App() {
   const pullModelDirectly = async (modelName: string) => {
     setDownloadingModelName(modelName);
     setModelDownloadProgress(0);
-    setModelDownloadStatus("Connecting to Ollama...");
+    setModelDownloadStatus(t("modelDownload.connecting"));
     try {
       const unlisten = await listen<{
         status: string;
@@ -268,11 +272,11 @@ function App() {
 
       await invoke("pull_ollama_model", { modelName });
       unlisten();
-      setModelDownloadStatus("Download complete!");
+      setModelDownloadStatus(t("modelDownload.complete"));
       setModelDownloadProgress(100);
       setTimeout(() => setDownloadingModelName(null), 500);
     } catch (err) {
-      alert("Failed to download model: " + String(err));
+      alert(t("common.alertModelDownloadFailed", { error: String(err) }));
       setDownloadingModelName(null);
     }
   };
@@ -311,7 +315,7 @@ function App() {
       multiple: false,
       filters: [
         {
-          name: "Media",
+          name: t("common.fileFilterMedia"),
           extensions: ["mp4", "mov", "mp3", "wav", "m4a"],
         },
       ],
@@ -349,20 +353,20 @@ function App() {
 
     if (transcriptionEngine === "local") {
       if (!env.hasLocalWhisperModel) {
-        setError("Import successful. Local Whisper GGML model (ggml-base.bin) is missing in your models directory. Please add it to start transcription.");
+        setError(t("common.importSuccessWhisperMissing"));
         return;
       }
     } else {
       const hasDG = env.hasDeepgramKey || deepgramKey.trim().length > 0;
       if (!hasDG) {
-        setError("Import successful. Deepgram key is missing. Please add it to start transcription.");
+        setError(t("common.importSuccessDeepgramMissing"));
         return;
       }
     }
 
     if (llmEngine === "local") {
       if (!env.hasOllama) {
-        setError("Import successful. Local Ollama server is not running at http://localhost:11434. Please start it to find viral moments.");
+        setError(t("common.importSuccessOllamaMissing"));
         return;
       }
     } else {
@@ -379,13 +383,8 @@ function App() {
               llmEngine === "openai" ? (env.hasOpenaiKey || activeKey.trim().length > 0) :
                 llmEngine === "openrouter" ? (env.hasOpenrouterKey || activeKey.trim().length > 0) : false;
       if (!hasActiveKey) {
-        const engineName =
-          llmEngine === "claude" ? "Claude" :
-            llmEngine === "deepseek" ? "DeepSeek" :
-              llmEngine === "gemini" ? "Gemini" :
-                llmEngine === "openai" ? "OpenAI" :
-                  llmEngine === "openrouter" ? "OpenRouter" : "LLM";
-        setError(`Transcription complete. ${engineName} API Key is missing. Please add it in settings to analyze viral moments.`);
+        const engineName = t(`status.${llmEngine === "claude" ? "claude" : llmEngine === "deepseek" ? "deepseek" : llmEngine === "gemini" ? "gemini" : llmEngine === "openai" ? "openai" : llmEngine === "openrouter" ? "openrouter" : "llm"}`);
+        setError(t("common.transcriptionCompleteKeyMissing", { engine: engineName }));
         return;
       }
     }
@@ -420,7 +419,7 @@ function App() {
     } catch (err) {
       const errMsg = String(err);
       if (llmEngine === "local" && (errMsg.includes("not found") || errMsg.includes("404"))) {
-        if (window.confirm(`Ollama model "${localLlmModel}" is not downloaded. Would you like to download it now?`)) {
+        if (window.confirm(t("common.downloadModelPrompt", { modelName: localLlmModel }))) {
           setTimeout(() => {
             void pullModelDirectly(localLlmModel).then(() => {
               void refresh(projectId);
@@ -439,7 +438,7 @@ function App() {
     const project = projects.find((p) => p.id === projectId);
     if (!project) return;
     const currentName = project.name || fileName(project.sourcePath);
-    const newName = window.prompt("Rename Project:", currentName);
+    const newName = window.prompt(t("common.renamePrompt"), currentName);
     if (newName === null) return;
     const trimmed = newName.trim();
     if (!trimmed) return;
@@ -456,7 +455,7 @@ function App() {
     const project = projects.find((p) => p.id === projectId);
     if (!project) return;
     const name = project.name || fileName(project.sourcePath);
-    if (!window.confirm(`Are you sure you want to delete the project "${name}"?`)) return;
+    if (!window.confirm(t("common.deleteConfirm", { name }))) return;
 
     try {
       await invoke("delete_project", { projectId });
@@ -502,7 +501,7 @@ function App() {
       } catch (err) {
         const errMsg = String(err);
         if (llmEngine === "local" && (errMsg.includes("not found") || errMsg.includes("404"))) {
-          if (window.confirm(`Ollama model "${localLlmModel}" is not downloaded. Would you like to download it now?`)) {
+          if (window.confirm(t("common.downloadModelPrompt", { modelName: localLlmModel }))) {
             setTimeout(() => {
               void pullModelDirectly(localLlmModel).then(() => {
                 void refresh(detail.project.id);
@@ -596,29 +595,29 @@ function App() {
             className="brand-row"
             onClick={() => setDetail(null)}
             style={{ cursor: "pointer" }}
-            title="Go to Home Dashboard"
+            title={t("sidebar.goHomeTitle")}
           >
             <div className="brand-mark">
               <Clapperboard size={20} />
             </div>
             <div>
-              <h1>AutoShorts</h1>
-              <p>Long recording in. Short clips out.</p>
+              <h1>{t("brand.name")}</h1>
+              <p>{t("brand.tagline")}</p>
             </div>
           </div>
 
           <button className="primary-action" onClick={importMedia} disabled={busy !== "idle"}>
             {busy === "import" ? <Loader2 className="spin" size={18} /> : <FileVideo size={18} />}
-            Import recording
+            {t("sidebar.importRecording")}
           </button>
 
-          <section className="project-list" aria-label="Projects">
+          <section className="project-list" aria-label={t("sidebar.allProjects")}>
             <button
               className={`project-row ${!detail ? "active" : ""}`}
               onClick={() => setDetail(null)}
             >
               <Clapperboard size={15} />
-              <span>All Projects</span>
+              <span>{t("sidebar.allProjects")}</span>
               <ChevronRight size={14} />
             </button>
 
@@ -645,15 +644,16 @@ function App() {
                   <h2>{detail.project.name || fileName(detail.project.sourcePath)}</h2>
                 </div>
                 <div className="topbar-actions">
+                  <LanguageSelector />
                   <button
                     className={`icon-button settings-toggle ${showSettings ? "active" : ""}`}
                     onClick={() => setShowSettings(!showSettings)}
-                    title="API Settings"
+                    title={t("topbar.apiSettings")}
                   >
                     <SlidersHorizontal size={16} />
-                    <span>API Settings</span>
+                    <span>{t("topbar.apiSettings")}</span>
                   </button>
-                  <button className="icon-button" onClick={() => void refresh(detail.project.id)} title="Refresh">
+                  <button className="icon-button" onClick={() => void refresh(detail.project.id)} title={t("topbar.refreshTitle")}>
                     <RefreshCw size={18} />
                   </button>
                 </div>
@@ -663,89 +663,89 @@ function App() {
                 <div className="settings-panel">
                   <div className="key-stack-horizontal">
                     <label>
-                      <span>Transcription Engine</span>
+                      <span>{t("settings.transcriptionEngine")}</span>
                       <select
                         value={transcriptionEngine}
                         onChange={(event) => setTranscriptionEngine(event.target.value as "deepgram" | "local")}
                       >
-                        <option value="local">Local Whisper (Offline)</option>
-                        <option value="deepgram">Deepgram (Cloud)</option>
+                        <option value="local">{t("settings.transcriptionOptions.local")}</option>
+                        <option value="deepgram">{t("settings.transcriptionOptions.deepgram")}</option>
                       </select>
-                      <span>LLM Engine</span>
+                      <span>{t("settings.llmEngine")}</span>
                       <select
                         value={llmEngine}
                         onChange={(event) => setLlmEngine(event.target.value as any)}
                       >
-                        <option value="local">Ollama (Offline Local)</option>
-                        <option value="claude">Claude (Cloud)</option>
-                        <option value="deepseek">DeepSeek (Cloud)</option>
-                        <option value="gemini">Google Gemini (Cloud)</option>
-                        <option value="openai">OpenAI (Cloud)</option>
-                        <option value="openrouter">OpenRouter (Cloud)</option>
+                        <option value="local">{t("settings.llmOptions.local")}</option>
+                        <option value="claude">{t("settings.llmOptions.claude")}</option>
+                        <option value="deepseek">{t("settings.llmOptions.deepseek")}</option>
+                        <option value="gemini">{t("settings.llmOptions.gemini")}</option>
+                        <option value="openai">{t("settings.llmOptions.openai")}</option>
+                        <option value="openrouter">{t("settings.llmOptions.openrouter")}</option>
                       </select>
                     </label>
                     {transcriptionEngine === "deepgram" && (
                       <label>
-                        <span>Deepgram API Key</span>
+                        <span>{t("settings.deepgramKey")}</span>
                         <input
                           value={deepgramKey}
                           onChange={(event) => setDeepgramKey(event.target.value)}
-                          placeholder={environment?.hasDeepgramKey ? "Loaded from env" : "Optional (Deepgram API Key)"}
+                          placeholder={environment?.hasDeepgramKey ? t("settings.loadedFromEnv") : t("settings.optionalKey", { label: t("settings.deepgramKey") })}
                           type="password"
                         />
                       </label>
                     )}
                     {llmEngine === "claude" && (
                       <label>
-                        <span>Claude API Key</span>
+                        <span>{t("settings.claudeKey")}</span>
                         <input
                           value={anthropicKey}
                           onChange={(event) => setAnthropicKey(event.target.value)}
-                          placeholder={environment?.hasAnthropicKey ? "Loaded from env" : "Optional (Claude API Key)"}
+                          placeholder={environment?.hasAnthropicKey ? t("settings.loadedFromEnv") : t("settings.optionalKey", { label: t("settings.claudeKey") })}
                           type="password"
                         />
                       </label>
                     )}
                     {llmEngine === "deepseek" && (
                       <label>
-                        <span>DeepSeek API Key</span>
+                        <span>{t("settings.deepseekKey")}</span>
                         <input
                           value={deepseekKey}
                           onChange={(event) => setDeepseekKey(event.target.value)}
-                          placeholder={environment?.hasDeepseekKey ? "Loaded from env" : "Optional (DeepSeek API Key)"}
+                          placeholder={environment?.hasDeepseekKey ? t("settings.loadedFromEnv") : t("settings.optionalKey", { label: t("settings.deepseekKey") })}
                           type="password"
                         />
                       </label>
                     )}
                     {llmEngine === "gemini" && (
                       <label>
-                        <span>Gemini API Key</span>
+                        <span>{t("settings.geminiKey")}</span>
                         <input
                           value={geminiKey}
                           onChange={(event) => setGeminiKey(event.target.value)}
-                          placeholder={environment?.hasGeminiKey ? "Loaded from env" : "Optional (Gemini API Key)"}
+                          placeholder={environment?.hasGeminiKey ? t("settings.loadedFromEnv") : t("settings.optionalKey", { label: t("settings.geminiKey") })}
                           type="password"
                         />
                       </label>
                     )}
                     {llmEngine === "openai" && (
                       <label>
-                        <span>OpenAI API Key</span>
+                        <span>{t("settings.openaiKey")}</span>
                         <input
                           value={openaiKey}
                           onChange={(event) => setOpenaiKey(event.target.value)}
-                          placeholder={environment?.hasOpenaiKey ? "Loaded from env" : "Optional (OpenAI API Key)"}
+                          placeholder={environment?.hasOpenaiKey ? t("settings.loadedFromEnv") : t("settings.optionalKey", { label: t("settings.openaiKey") })}
                           type="password"
                         />
                       </label>
                     )}
                     {llmEngine === "openrouter" && (
                       <label>
-                        <span>OpenRouter API Key</span>
+                        <span>{t("settings.openrouterKey")}</span>
                         <input
                           value={openrouterKey}
                           onChange={(event) => setOpenrouterKey(event.target.value)}
-                          placeholder={environment?.hasOpenrouterKey ? "Loaded from env" : "Optional (OpenRouter API Key)"}
+                          placeholder={environment?.hasOpenrouterKey ? t("settings.loadedFromEnv") : t("settings.optionalKey", { label: t("settings.openrouterKey") })}
                           type="password"
                         />
                       </label>
@@ -753,12 +753,12 @@ function App() {
 
                     {llmEngine === "local" && (
                       <label>
-                        <span>Ollama Model Name</span>
+                        <span>{t("settings.ollamaModelName")}</span>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <input
                             value={localLlmModel}
                             onChange={(event) => setLocalLlmModel(event.target.value)}
-                            placeholder="e.g. llama3.2, qwen2.5:7b"
+                            placeholder={t("settings.ollamaModelPlaceholder")}
                             type="text"
                           />
                           <button
@@ -767,7 +767,7 @@ function App() {
                             style={{ minHeight: '36px', height: '36px' }}
                             onClick={() => pullModelDirectly(localLlmModel)}
                           >
-                            <Download size={14} /> Pull
+                            <Download size={14} /> {t("settings.pull")}
                           </button>
                         </div>
                       </label>
@@ -779,13 +779,13 @@ function App() {
                       className="icon-button"
                       style={{ background: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}
                       onClick={() => {
-                        if (window.confirm("Are you sure you want to reset your configuration and restart onboarding from scratch?")) {
+                        if (window.confirm(t("settings.resetConfirm"))) {
                           localStorage.clear();
                           window.location.reload();
                         }
                       }}
                     >
-                      Reset App Configuration & Onboarding
+                      {t("settings.resetConfig")}
                     </button>
                   </div>
                 </div>
@@ -794,24 +794,24 @@ function App() {
               {error && <div className="error-banner">{error}</div>}
 
               <div className="pipeline-strip">
-                <PipelineStep icon={<AudioLines size={16} />} label="Transcript" done={Boolean(detail.transcript)} />
-                <PipelineStep icon={<Sparkles size={16} />} label="Moments" done={detail.candidates.length > 0} />
-                <PipelineStep icon={<Scissors size={16} />} label="Cut" done={selectedCount > 0 && selectedCutCount === selectedCount} />
-                <PipelineStep icon={<Captions size={16} />} label="Captions" done={selectedCount > 0 && selectedCaptionsCount === selectedCount} />
-                <PipelineStep icon={<Download size={16} />} label="Export" done={selectedCount > 0 && selectedCutCount === selectedCount} />
+                <PipelineStep icon={<AudioLines size={16} />} label={t("pipeline.transcript")} done={Boolean(detail.transcript)} />
+                <PipelineStep icon={<Sparkles size={16} />} label={t("pipeline.moments")} done={detail.candidates.length > 0} />
+                <PipelineStep icon={<Scissors size={16} />} label={t("pipeline.cut")} done={selectedCount > 0 && selectedCutCount === selectedCount} />
+                <PipelineStep icon={<Captions size={16} />} label={t("pipeline.captions")} done={selectedCount > 0 && selectedCaptionsCount === selectedCount} />
+                <PipelineStep icon={<Download size={16} />} label={t("pipeline.export")} done={selectedCount > 0 && selectedCutCount === selectedCount} />
               </div>
 
               <div className="work-grid">
                 <section className="panel transcript-panel">
                   <div className="panel-heading">
                     <div>
-                      <h3>Transcript</h3>
-                      <p>{transcript ? `${transcript.segments.length} segments` : "No transcript"}</p>
+                      <h3>{t("transcript.title")}</h3>
+                      <p>{transcript ? t("transcript.segments", { count: transcript.segments.length }) : t("transcript.empty")}</p>
                     </div>
                     <div className="button-pair">
                       <button onClick={transcribe} disabled={busy !== "idle" || !canTranscribe}>
                         {busy === "transcribe" ? <Loader2 className="spin" size={16} /> : <AudioLines size={16} />}
-                        Transcribe
+                        {t("transcript.transcribe")}
                       </button>
                     </div>
                   </div>
@@ -819,8 +819,8 @@ function App() {
                   {!canTranscribe && (
                     <div className="api-warning">
                       {transcriptionEngine === "local"
-                        ? `⚠️ Local Whisper (Python package 'openai-whisper') is not installed. Run 'pip3 install openai-whisper' in your terminal.`
-                        : "⚠️ Deepgram API Key is missing. Transcribing will not work. Please add your key in API Settings."}
+                        ? t("transcript.warningLocal")
+                        : t("transcript.warningCloud")}
                     </div>
                   )}
 
@@ -830,24 +830,24 @@ function App() {
                         <span>{formatTime(segment.start)}</span>
                         <p>{segment.text}</p>
                       </article>
-                    )) ?? <EmptyState icon={<AudioLines size={28} />} label="Transcript pending" />}
+                    )) ?? <EmptyState icon={<AudioLines size={28} />} label={t("transcript.pending")} />}
                   </div>
                 </section>
 
                 <section className="panel candidate-panel">
                   <div className="panel-heading">
                     <div>
-                      <h3>Clip Candidates</h3>
-                      <p>{detail.candidates.length ? `${selectedCount} selected` : "No candidates"}</p>
+                      <h3>{t("candidates.title")}</h3>
+                      <p>{detail.candidates.length ? t("candidates.selected", { count: selectedCount }) : t("candidates.empty")}</p>
                     </div>
                     <div className="button-pair">
                       <button onClick={cutSelected} disabled={busy !== "idle" || selectedCount === 0 || !environment?.hasFfmpeg}>
                         {busy === "cut" ? <Loader2 className="spin" size={16} /> : <Scissors size={16} />}
-                        Cut
+                        {t("candidates.cut")}
                       </button>
                       <button onClick={() => void moments(false)} disabled={busy !== "idle" || !detail.transcript || !canUseActiveLlm}>
                         {busy === "moments" ? <Loader2 className="spin" size={16} /> : <Sparkles size={16} />}
-                        Find Viral Moments
+                        {t("candidates.findMoments")}
                       </button>
                     </div>
                   </div>
@@ -855,13 +855,8 @@ function App() {
                   {!canUseActiveLlm && (
                     <div className="api-warning">
                       {llmEngine === "local"
-                        ? "⚠️ Ollama local server is not running at http://localhost:11434. Moment detection will not work."
-                        : `⚠️ ${llmEngine === "claude" ? "Claude" :
-                          llmEngine === "deepseek" ? "DeepSeek" :
-                            llmEngine === "gemini" ? "Gemini" :
-                              llmEngine === "openai" ? "OpenAI" :
-                                llmEngine === "openrouter" ? "OpenRouter" : "LLM"
-                        } API Key is missing. Viral moment identification will not work. Please add your key in API Settings.`}
+                        ? t("candidates.warningLocal")
+                        : t("candidates.warningCloud", { engine: t(`status.${llmEngine === "claude" ? "claude" : llmEngine === "deepseek" ? "deepseek" : llmEngine === "gemini" ? "gemini" : llmEngine === "openai" ? "openai" : llmEngine === "openrouter" ? "openrouter" : "llm"}`) })}
                     </div>
                   )}
 
@@ -907,14 +902,14 @@ function App() {
                           <div className="candidate-body">
                             <div className="candidate-meta">
                               <span>{formatTime(candidate.startSec)} - {formatTime(candidate.endSec)}</span>
-                              <span className="candidate-score">{Math.round(candidate.score * 100)}% Match</span>
+                              <span className="candidate-score">{Math.round(candidate.score * 100)}% {t("candidates.match")}</span>
                             </div>
                             <h4>{candidate.hook}</h4>
                             <p className="candidate-rationale">{candidate.rationale}</p>
 
                             <div className="candidate-actions">
                               <span className={`clip-status ${isCut ? "ready" : clip?.status === "error" ? "error" : ""}`}>
-                                {isCut ? "Cut ready" : clip?.status === "error" ? "Cut failed" : clip?.status ?? "Pending"}
+                                {isCut ? t("candidates.cutReady") : clip?.status === "error" ? t("candidates.cutFailed") : clip?.status ?? t("candidates.pending")}
                               </span>
                               <button
                                 className="cut-button"
@@ -926,13 +921,13 @@ function App() {
                                 ) : (
                                   <Scissors size={14} />
                                 )}
-                                {renderingCandidateId === candidate.id ? "Cutting..." : isCut ? "Re-cut" : "Cut"}
+                                {renderingCandidateId === candidate.id ? t("candidates.cutting") : isCut ? t("candidates.reCut") : t("candidates.cut")}
                               </button>
                             </div>
                             {clip?.outputPath && <div className="output-path">{clip.outputPath}</div>}
                             {clip?.captionAssPath && (
                               <div className="output-path" style={{ background: "rgba(142, 230, 199, 0.05)", borderColor: "var(--accent-primary)", color: "var(--accent-primary)", marginTop: "4px" }}>
-                                Subtitles: {clip.captionAssPath}
+                                {t("candidates.subtitles", { path: clip.captionAssPath })}
                               </div>
                             )}
                             {clip?.renderLog && <div className="render-log">{clip.renderLog}</div>}
@@ -940,7 +935,7 @@ function App() {
                         </article>
                       );
                     })}
-                    {detail.candidates.length === 0 && <EmptyState icon={<Sparkles size={28} />} label="Moments pending" />}
+                    {detail.candidates.length === 0 && <EmptyState icon={<Sparkles size={28} />} label={t("candidates.empty")} />}
                   </div>
                 </section>
               </div>
@@ -949,13 +944,16 @@ function App() {
             <div className="home-dashboard">
               <header className="home-header">
                 <div>
-                  <h2>All Projects</h2>
-                  <p>Select a project below or import a new media file to get started.</p>
+                  <h2>{t("home.title")}</h2>
+                  <p>{t("home.subtitle")}</p>
                 </div>
-                <button className="primary-action compact" onClick={importMedia} disabled={busy !== "idle"}>
-                  {busy === "import" ? <Loader2 className="spin" size={18} /> : <FileVideo size={18} />}
-                  Import recording
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <LanguageSelector />
+                  <button className="primary-action compact" onClick={importMedia} disabled={busy !== "idle"}>
+                    {busy === "import" ? <Loader2 className="spin" size={18} /> : <FileVideo size={18} />}
+                    {t("home.importRecording")}
+                  </button>
+                </div>
               </header>
 
               {projects.length > 0 ? (
@@ -970,18 +968,18 @@ function App() {
                         </div>
                         <h3 className="project-card-title">{name}</h3>
                         <div className="project-card-meta">
-                          <span>Duration: {project.sourceDuration ? formatTime(project.sourceDuration) : "Probing..."}</span>
-                          <span>Created: {new Date(project.createdAt).toLocaleDateString()}</span>
+                          <span>{t("home.duration")} {project.sourceDuration ? formatTime(project.sourceDuration) : t("common.probing")}</span>
+                          <span>{t("home.created")} {new Date(project.createdAt).toLocaleDateString()}</span>
                         </div>
                         <div className="project-card-actions">
                           <button className="action-btn open-btn" onClick={() => void selectProject(project.id)}>
-                            Open
+                            {t("home.open")}
                           </button>
                           <button className="action-btn rename-btn" onClick={() => void renameProject(project.id)}>
-                            Rename
+                            {t("home.rename")}
                           </button>
                           <button className="action-btn delete-btn" onClick={() => void deleteProject(project.id)}>
-                            Delete
+                            {t("home.delete")}
                           </button>
                         </div>
                       </article>
@@ -991,8 +989,8 @@ function App() {
               ) : (
                 <div className="empty-dashboard-state">
                   <Clapperboard size={48} className="empty-state-icon" />
-                  <h3>No projects found</h3>
-                  <p>Import your first recording to begin creating shorts.</p>
+                  <h3>{t("home.noProjects")}</h3>
+                  <p>{t("home.emptyHint")}</p>
                 </div>
               )}
             </div>
@@ -1002,17 +1000,17 @@ function App() {
 
       <footer className="status-bar">
         <div className="status-bar-left">
-          <span className="app-status-indicator">System Ready</span>
+          <span className="app-status-indicator">{t("status.systemReady")}</span>
         </div>
         <div className="status-bar-right">
           <div className="status-indicators">
-            <span className={`indicator ${environment?.hasFfmpeg ? "active" : ""}`} title="FFmpeg status">ffmpeg</span>
-            <span className={`indicator ${environment?.hasFfprobe ? "active" : ""}`} title="FFprobe status">ffprobe</span>
-            <span className={`indicator ${environment?.hasLocalWhisperModel ? "active" : ""}`} title="Whisper Model status">Whisper Model</span>
-            <span className={`indicator ${environment?.hasOllama ? "active" : ""}`} title="Ollama status">Ollama</span>
-            <span className={`indicator ${canUseCloudKey ? "active" : ""}`} title="Deepgram Key status">Deepgram</span>
-            <span className={`indicator ${canUseClaude ? "active" : ""}`} title="Claude Key status">Claude</span>
-            <span className={`indicator ${canUseDeepseek ? "active" : ""}`} title="DeepSeek Key status">DeepSeek</span>
+            <span className={`indicator ${environment?.hasFfmpeg ? "active" : ""}`} title={t("status.ffmpegStatus")}>{t("status.ffmpeg")}</span>
+            <span className={`indicator ${environment?.hasFfprobe ? "active" : ""}`} title={t("status.ffprobeStatus")}>{t("status.ffprobe")}</span>
+            <span className={`indicator ${environment?.hasLocalWhisperModel ? "active" : ""}`} title={t("status.whisperModelStatus")}>{t("status.whisperModel")}</span>
+            <span className={`indicator ${environment?.hasOllama ? "active" : ""}`} title={t("status.ollamaStatus")}>{t("status.ollama")}</span>
+            <span className={`indicator ${canUseCloudKey ? "active" : ""}`} title={t("status.deepgramKeyStatus")}>{t("status.deepgram")}</span>
+            <span className={`indicator ${canUseClaude ? "active" : ""}`} title={t("status.claudeKeyStatus")}>{t("status.claude")}</span>
+            <span className={`indicator ${canUseDeepseek ? "active" : ""}`} title={t("status.deepseekKeyStatus")}>{t("status.deepseek")}</span>
           </div>
         </div>
       </footer>
@@ -1021,8 +1019,8 @@ function App() {
         <div className="style-modal-overlay">
           <div className="style-modal">
             <div className="style-modal-header">
-              <h3>Choose Caption Style</h3>
-              <p>Select how your automated captions should look on the portrait short-form video clips.</p>
+              <h3>{t("styleModal.title")}</h3>
+              <p>{t("styleModal.subtitle")}</p>
             </div>
 
             <div className="style-grid">
@@ -1033,8 +1031,8 @@ function App() {
                 <div className="style-preview-box">
                   <span className="preview-text-box">BRAINFOOD BECAUSE</span>
                 </div>
-                <div className="style-card-title">Modern Box</div>
-                <div className="style-card-desc">Sleek white text inside a semi-transparent black background padding box. Highly readable.</div>
+                <div className="style-card-title">{t("styleModal.styles.modernBox.name")}</div>
+                <div className="style-card-desc">{t("styleModal.styles.modernBox.description")}</div>
               </div>
 
               <div
@@ -1044,8 +1042,8 @@ function App() {
                 <div className="style-preview-box">
                   <span className="preview-text-outline">BRAINFOOD BECAUSE</span>
                 </div>
-                <div className="style-card-title">Classic Outline</div>
-                <div className="style-card-desc">Vibrant bold yellow text with a clean black outline. High-energy CapCut formatting.</div>
+                <div className="style-card-title">{t("styleModal.styles.classicOutline.name")}</div>
+                <div className="style-card-desc">{t("styleModal.styles.classicOutline.description")}</div>
               </div>
 
               <div
@@ -1055,8 +1053,8 @@ function App() {
                 <div className="style-preview-box">
                   <span className="preview-text-shadow">BRAINFOOD BECAUSE</span>
                 </div>
-                <div className="style-card-title">Minimal Shadow</div>
-                <div className="style-card-desc">Pure white text with a soft, elegant drop shadow. Unobtrusive and modern.</div>
+                <div className="style-card-title">{t("styleModal.styles.minimalShadow.name")}</div>
+                <div className="style-card-desc">{t("styleModal.styles.minimalShadow.description")}</div>
               </div>
 
               <div
@@ -1066,8 +1064,8 @@ function App() {
                 <div className="style-preview-box">
                   <span className="preview-text-cyan">BRAINFOOD BECAUSE</span>
                 </div>
-                <div className="style-card-title">Vibrant Cyan</div>
-                <div className="style-card-desc">Vibrant tech cyan text with a black drop shadow for a clean look.</div>
+                <div className="style-card-title">{t("styleModal.styles.vibrantCyan.name")}</div>
+                <div className="style-card-desc">{t("styleModal.styles.vibrantCyan.description")}</div>
               </div>
 
               <div
@@ -1077,8 +1075,8 @@ function App() {
                 <div className="style-preview-box">
                   <span className="preview-text-yellow-box">BRAINFOOD BECAUSE</span>
                 </div>
-                <div className="style-card-title">Vibrant Yellow Box</div>
-                <div className="style-card-desc">Bold black text inside a solid yellow padding box. Punchy and high visibility.</div>
+                <div className="style-card-title">{t("styleModal.styles.vibrantYellowBox.name")}</div>
+                <div className="style-card-desc">{t("styleModal.styles.vibrantYellowBox.description")}</div>
               </div>
 
               <div
@@ -1088,8 +1086,8 @@ function App() {
                 <div className="style-preview-box">
                   <span className="preview-text-green">BRAINFOOD BECAUSE</span>
                 </div>
-                <div className="style-card-title">Vibrant Green</div>
-                <div className="style-card-desc">High-energy neon green text with black borders and a drop shadow (Hormozi style).</div>
+                <div className="style-card-title">{t("styleModal.styles.vibrantGreen.name")}</div>
+                <div className="style-card-desc">{t("styleModal.styles.vibrantGreen.description")}</div>
               </div>
 
               <div
@@ -1099,17 +1097,17 @@ function App() {
                 <div className="style-preview-box">
                   <span className="preview-text-red">BRAINFOOD BECAUSE</span>
                 </div>
-                <div className="style-card-title">Vibrant Red</div>
-                <div className="style-card-desc">Dramatic neon crimson text with outline and drop shadow (gaming/action style).</div>
+                <div className="style-card-title">{t("styleModal.styles.vibrantRed.name")}</div>
+                <div className="style-card-desc">{t("styleModal.styles.vibrantRed.description")}</div>
               </div>
             </div>
 
             <div className="style-modal-actions">
               <button className="btn-cancel" onClick={() => { setShowStyleModal(false); setMediaPathToImport(null); }}>
-                Cancel
+                {t("styleModal.cancel")}
               </button>
               <button className="btn-confirm" onClick={() => confirmImport(selectedStyle)}>
-                Confirm & Import
+                {t("styleModal.confirm")}
               </button>
             </div>
           </div>
@@ -1119,8 +1117,8 @@ function App() {
         <div className="onboarding-overlay" style={{ zIndex: 20000 }}>
           <div className="onboarding-card" style={{ maxWidth: '480px', textAlign: 'center' }}>
             <div className="onboarding-header compact" style={{ textAlign: 'center' }}>
-              <h2>Downloading Ollama Model</h2>
-              <p>Downloading model weights for "{downloadingModelName}". Please do not close the app.</p>
+              <h2>{t("modelDownload.title")}</h2>
+              <p>{t("modelDownload.description", { modelName: downloadingModelName })}</p>
             </div>
 
             <div className="download-progress-container">
@@ -1210,6 +1208,7 @@ function Onboarding({
   deepseekKey: initialDeepseekKey,
   refreshEnv,
 }: OnboardingProps) {
+  const { t } = useTranslation();
   const [setupMode, setSetupMode] = useState<"choose" | "local" | "cloud" | "downloading">("choose");
   const [selectedModel, setSelectedModel] = useState<string>("llama3.2");
 
@@ -1217,7 +1216,7 @@ function Onboarding({
   const [antKey, setAntKey] = useState(initialAnthropicKey);
   const [dsKey, setDsKey] = useState(initialDeepseekKey);
 
-  const [downloadStatus, setDownloadStatus] = useState("Initializing download...");
+  const [downloadStatus, setDownloadStatus] = useState(t("common.initializingDownload"));
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [checkingOllama, setCheckingOllama] = useState(false);
@@ -1232,11 +1231,11 @@ function Onboarding({
   const handleCloudSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!dgKey.trim()) {
-      setError("Deepgram API Key is required for cloud mode.");
+      setError(t("onboarding.errors.deepgramRequired"));
       return;
     }
     if (!antKey.trim() && !dsKey.trim()) {
-      setError("Please provide at least one LLM Key (Claude or DeepSeek).");
+      setError(t("onboarding.errors.llmRequired"));
       return;
     }
 
@@ -1280,7 +1279,7 @@ function Onboarding({
 
     if (!isOllamaRunning) {
       setSetupMode("downloading");
-      setDownloadStatus("Ollama not found. Starting automatic installer...");
+      setDownloadStatus(t("onboarding.errors.ollamaNotFound"));
 
       try {
         const unlistenInstall = await listen<string>("ollama-install-status", (event) => {
@@ -1290,14 +1289,14 @@ function Onboarding({
         await invoke("install_ollama");
         unlistenInstall();
       } catch (err) {
-        setError("Automatic installation failed: " + String(err) + ". Please install it manually from ollama.com.");
+        setError(t("onboarding.errors.installFailed", { error: String(err) }));
         setSetupMode("local");
         return;
       }
     }
 
     setSetupMode("downloading");
-    setDownloadStatus("Ollama connected. Initiating model download...");
+    setDownloadStatus(t("onboarding.errors.ollamaConnected"));
 
     try {
       const unlisten = await listen<{
@@ -1342,8 +1341,8 @@ function Onboarding({
               <div className="brand-mark large">
                 <Clapperboard size={36} />
               </div>
-              <h2>Welcome to AutoShorts</h2>
-              <p>Long recording in. Short clips out. Select how you would like to run the studio.</p>
+              <h2>{t("onboarding.welcome")}</h2>
+              <p>{t("onboarding.tagline")}</p>
             </div>
 
             <div className="onboarding-choices">
@@ -1351,18 +1350,18 @@ function Onboarding({
                 <div className="choice-icon">
                   <Database size={28} />
                 </div>
-                <h3>Fully Offline & Private</h3>
-                <p>Process everything locally on your computer. Private, secure, and completely free.</p>
-                <div className="choice-badge local">Offline (Ollama)</div>
+                <h3>{t("onboarding.offline.title")}</h3>
+                <p>{t("onboarding.offline.description")}</p>
+                <div className="choice-badge local">{t("onboarding.offline.badge")}</div>
               </div>
 
               <div className="choice-card clickable" onClick={() => setSetupMode("cloud")}>
                 <div className="choice-icon">
                   <Cloud size={28} />
                 </div>
-                <h3>Cloud APIs</h3>
-                <p>Use high-speed cloud services for transcription and analysis. No local GPU needed.</p>
-                <div className="choice-badge cloud">API Keys Required</div>
+                <h3>{t("onboarding.cloud.title")}</h3>
+                <p>{t("onboarding.cloud.description")}</p>
+                <div className="choice-badge cloud">{t("onboarding.cloud.badge")}</div>
               </div>
             </div>
           </>
@@ -1371,8 +1370,8 @@ function Onboarding({
         {setupMode === "local" && (
           <div className="local-setup-flow">
             <div className="onboarding-header compact">
-              <h2>Configure Offline Mode</h2>
-              <p>Follow these steps to set up your local studio.</p>
+              <h2>{t("onboarding.localSetup.title")}</h2>
+              <p>{t("onboarding.localSetup.subtitle")}</p>
             </div>
 
             {error && <div className="error-banner" style={{ marginBottom: "16px" }}>{error}</div>}
@@ -1381,19 +1380,19 @@ function Onboarding({
               <div className="setup-step">
                 <div className="step-num">1</div>
                 <div className="step-body">
-                  <h4>Install Python Whisper</h4>
-                  <p>Open your terminal and run the following command to install the transcription engine:</p>
+                  <h4>{t("onboarding.localSetup.step1.title")}</h4>
+                  <p>{t("onboarding.localSetup.step1.description")}</p>
                   <div className="code-block-container">
-                    <code>pip3 install -U openai-whisper</code>
+                    <code>{t("onboarding.localSetup.step1.command")}</code>
                     <button type="button" className="copy-btn" onClick={copyWhisperCommand}>
                       {copied ? <Check size={14} /> : <Copy size={14} />}
-                      {copied ? "Copied!" : "Copy"}
+                      {copied ? t("onboarding.localSetup.step1.copied") : t("onboarding.localSetup.step1.copy")}
                     </button>
                   </div>
                   {environment?.hasLocalWhisperModel ? (
-                    <span className="step-check success"><BadgeCheck size={14} /> Whisper installed in Python!</span>
+                    <span className="step-check success"><BadgeCheck size={14} /> {t("onboarding.localSetup.step1.installed")}</span>
                   ) : (
-                    <span className="step-check warning">⚠️ Python package 'whisper' not detected yet. Run the command above.</span>
+                    <span className="step-check warning">⚠️ {t("onboarding.localSetup.step1.notDetected")}</span>
                   )}
                 </div>
               </div>
@@ -1401,12 +1400,9 @@ function Onboarding({
               <div className="setup-step">
                 <div className="step-num">2</div>
                 <div className="step-body">
-                  <h4>Set up local LLM (Ollama)</h4>
-                  <p>
-                    Ollama must be installed and running on your machine.
-                    If you don't have it installed, you can download it from <a href="https://ollama.com" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}>ollama.com</a>.
-                  </p>
-                  <p>Select a model to download:</p>
+                  <h4>{t("onboarding.localSetup.step2.title")}</h4>
+                  <p dangerouslySetInnerHTML={{ __html: t("onboarding.localSetup.step2.description") }} />
+                  <p>{t("onboarding.localSetup.step2.selectModel")}</p>
 
                   <div className="model-cards">
                     <div
@@ -1414,10 +1410,10 @@ function Onboarding({
                       onClick={() => setSelectedModel("llama3.2")}
                     >
                       <div className="model-card-header">
-                        <h5>LLaMA 3.2 3B</h5>
-                        <span className="model-size">1.9 GB</span>
+                        <h5>{t("onboarding.localSetup.step2.models.llama32.name")}</h5>
+                        <span className="model-size">{t("onboarding.localSetup.step2.models.llama32.size")}</span>
                       </div>
-                      <p>Requires 8GB+ RAM. Recommended for standard setups. Fast and efficient.</p>
+                      <p>{t("onboarding.localSetup.step2.models.llama32.description")}</p>
                     </div>
 
                     <div
@@ -1425,10 +1421,10 @@ function Onboarding({
                       onClick={() => setSelectedModel("qwen2.5:3b")}
                     >
                       <div className="model-card-header">
-                        <h5>Qwen 2.5 3B</h5>
-                        <span className="model-size">2.0 GB</span>
+                        <h5>{t("onboarding.localSetup.step2.models.qwen3b.name")}</h5>
+                        <span className="model-size">{t("onboarding.localSetup.step2.models.qwen3b.size")}</span>
                       </div>
-                      <p>Requires 8GB+ RAM. Excellent coding and logical reasoning abilities.</p>
+                      <p>{t("onboarding.localSetup.step2.models.qwen3b.description")}</p>
                     </div>
 
                     <div
@@ -1436,10 +1432,10 @@ function Onboarding({
                       onClick={() => setSelectedModel("qwen2.5:7b")}
                     >
                       <div className="model-card-header">
-                        <h5>Qwen 2.5 7B</h5>
-                        <span className="model-size">4.7 GB</span>
+                        <h5>{t("onboarding.localSetup.step2.models.qwen7b.name")}</h5>
+                        <span className="model-size">{t("onboarding.localSetup.step2.models.qwen7b.size")}</span>
                       </div>
-                      <p>Requires 16GB+ RAM. High-quality moment detection and hook precision.</p>
+                      <p>{t("onboarding.localSetup.step2.models.qwen7b.description")}</p>
                     </div>
                   </div>
                 </div>
@@ -1447,7 +1443,7 @@ function Onboarding({
             </div>
 
             <div className="onboarding-actions">
-              <button type="button" className="icon-button" onClick={() => setSetupMode("choose")}>Back</button>
+              <button type="button" className="icon-button" onClick={() => setSetupMode("choose")}>{t("onboarding.localSetup.back")}</button>
               <button
                 type="button"
                 className="primary-action compact"
@@ -1455,7 +1451,7 @@ function Onboarding({
                 disabled={checkingOllama}
               >
                 {checkingOllama ? <Loader2 className="spin" size={18} /> : null}
-                {checkingOllama ? "Checking Ollama..." : "Download & Start Setup"}
+                {checkingOllama ? t("onboarding.localSetup.checkingOllama") : t("onboarding.localSetup.downloadStart")}
               </button>
             </div>
           </div>
@@ -1464,48 +1460,48 @@ function Onboarding({
         {setupMode === "cloud" && (
           <form className="cloud-setup-flow" onSubmit={handleCloudSubmit}>
             <div className="onboarding-header compact">
-              <h2>Configure Cloud APIs</h2>
-              <p>Add your keys below. AutoShorts will route transcription and analysis to the cloud.</p>
+              <h2>{t("onboarding.cloudSetup.title")}</h2>
+              <p>{t("onboarding.cloudSetup.subtitle")}</p>
             </div>
 
             {error && <div className="error-banner" style={{ marginBottom: "16px" }}>{error}</div>}
 
             <div className="form-stack">
               <div className="input-group">
-                <label>Deepgram API Key *</label>
+                <label>{t("onboarding.cloudSetup.deepgramKey")}</label>
                 <input
                   type="password"
                   value={dgKey}
                   onChange={(e) => setDgKey(e.target.value)}
-                  placeholder="Insert your Deepgram API Key (for transcription)"
+                  placeholder={t("onboarding.cloudSetup.deepgramPlaceholder")}
                 />
               </div>
 
               <div className="input-group">
-                <label>Claude API Key</label>
+                <label>{t("onboarding.cloudSetup.claudeKey")}</label>
                 <input
                   type="password"
                   value={antKey}
                   onChange={(e) => setAntKey(e.target.value)}
-                  placeholder="Insert your Anthropic API Key (moment detection)"
+                  placeholder={t("onboarding.cloudSetup.claudePlaceholder")}
                 />
               </div>
 
               <div className="input-group">
-                <label>DeepSeek API Key</label>
+                <label>{t("onboarding.cloudSetup.deepseekKey")}</label>
                 <input
                   type="password"
                   value={dsKey}
                   onChange={(e) => setDsKey(e.target.value)}
-                  placeholder="Insert your DeepSeek API Key (alternative moment detection)"
+                  placeholder={t("onboarding.cloudSetup.deepseekPlaceholder")}
                 />
               </div>
-              <p className="form-help">* Deepgram Key + at least one LLM Key (Claude or DeepSeek) is required.</p>
+              <p className="form-help">{t("onboarding.cloudSetup.help")}</p>
             </div>
 
             <div className="onboarding-actions">
-              <button type="button" className="icon-button" onClick={() => setSetupMode("choose")}>Back</button>
-              <button type="submit" className="primary-action compact">Save & Start</button>
+              <button type="button" className="icon-button" onClick={() => setSetupMode("choose")}>{t("onboarding.cloudSetup.back")}</button>
+              <button type="submit" className="primary-action compact">{t("onboarding.cloudSetup.saveStart")}</button>
             </div>
           </form>
         )}
@@ -1513,8 +1509,8 @@ function Onboarding({
         {setupMode === "downloading" && (
           <div className="downloading-flow">
             <div className="onboarding-header compact">
-              <h2>Downloading Local Model</h2>
-              <p>Please wait while your local environment is downloaded. Do not close the application.</p>
+              <h2>{t("onboarding.downloading.title")}</h2>
+              <p>{t("onboarding.downloading.subtitle")}</p>
             </div>
 
             <div className="download-progress-container">

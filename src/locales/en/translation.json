@@ -1,0 +1,240 @@
+{
+  "brand": {
+    "name": "AutoShorts",
+    "tagline": "Long recording in. Short clips out."
+  },
+  "sidebar": {
+    "goHomeTitle": "Go to Home Dashboard",
+    "importRecording": "Import recording",
+    "allProjects": "All Projects"
+  },
+  "topbar": {
+    "apiSettings": "API Settings",
+    "refreshTitle": "Refresh",
+    "languageSelector": "Language"
+  },
+  "settings": {
+    "transcriptionEngine": "Transcription Engine",
+    "transcriptionOptions": {
+      "local": "Local Whisper (Offline)",
+      "deepgram": "Deepgram (Cloud)"
+    },
+    "llmEngine": "LLM Engine",
+    "llmOptions": {
+      "local": "Ollama (Offline Local)",
+      "claude": "Claude (Cloud)",
+      "deepseek": "DeepSeek (Cloud)",
+      "gemini": "Google Gemini (Cloud)",
+      "openai": "OpenAI (Cloud)",
+      "openrouter": "OpenRouter (Cloud)"
+    },
+    "deepgramKey": "Deepgram API Key",
+    "claudeKey": "Claude API Key",
+    "deepseekKey": "DeepSeek API Key",
+    "geminiKey": "Gemini API Key",
+    "openaiKey": "OpenAI API Key",
+    "openrouterKey": "OpenRouter API Key",
+    "loadedFromEnv": "Loaded from env",
+    "optionalKey": "Optional ({{label}})",
+    "ollamaModelName": "Ollama Model Name",
+    "ollamaModelPlaceholder": "e.g. llama3.2, qwen2.5:7b",
+    "pull": "Pull",
+    "resetConfig": "Reset App Configuration & Onboarding",
+    "resetConfirm": "Are you sure you want to reset your configuration and restart onboarding from scratch?"
+  },
+  "pipeline": {
+    "transcript": "Transcript",
+    "moments": "Moments",
+    "cut": "Cut",
+    "captions": "Captions",
+    "export": "Export"
+  },
+  "transcript": {
+    "title": "Transcript",
+    "segments_one": "{{count}} segment",
+    "segments_other": "{{count}} segments",
+    "empty": "No transcript",
+    "transcribe": "Transcribe",
+    "pending": "Transcript pending",
+    "warningLocal": "Local Whisper (Python package 'openai-whisper') is not installed. Run 'pip3 install openai-whisper' in your terminal.",
+    "warningCloud": "Deepgram API Key is missing. Transcribing will not work. Please add your key in API Settings."
+  },
+  "candidates": {
+    "title": "Clip Candidates",
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected",
+    "empty": "No candidates",
+    "cut": "Cut",
+    "findMoments": "Find Viral Moments",
+    "warningLocal": "Ollama local server is not running at http://localhost:11434. Moment detection will not work.",
+    "warningCloud": "{{engine}} API Key is missing. Viral moment identification will not work. Please add your key in API Settings.",
+    "match": "Match",
+    "cutReady": "Cut ready",
+    "cutFailed": "Cut failed",
+    "pending": "Pending",
+    "cutting": "Cutting...",
+    "reCut": "Re-cut",
+    "subtitles": "Subtitles: {{path}}"
+  },
+  "home": {
+    "title": "All Projects",
+    "subtitle": "Select a project below or import a new media file to get started.",
+    "importRecording": "Import recording",
+    "noProjects": "No projects found",
+    "emptyHint": "Import your first recording to begin creating shorts.",
+    "duration": "Duration:",
+    "created": "Created:",
+    "open": "Open",
+    "rename": "Rename",
+    "delete": "Delete"
+  },
+  "status": {
+    "systemReady": "System Ready",
+    "ffmpeg": "ffmpeg",
+    "ffprobe": "ffprobe",
+    "whisperModel": "Whisper Model",
+    "ollama": "Ollama",
+    "deepgram": "Deepgram",
+    "claude": "Claude",
+    "deepseek": "DeepSeek",
+    "ffmpegStatus": "FFmpeg status",
+    "ffprobeStatus": "FFprobe status",
+    "whisperModelStatus": "Whisper Model status",
+    "ollamaStatus": "Ollama status",
+    "deepgramKeyStatus": "Deepgram Key status",
+    "claudeKeyStatus": "Claude Key status",
+    "deepseekKeyStatus": "DeepSeek Key status"
+  },
+  "styleModal": {
+    "title": "Choose Caption Style",
+    "subtitle": "Select how your automated captions should look on the portrait short-form video clips.",
+    "styles": {
+      "modernBox": {
+        "name": "Modern Box",
+        "description": "Sleek white text inside a semi-transparent black background padding box. Highly readable."
+      },
+      "classicOutline": {
+        "name": "Classic Outline",
+        "description": "Vibrant bold yellow text with a clean black outline. High-energy CapCut formatting."
+      },
+      "minimalShadow": {
+        "name": "Minimal Shadow",
+        "description": "Pure white text with a soft, elegant drop shadow. Unobtrusive and modern."
+      },
+      "vibrantCyan": {
+        "name": "Vibrant Cyan",
+        "description": "Vibrant tech cyan text with a black drop shadow for a clean look."
+      },
+      "vibrantYellowBox": {
+        "name": "Vibrant Yellow Box",
+        "description": "Bold black text inside a solid yellow padding box. Punchy and high visibility."
+      },
+      "vibrantGreen": {
+        "name": "Vibrant Green",
+        "description": "High-energy neon green text with black borders and a drop shadow (Hormozi style)."
+      },
+      "vibrantRed": {
+        "name": "Vibrant Red",
+        "description": "Dramatic neon crimson text with outline and drop shadow (gaming/action style)."
+      }
+    },
+    "cancel": "Cancel",
+    "confirm": "Confirm & Import"
+  },
+  "modelDownload": {
+    "title": "Downloading Ollama Model",
+    "description": "Downloading model weights for \"{{modelName}}\". Please do not close the app.",
+    "connecting": "Connecting to Ollama...",
+    "complete": "Download complete!"
+  },
+  "onboarding": {
+    "welcome": "Welcome to AutoShorts",
+    "tagline": "Long recording in. Short clips out. Select how you would like to run the studio.",
+    "offline": {
+      "title": "Fully Offline & Private",
+      "description": "Process everything locally on your computer. Private, secure, and completely free.",
+      "badge": "Offline (Ollama)"
+    },
+    "cloud": {
+      "title": "Cloud APIs",
+      "description": "Use high-speed cloud services for transcription and analysis. No local GPU needed.",
+      "badge": "API Keys Required"
+    },
+    "localSetup": {
+      "title": "Configure Offline Mode",
+      "subtitle": "Follow these steps to set up your local studio.",
+      "step1": {
+        "title": "Install Python Whisper",
+        "description": "Open your terminal and run the following command to install the transcription engine:",
+        "command": "pip3 install -U openai-whisper",
+        "copy": "Copy",
+        "copied": "Copied!",
+        "installed": "Whisper installed in Python!",
+        "notDetected": "Python package 'whisper' not detected yet. Run the command above."
+      },
+      "step2": {
+        "title": "Set up local LLM (Ollama)",
+        "description": "Ollama must be installed and running on your machine. If you don't have it installed, you can download it from <a href=\"https://ollama.com\" target=\"_blank\" rel=\"noreferrer\">ollama.com</a>.",
+        "selectModel": "Select a model to download:",
+        "models": {
+          "llama32": {
+            "name": "LLaMA 3.2 3B",
+            "size": "1.9 GB",
+            "description": "Requires 8GB+ RAM. Recommended for standard setups. Fast and efficient."
+          },
+          "qwen3b": {
+            "name": "Qwen 2.5 3B",
+            "size": "2.0 GB",
+            "description": "Requires 8GB+ RAM. Excellent coding and logical reasoning abilities."
+          },
+          "qwen7b": {
+            "name": "Qwen 2.5 7B",
+            "size": "4.7 GB",
+            "description": "Requires 16GB+ RAM. High-quality moment detection and hook precision."
+          }
+        }
+      },
+      "back": "Back",
+      "downloadStart": "Download & Start Setup",
+      "checkingOllama": "Checking Ollama..."
+    },
+    "cloudSetup": {
+      "title": "Configure Cloud APIs",
+      "subtitle": "Add your keys below. AutoShorts will route transcription and analysis to the cloud.",
+      "deepgramKey": "Deepgram API Key *",
+      "deepgramPlaceholder": "Insert your Deepgram API Key (for transcription)",
+      "claudeKey": "Claude API Key",
+      "claudePlaceholder": "Insert your Anthropic API Key (moment detection)",
+      "deepseekKey": "DeepSeek API Key",
+      "deepseekPlaceholder": "Insert your DeepSeek API Key (alternative moment detection)",
+      "help": "* Deepgram Key + at least one LLM Key (Claude or DeepSeek) is required.",
+      "back": "Back",
+      "saveStart": "Save & Start"
+    },
+    "downloading": {
+      "title": "Downloading Local Model",
+      "subtitle": "Please wait while your local environment is downloaded. Do not close the application."
+    },
+    "errors": {
+      "deepgramRequired": "Deepgram API Key is required for cloud mode.",
+      "llmRequired": "Please provide at least one LLM Key (Claude or DeepSeek).",
+      "installFailed": "Automatic installation failed: {{error}}. Please install it manually from ollama.com.",
+      "ollamaNotFound": "Ollama not found. Starting automatic installer...",
+      "ollamaConnected": "Ollama connected. Initiating model download..."
+    }
+  },
+  "common": {
+    "fileFilterMedia": "Media",
+    "probing": "Probing...",
+    "initializingDownload": "Initializing download...",
+    "alertModelDownloadFailed": "Failed to download model: {{error}}", 
+    "renamePrompt": "Rename Project:",
+    "deleteConfirm": "Are you sure you want to delete the project \"{{name}}\"?",
+    "downloadModelPrompt": "Ollama model \"{{modelName}}\" is not downloaded. Would you like to download it now?",
+    "importSuccessWhisperMissing": "Import successful. Local Whisper GGML model (ggml-base.bin) is missing in your models directory. Please add it to start transcription.",
+    "importSuccessDeepgramMissing": "Import successful. Deepgram key is missing. Please add it to start transcription.",
+    "importSuccessOllamaMissing": "Import successful. Local Ollama server is not running at http://localhost:11434. Please start it to find viral moments.",
+    "transcriptionCompleteKeyMissing": "Transcription complete. {{engine}} API Key is missing. Please add it in settings to analyze viral moments.",
+    "selectProjectTitle": "Open project {{name}}"
+  }
+}
