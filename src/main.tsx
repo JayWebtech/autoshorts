@@ -408,7 +408,12 @@ function App() {
     // 2. LLM Moments
     try {
       setBusy("moments");
-      const activeKey = llmEngine === "claude" ? anthropicKey.trim() : (llmEngine === "deepseek" ? deepseekKey.trim() : "");
+      const activeKey =
+        llmEngine === "claude" ? anthropicKey.trim() :
+          llmEngine === "deepseek" ? deepseekKey.trim() :
+            llmEngine === "gemini" ? geminiKey.trim() :
+              llmEngine === "openai" ? openaiKey.trim() :
+                llmEngine === "openrouter" ? openrouterKey.trim() : "";
       await invoke<Candidate[]>("generate_candidates", {
         projectId,
         apiKey: activeKey || null,
@@ -489,7 +494,12 @@ function App() {
   async function moments(allowDemo: boolean) {
     if (!detail) return;
     await run("moments", async () => {
-      const activeKey = llmEngine === "claude" ? anthropicKey.trim() : (llmEngine === "deepseek" ? deepseekKey.trim() : "");
+      const activeKey =
+        llmEngine === "claude" ? anthropicKey.trim() :
+          llmEngine === "deepseek" ? deepseekKey.trim() :
+            llmEngine === "gemini" ? geminiKey.trim() :
+              llmEngine === "openai" ? openaiKey.trim() :
+                llmEngine === "openrouter" ? openrouterKey.trim() : "";
       try {
         await invoke<Candidate[]>("generate_candidates", {
           projectId: detail.project.id,
