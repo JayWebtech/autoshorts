@@ -83,10 +83,10 @@ pub fn extract_audio(source_path: &str, project_dir: &Path) -> Result<PathBuf> {
     }
 
     std::fs::create_dir_all(project_dir)?;
-    let output_path = project_dir.join("transcription_audio.wav");
+    let output_path = project_dir.join("transcription_audio.mp3");
 
     let output = Command::new("ffmpeg")
-        .args(["-y", "-i", source_path, "-vn", "-ac", "1", "-ar", "16000"])
+        .args(["-y", "-i", source_path, "-vn", "-c:a", "libmp3lame", "-b:a", "64k", "-ac", "1", "-ar", "16000"])
         .arg(&output_path)
         .output()
         .context("running ffmpeg audio extraction")?;

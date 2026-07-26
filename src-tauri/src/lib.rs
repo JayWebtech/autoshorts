@@ -894,8 +894,8 @@ fn build_drawtext_filters(
         for path in &font_paths {
             if std::path::Path::new(path).exists() {
                 let escaped_path = path
-                    .replace('\\', "\\\\")
-                    .replace(':', "\\:")
+                    .replace('\\', "/")
+                    .replace(':', "\\\\:")
                     .replace('\'', "\\'")
                     .replace(' ', "\\ ");
                 font_option = format!("fontfile={}:", escaped_path);

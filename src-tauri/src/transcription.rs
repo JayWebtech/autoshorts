@@ -13,7 +13,7 @@ pub async fn transcribe_deepgram(audio_path: &str, api_key: &str) -> Result<Norm
     let response = reqwest::Client::new()
         .post("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&diarize=true&punctuate=true&filler_words=true")
         .header("Authorization", format!("Token {api_key}"))
-        .header("Content-Type", "audio/wav")
+        .header("Content-Type", "audio/mpeg")
         .body(bytes)
         .send()
         .await

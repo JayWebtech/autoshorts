@@ -3,5 +3,7 @@ dist
 target
 src-tauri/target
 .env
+.env.*
+.vscode/
 .DS_Store
 *.log
