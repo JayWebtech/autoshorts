@@ -408,7 +408,7 @@ function App() {
     // 2. LLM Moments
     try {
       setBusy("moments");
-      const activeKey = llmEngine === "claude" ? anthropicKey.trim() : (llmEngine === "deepseek" ? deepseekKey.trim() : "");
+      const activeKey = llmEngine === "claude" ? anthropicKey.trim() : llmEngine === "deepseek" ? deepseekKey.trim() : llmEngine === "gemini" ? geminiKey.trim() : llmEngine === "openai" ? openaiKey.trim() : llmEngine === "openrouter" ? openrouterKey.trim() : "";
       await invoke<Candidate[]>("generate_candidates", {
         projectId,
         apiKey: activeKey || null,
@@ -489,7 +489,7 @@ function App() {
   async function moments(allowDemo: boolean) {
     if (!detail) return;
     await run("moments", async () => {
-      const activeKey = llmEngine === "claude" ? anthropicKey.trim() : (llmEngine === "deepseek" ? deepseekKey.trim() : "");
+      const activeKey = llmEngine === "claude" ? anthropicKey.trim() : llmEngine === "deepseek" ? deepseekKey.trim() : llmEngine === "gemini" ? geminiKey.trim() : llmEngine === "openai" ? openaiKey.trim() : llmEngine === "openrouter" ? openrouterKey.trim() : "";
       try {
         await invoke<Candidate[]>("generate_candidates", {
           projectId: detail.project.id,
@@ -580,9 +580,11 @@ function App() {
         setDeepgramKey={setDeepgramKey}
         setAnthropicKey={setAnthropicKey}
         setDeepseekKey={setDeepseekKey}
+        setGeminiKey={setGeminiKey}
         deepgramKey={deepgramKey}
         anthropicKey={anthropicKey}
         deepseekKey={deepseekKey}
+        geminiKey={geminiKey}
         refreshEnv={() => refresh()}
       />
     );
@@ -1185,14 +1187,16 @@ interface OnboardingProps {
   environment: EnvironmentStatus | null;
   onComplete: () => void;
   setTranscriptionEngine: (engine: "deepgram" | "local") => void;
-  setLlmEngine: (engine: "claude" | "deepseek" | "local") => void;
+  setLlmEngine: (engine: "claude" | "deepseek" | "local" | "gemini" | "openai" | "openrouter") => void;
   setLocalLlmModel: (model: string) => void;
   setDeepgramKey: (key: string) => void;
   setAnthropicKey: (key: string) => void;
   setDeepseekKey: (key: string) => void;
+  setGeminiKey: (key: string) => void;
   deepgramKey: string;
   anthropicKey: string;
   deepseekKey: string;
+  geminiKey: string;
   refreshEnv: () => Promise<void>;
 }
 
@@ -1205,9 +1209,11 @@ function Onboarding({
   setDeepgramKey,
   setAnthropicKey,
   setDeepseekKey,
+  setGeminiKey,
   deepgramKey: initialDeepgramKey,
   anthropicKey: initialAnthropicKey,
   deepseekKey: initialDeepseekKey,
+  geminiKey: initialGeminiKey,
   refreshEnv,
 }: OnboardingProps) {
   const [setupMode, setSetupMode] = useState<"choose" | "local" | "cloud" | "downloading">("choose");
@@ -1216,6 +1222,7 @@ function Onboarding({
   const [dgKey, setDgKey] = useState(initialDeepgramKey);
   const [antKey, setAntKey] = useState(initialAnthropicKey);
   const [dsKey, setDsKey] = useState(initialDeepseekKey);
+  const [gmKey, setGmKey] = useState(initialGeminiKey);
 
   const [downloadStatus, setDownloadStatus] = useState("Initializing download...");
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -1235,8 +1242,8 @@ function Onboarding({
       setError("Deepgram API Key is required for cloud mode.");
       return;
     }
-    if (!antKey.trim() && !dsKey.trim()) {
-      setError("Please provide at least one LLM Key (Claude or DeepSeek).");
+    if (!antKey.trim() && !dsKey.trim() && !gmKey.trim()) {
+      setError("Please provide at least one LLM Key (Claude, DeepSeek, or Gemini).");
       return;
     }
 
@@ -1245,7 +1252,12 @@ function Onboarding({
     localStorage.setItem("autoshorts_deepgram_key", dgKey.trim());
     localStorage.setItem("autoshorts_transcription_engine", "deepgram");
 
-    if (antKey.trim()) {
+    if (gmKey.trim()) {
+      setLlmEngine("gemini");
+      setGeminiKey(gmKey.trim());
+      localStorage.setItem("autoshorts_gemini_key", gmKey.trim());
+      localStorage.setItem("autoshorts_llm_engine", "gemini");
+    } else if (antKey.trim()) {
       setLlmEngine("claude");
       setAnthropicKey(antKey.trim());
       localStorage.setItem("autoshorts_anthropic_key", antKey.trim());
@@ -1500,7 +1512,17 @@ function Onboarding({
                   placeholder="Insert your DeepSeek API Key (alternative moment detection)"
                 />
               </div>
-              <p className="form-help">* Deepgram Key + at least one LLM Key (Claude or DeepSeek) is required.</p>
+
+              <div className="input-group">
+                <label>Gemini API Key</label>
+                <input
+                  type="password"
+                  value={gmKey}
+                  onChange={(e) => setGmKey(e.target.value)}
+                  placeholder="Insert your Google Gemini API Key (moment detection)"
+                />
+              </div>
+              <p className="form-help">* Deepgram Key + at least one LLM Key (Claude, DeepSeek, or Gemini) is required.</p>
             </div>
 
             <div className="onboarding-actions">
