@@ -252,6 +252,7 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
 pub async fn detect_candidates_with_openrouter(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    model_name: Option<&str>,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
@@ -263,8 +264,12 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
 {{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
     );
 
-    let model =
-        std::env::var("OPENROUTER_MODEL").unwrap_or_else(|_| "google/gemini-2.5-flash".to_string());
+    let default_model = "google/gemini-2.5-flash".to_string();
+    let model = model_name
+        .filter(|m| !m.trim().is_empty())
+        .map(|m| m.trim().to_string())
+        .or_else(|| std::env::var("OPENROUTER_MODEL").ok().filter(|m| !m.trim().is_empty()))
+        .unwrap_or(default_model);
 
     let response = reqwest::Client::new()
         .post("https://openrouter.ai/api/v1/chat/completions")
