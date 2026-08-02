@@ -518,119 +518,121 @@ fn set_selected_clip_count(
 }
 
 #[tauri::command]
-fn render_flat_clip_for_candidate(
+async fn render_flat_clip_for_candidate(
     state: tauri::State<'_, AppState>,
     candidate_id: String,
 ) -> Result<String, String> {
-    let (candidate, project) = state
-        .db
-        .get_candidate_with_project(&candidate_id)
-        .map_err(to_command_error)?;
-    state
-        .db
-        .update_clip_for_candidate(&candidate_id, "cutting", None, None, None)
-        .map_err(to_command_error)?;
+    let db = state.db.clone();
+    let data_dir = state.data_dir.clone();
 
-    let output_path = documents_project_dir(&project)?
-        .join("clips")
-        .join(format!("clip-{:02}_flat.mp4", candidate.rank));
+    tokio::task::spawn_blocking(move || {
+        let (candidate, project) = db
+            .get_candidate_with_project(&candidate_id)
+            .map_err(to_command_error)?;
+        db
+            .update_clip_for_candidate(&candidate_id, "cutting", None, None, None)
+            .map_err(to_command_error)?;
 
-    let mut srt_path = None;
-    let mut drawtext_filters = None;
+        let output_path = documents_project_dir(&project)?
+            .join("clips")
+            .join(format!("clip-{:02}_flat.mp4", candidate.rank));
 
-    let probe = media::probe_media(&project.source_path).ok();
-    let cropped_width = if let Some(p) = &probe {
-        let iw = p.width.unwrap_or(1920) as f64;
-        let ih = p.height.unwrap_or(1080) as f64;
-        let w = (iw.min(ih * 9.0 / 16.0) / 2.0).floor() * 2.0;
-        w as i64
-    } else {
-        1080
-    };
+        let mut srt_path = None;
+        let mut drawtext_filters = None;
 
-    if let Ok(Some(transcript_record)) = state.db.latest_transcript(&project.id) {
-        if let Ok(normalized) = serde_json::from_str::<NormalizedTranscript>(&transcript_record.raw_json) {
-            let srt_content = generate_srt(&normalized.words, candidate.start_sec, candidate.end_sec);
-            let clip_srt_path = project_dir(&state, &project.id).join(format!("clip-{}.srt", candidate.id));
-            if std::fs::write(&clip_srt_path, srt_content).is_ok() {
-                srt_path = Some(clip_srt_path);
-            }
-            let style = project.caption_style.as_deref().unwrap_or("modern-box");
-            let drawtext = build_drawtext_filters(
-                &normalized.words,
-                candidate.start_sec,
-                candidate.end_sec,
-                cropped_width,
-                style,
-            );
-            if !drawtext.is_empty() {
-                drawtext_filters = Some(drawtext);
+        let probe = media::probe_media(&project.source_path).ok();
+        let cropped_width = if let Some(p) = &probe {
+            let iw = p.width.unwrap_or(1920) as f64;
+            let ih = p.height.unwrap_or(1080) as f64;
+            let w = (iw.min(ih * 9.0 / 16.0) / 2.0).floor() * 2.0;
+            w as i64
+        } else {
+            1080
+        };
+
+        if let Ok(Some(transcript_record)) = db.latest_transcript(&project.id) {
+            if let Ok(normalized) = serde_json::from_str::<NormalizedTranscript>(&transcript_record.raw_json) {
+                let srt_content = generate_srt(&normalized.words, candidate.start_sec, candidate.end_sec);
+                let clip_srt_path = data_dir.join("projects").join(&project.id).join(format!("clip-{}.srt", candidate.id));
+                if std::fs::write(&clip_srt_path, srt_content).is_ok() {
+                    srt_path = Some(clip_srt_path);
+                }
+                let style = project.caption_style.as_deref().unwrap_or("modern-box");
+                let drawtext = build_drawtext_filters(
+                    &normalized.words,
+                    candidate.start_sec,
+                    candidate.end_sec,
+                    cropped_width,
+                    style,
+                );
+                if !drawtext.is_empty() {
+                    drawtext_filters = Some(drawtext);
+                }
             }
         }
-    }
 
-    match media::render_flat_clip(
-        &project.source_path,
-        candidate.start_sec,
-        candidate.end_sec,
-        &output_path,
-        drawtext_filters.as_deref(),
-    ) {
-        Ok(path) => {
-            let path_string = path.to_string_lossy().to_string();
-            let srt_string = srt_path.map(|p| p.to_string_lossy().to_string());
-            state
-                .db
-                .update_clip_for_candidate(
-                    &candidate_id,
-                    "done",
-                    Some(&path_string),
-                    srt_string.as_deref(),
+        match media::render_flat_clip(
+            &project.source_path,
+            candidate.start_sec,
+            candidate.end_sec,
+            &output_path,
+            drawtext_filters.as_deref(),
+        ) {
+            Ok(path) => {
+                let path_string = path.to_string_lossy().to_string();
+                let srt_string = srt_path.map(|p| p.to_string_lossy().to_string());
+                db
+                    .update_clip_for_candidate(
+                        &candidate_id,
+                        "done",
+                        Some(&path_string),
+                        srt_string.as_deref(),
+                        None,
+                    )
+                    .map_err(to_command_error)?;
+                Ok(path_string)
+            }
+            Err(error) => {
+                let err_msg = error.to_string();
+                // Fallback retry rendering without captions overlay on any error
+                match media::render_flat_clip(
+                    &project.source_path,
+                    candidate.start_sec,
+                    candidate.end_sec,
+                    &output_path,
                     None,
-                )
-                .map_err(to_command_error)?;
-            Ok(path_string)
-        }
-        Err(error) => {
-            let err_msg = error.to_string();
-            // Fallback retry rendering without captions overlay on any error
-            match media::render_flat_clip(
-                &project.source_path,
-                candidate.start_sec,
-                candidate.end_sec,
-                &output_path,
-                None,
-            ) {
-                Ok(path) => {
-                    let path_string = path.to_string_lossy().to_string();
-                    let srt_string = srt_path.map(|p| p.to_string_lossy().to_string());
-                    let warning_msg = format!(
-                        "Clip rendered successfully, but captions were skipped. Error: {}",
-                        err_msg
-                    );
-                    state
-                        .db
-                        .update_clip_for_candidate(
-                            &candidate_id,
-                            "done",
-                            Some(&path_string),
-                            srt_string.as_deref(),
-                            Some(&warning_msg),
-                        )
-                        .map_err(to_command_error)?;
-                    Ok(path_string)
-                }
-                Err(retry_err) => {
-                    let message = retry_err.to_string();
-                    state
-                        .db
-                        .update_clip_for_candidate(&candidate_id, "error", None, None, Some(&message))
-                        .map_err(to_command_error)?;
-                    Err(message)
+                ) {
+                    Ok(path) => {
+                        let path_string = path.to_string_lossy().to_string();
+                        let srt_string = srt_path.map(|p| p.to_string_lossy().to_string());
+                        let warning_msg = format!(
+                            "Clip rendered successfully, but captions were skipped. Error: {}",
+                            err_msg
+                        );
+                        db
+                            .update_clip_for_candidate(
+                                &candidate_id,
+                                "done",
+                                Some(&path_string),
+                                srt_string.as_deref(),
+                                Some(&warning_msg),
+                            )
+                            .map_err(to_command_error)?;
+                        Ok(path_string)
+                    }
+                    Err(retry_err) => {
+                        let message = retry_err.to_string();
+                        db
+                            .update_clip_for_candidate(&candidate_id, "error", None, None, Some(&message))
+                            .map_err(to_command_error)?;
+                        Err(message)
+                    }
                 }
             }
         }
-    }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -894,9 +896,9 @@ fn build_drawtext_filters(
         let first = chunk[0];
         let last = chunk[chunk.len() - 1];
 
-        // Absolute timestamps for FFmpeg filter graph (due to output seeking keeping original PTS)
-        let start_rel = first.start;
-        let end_rel = last.end;
+        // Timestamps relative to clip start (due to fast input seeking resetting stream PTS)
+        let start_rel = (first.start - start_sec).max(0.0);
+        let end_rel = (last.end - start_sec).min(end_sec - start_sec).max(0.0);
         if end_rel <= start_rel {
             continue;
         }
