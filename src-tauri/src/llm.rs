@@ -33,6 +33,7 @@ struct DeepseekResponse {
 pub async fn detect_candidates_with_deepseek(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    model_name: Option<&str>,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
@@ -48,11 +49,18 @@ Transcript:
 {segments}"
     );
 
+    let default_model = "deepseek-chat".to_string();
+    let model = model_name
+        .filter(|m| !m.trim().is_empty())
+        .map(|m| m.trim().to_string())
+        .or_else(|| std::env::var("DEEPSEEK_MODEL").ok().filter(|m| !m.trim().is_empty()))
+        .unwrap_or(default_model);
+
     let response = reqwest::Client::new()
         .post("https://api.deepseek.com/chat/completions")
         .header("Authorization", format!("Bearer {api_key}"))
         .json(&json!({
-            "model": "deepseek-chat",
+            "model": model,
             "messages": [
                 {
                     "role": "user",
@@ -256,6 +264,7 @@ Transcript:
 pub async fn detect_candidates_with_openrouter(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    model_name: Option<&str>,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
@@ -271,8 +280,12 @@ Transcript:
 {segments}"
     );
 
-    let model =
-        std::env::var("OPENROUTER_MODEL").unwrap_or_else(|_| "google/gemini-2.5-flash".to_string());
+    let default_model = "google/gemini-2.5-flash".to_string();
+    let model = model_name
+        .filter(|m| !m.trim().is_empty())
+        .map(|m| m.trim().to_string())
+        .or_else(|| std::env::var("OPENROUTER_MODEL").ok().filter(|m| !m.trim().is_empty()))
+        .unwrap_or(default_model);
 
     let response = reqwest::Client::new()
         .post("https://openrouter.ai/api/v1/chat/completions")

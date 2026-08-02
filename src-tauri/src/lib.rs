@@ -481,7 +481,7 @@ async fn generate_candidates(
             let key = api_key
                 .or_else(|| std::env::var("OPENROUTER_API_KEY").ok())
                 .ok_or_else(|| "Set OPENROUTER_API_KEY or supply OpenRouter API Key to generate candidates.".to_string())?;
-            llm::detect_candidates_with_openrouter(&normalized, &key)
+            llm::detect_candidates_with_openrouter(&normalized, &key, model_name.as_deref())
                 .await
                 .map_err(to_command_error)?
         }
@@ -497,7 +497,7 @@ async fn generate_candidates(
             let key = api_key
                 .or_else(|| std::env::var("DEEPSEEK_API_KEY").ok())
                 .ok_or_else(|| "Set DEEPSEEK_API_KEY or supply DeepSeek API Key to generate candidates.".to_string())?;
-            llm::detect_candidates_with_deepseek(&normalized, &key)
+            llm::detect_candidates_with_deepseek(&normalized, &key, model_name.as_deref())
                 .await
                 .map_err(to_command_error)?
         }
@@ -528,119 +528,121 @@ fn set_selected_clip_count(
 }
 
 #[tauri::command]
-fn render_flat_clip_for_candidate(
+async fn render_flat_clip_for_candidate(
     state: tauri::State<'_, AppState>,
     candidate_id: String,
 ) -> Result<String, String> {
-    let (candidate, project) = state
-        .db
-        .get_candidate_with_project(&candidate_id)
-        .map_err(to_command_error)?;
-    state
-        .db
-        .update_clip_for_candidate(&candidate_id, "cutting", None, None, None)
-        .map_err(to_command_error)?;
+    let db = state.db.clone();
+    let data_dir = state.data_dir.clone();
 
-    let output_path = documents_project_dir(&project)?
-        .join("clips")
-        .join(format!("clip-{:02}_flat.mp4", candidate.rank));
+    tokio::task::spawn_blocking(move || {
+        let (candidate, project) = db
+            .get_candidate_with_project(&candidate_id)
+            .map_err(to_command_error)?;
+        db
+            .update_clip_for_candidate(&candidate_id, "cutting", None, None, None)
+            .map_err(to_command_error)?;
 
-    let mut srt_path = None;
-    let mut drawtext_filters = None;
+        let output_path = documents_project_dir(&project)?
+            .join("clips")
+            .join(format!("clip-{:02}_flat.mp4", candidate.rank));
 
-    let probe = media::probe_media(&project.source_path).ok();
-    let cropped_width = if let Some(p) = &probe {
-        let iw = p.width.unwrap_or(1920) as f64;
-        let ih = p.height.unwrap_or(1080) as f64;
-        let w = (iw.min(ih * 9.0 / 16.0) / 2.0).floor() * 2.0;
-        w as i64
-    } else {
-        1080
-    };
+        let mut srt_path = None;
+        let mut drawtext_filters = None;
 
-    if let Ok(Some(transcript_record)) = state.db.latest_transcript(&project.id) {
-        if let Ok(normalized) = serde_json::from_str::<NormalizedTranscript>(&transcript_record.raw_json) {
-            let srt_content = generate_srt(&normalized.words, candidate.start_sec, candidate.end_sec);
-            let clip_srt_path = project_dir(&state, &project.id).join(format!("clip-{}.srt", candidate.id));
-            if std::fs::write(&clip_srt_path, srt_content).is_ok() {
-                srt_path = Some(clip_srt_path);
-            }
-            let style = project.caption_style.as_deref().unwrap_or("modern-box");
-            let drawtext = build_drawtext_filters(
-                &normalized.words,
-                candidate.start_sec,
-                candidate.end_sec,
-                cropped_width,
-                style,
-            );
-            if !drawtext.is_empty() {
-                drawtext_filters = Some(drawtext);
+        let probe = media::probe_media(&project.source_path).ok();
+        let cropped_width = if let Some(p) = &probe {
+            let iw = p.width.unwrap_or(1920) as f64;
+            let ih = p.height.unwrap_or(1080) as f64;
+            let w = (iw.min(ih * 9.0 / 16.0) / 2.0).floor() * 2.0;
+            w as i64
+        } else {
+            1080
+        };
+
+        if let Ok(Some(transcript_record)) = db.latest_transcript(&project.id) {
+            if let Ok(normalized) = serde_json::from_str::<NormalizedTranscript>(&transcript_record.raw_json) {
+                let srt_content = generate_srt(&normalized.words, candidate.start_sec, candidate.end_sec);
+                let clip_srt_path = data_dir.join("projects").join(&project.id).join(format!("clip-{}.srt", candidate.id));
+                if std::fs::write(&clip_srt_path, srt_content).is_ok() {
+                    srt_path = Some(clip_srt_path);
+                }
+                let style = project.caption_style.as_deref().unwrap_or("modern-box");
+                let drawtext = build_drawtext_filters(
+                    &normalized.words,
+                    candidate.start_sec,
+                    candidate.end_sec,
+                    cropped_width,
+                    style,
+                );
+                if !drawtext.is_empty() {
+                    drawtext_filters = Some(drawtext);
+                }
             }
         }
-    }
 
-    match media::render_flat_clip(
-        &project.source_path,
-        candidate.start_sec,
-        candidate.end_sec,
-        &output_path,
-        drawtext_filters.as_deref(),
-    ) {
-        Ok(path) => {
-            let path_string = path.to_string_lossy().to_string();
-            let srt_string = srt_path.map(|p| p.to_string_lossy().to_string());
-            state
-                .db
-                .update_clip_for_candidate(
-                    &candidate_id,
-                    "done",
-                    Some(&path_string),
-                    srt_string.as_deref(),
+        match media::render_flat_clip(
+            &project.source_path,
+            candidate.start_sec,
+            candidate.end_sec,
+            &output_path,
+            drawtext_filters.as_deref(),
+        ) {
+            Ok(path) => {
+                let path_string = path.to_string_lossy().to_string();
+                let srt_string = srt_path.map(|p| p.to_string_lossy().to_string());
+                db
+                    .update_clip_for_candidate(
+                        &candidate_id,
+                        "done",
+                        Some(&path_string),
+                        srt_string.as_deref(),
+                        None,
+                    )
+                    .map_err(to_command_error)?;
+                Ok(path_string)
+            }
+            Err(error) => {
+                let err_msg = error.to_string();
+                // Fallback retry rendering without captions overlay on any error
+                match media::render_flat_clip(
+                    &project.source_path,
+                    candidate.start_sec,
+                    candidate.end_sec,
+                    &output_path,
                     None,
-                )
-                .map_err(to_command_error)?;
-            Ok(path_string)
-        }
-        Err(error) => {
-            let err_msg = error.to_string();
-            // Fallback retry rendering without captions overlay on any error
-            match media::render_flat_clip(
-                &project.source_path,
-                candidate.start_sec,
-                candidate.end_sec,
-                &output_path,
-                None,
-            ) {
-                Ok(path) => {
-                    let path_string = path.to_string_lossy().to_string();
-                    let srt_string = srt_path.map(|p| p.to_string_lossy().to_string());
-                    let warning_msg = format!(
-                        "Clip rendered successfully, but captions were skipped. Error: {}",
-                        err_msg
-                    );
-                    state
-                        .db
-                        .update_clip_for_candidate(
-                            &candidate_id,
-                            "done",
-                            Some(&path_string),
-                            srt_string.as_deref(),
-                            Some(&warning_msg),
-                        )
-                        .map_err(to_command_error)?;
-                    Ok(path_string)
-                }
-                Err(retry_err) => {
-                    let message = retry_err.to_string();
-                    state
-                        .db
-                        .update_clip_for_candidate(&candidate_id, "error", None, None, Some(&message))
-                        .map_err(to_command_error)?;
-                    Err(message)
+                ) {
+                    Ok(path) => {
+                        let path_string = path.to_string_lossy().to_string();
+                        let srt_string = srt_path.map(|p| p.to_string_lossy().to_string());
+                        let warning_msg = format!(
+                            "Clip rendered successfully, but captions were skipped. Error: {}",
+                            err_msg
+                        );
+                        db
+                            .update_clip_for_candidate(
+                                &candidate_id,
+                                "done",
+                                Some(&path_string),
+                                srt_string.as_deref(),
+                                Some(&warning_msg),
+                            )
+                            .map_err(to_command_error)?;
+                        Ok(path_string)
+                    }
+                    Err(retry_err) => {
+                        let message = retry_err.to_string();
+                        db
+                            .update_clip_for_candidate(&candidate_id, "error", None, None, Some(&message))
+                            .map_err(to_command_error)?;
+                        Err(message)
+                    }
                 }
             }
         }
-    }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -916,12 +918,53 @@ fn build_drawtext_filters(
     cropped_width: i64,
     caption_style: &str,
 ) -> String {
-    let mut drawtext_filters = Vec::new();
-
     let candidate_words: Vec<&TranscriptWord> = words
         .iter()
         .filter(|w| w.end > start_sec && w.start < end_sec)
         .collect();
+
+    if candidate_words.is_empty() {
+        return String::new();
+    }
+
+    // Build font option once for drawtext filter
+    let mut font_paths = vec![
+        // macOS
+        "/System/Library/Fonts/Supplemental/Futura.ttc".to_string(),
+        "/System/Library/Fonts/Avenir Next.ttc".to_string(),
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf".to_string(),
+        "/System/Library/Fonts/Helvetica.ttc".to_string(),
+        // Windows standard
+        "C:/Windows/Fonts/SegoeUIb.ttf".to_string(),
+        "C:/Windows/Fonts/segoeuib.ttf".to_string(),
+        "C:/Windows/Fonts/SegoeUI.ttf".to_string(),
+        "C:/Windows/Fonts/segoeui.ttf".to_string(),
+        "C:/Windows/Fonts/arialbd.ttf".to_string(),
+        "C:/Windows/Fonts/arial.ttf".to_string(),
+        // Linux
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf".to_string(),
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf".to_string(),
+    ];
+    if let Ok(windir) = std::env::var("WINDIR").or_else(|_| std::env::var("SystemRoot")) {
+        let windir_fonts = format!("{}/Fonts", windir.replace('\\', "/"));
+        font_paths.push(format!("{}/SegoeUIb.ttf", windir_fonts));
+        font_paths.push(format!("{}/segoeuib.ttf", windir_fonts));
+        font_paths.push(format!("{}/SegoeUI.ttf", windir_fonts));
+        font_paths.push(format!("{}/arialbd.ttf", windir_fonts));
+        font_paths.push(format!("{}/arial.ttf", windir_fonts));
+    }
+
+    let mut font_option = String::new();
+    for path in &font_paths {
+        if std::path::Path::new(path).exists() {
+            let normalized_path = path.replace('\\', "/");
+            let escaped_path = normalized_path.replace('\'', "'\\''");
+            font_option = format!("fontfile='{}':", escaped_path);
+            break;
+        }
+    }
+
+    let mut drawtext_filters = Vec::new();
 
     // Group into chunks of 2 words for fast-paced style captions
     for chunk in candidate_words.chunks(2) {
@@ -931,9 +974,9 @@ fn build_drawtext_filters(
         let first = chunk[0];
         let last = chunk[chunk.len() - 1];
 
-        // Absolute timestamps for FFmpeg filter graph (due to output seeking keeping original PTS)
-        let start_rel = first.start;
-        let end_rel = last.end;
+        // Timestamps relative to clip start (due to fast input seeking resetting stream PTS)
+        let start_rel = (first.start - start_sec).max(0.0);
+        let end_rel = (last.end - start_sec).min(end_sec - start_sec).max(0.0);
         if end_rel <= start_rel {
             continue;
         }
@@ -953,31 +996,7 @@ fn build_drawtext_filters(
         let fontsize = ((cropped_width as f64) * 0.075).clamp(16.0, 80.0).round() as i64;
         let padding = ((fontsize as f64) * 0.3).clamp(4.0, 24.0).round() as i64;
 
-        // Premium system font hierarchy
-        let font_paths = [
-            // macOS
-            "/System/Library/Fonts/Supplemental/Futura.ttc",
-            "/System/Library/Fonts/Avenir Next.ttc",
-            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            // Windows
-            "C:/Windows/Fonts/SegoeUIb.ttf",
-            "C:/Windows/Fonts/arialbd.ttf",
-            "C:/Windows/Fonts/arial.ttf",
-            // Linux
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-        ];
-        let mut font_option = String::new();
-        for path in &font_paths {
-            if std::path::Path::new(path).exists() {
-                // Windows FFmpeg requires a single backslash to escape the colon even inside single quotes
-                let clean_path = path.replace('\\', "/").replace(':', "\\:");
-                font_option = format!("fontfile='{}':", clean_path);
-                break;
-            }
-        }
-        
+
         let drawtext = match caption_style {
             "classic-outline" => {
                 // Classic yellow text with a bold outline (CapCut style)
@@ -1036,4 +1055,38 @@ fn build_drawtext_filters(
     }
 
     drawtext_filters.join(",")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::TranscriptWord;
+
+    #[test]
+    fn test_build_drawtext_filters_formatting() {
+        let words = vec![
+            TranscriptWord {
+                text: "Hello".to_string(),
+                start: 0.0,
+                end: 1.0,
+                speaker: None,
+            },
+            TranscriptWord {
+                text: "world".to_string(),
+                start: 1.0,
+                end: 2.0,
+                speaker: None,
+            },
+        ];
+
+        let result = build_drawtext_filters(&words, 0.0, 5.0, 1080, "classic-outline");
+        assert!(!result.is_empty());
+        assert!(result.contains("drawtext="));
+        assert!(result.contains("text='HELLO WORLD'"));
+
+        if result.contains("fontfile=") {
+            assert!(result.contains("fontfile='"));
+            assert!(!result.contains("\\:"));
+        }
+    }
 }
