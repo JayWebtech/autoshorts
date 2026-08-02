@@ -137,20 +137,60 @@ pub fn build_segments(words: &[TranscriptWord]) -> Vec<TranscriptSegment> {
     segments
 }
 
+pub fn find_python_command() -> Option<String> {
+    let candidates: &[&str] = if cfg!(windows) {
+        &["python", "py", "python3"]
+    } else {
+        &["python3", "python"]
+    };
+
+    for &cmd in candidates {
+        if let Ok(out) = std::process::Command::new(cmd).args(["-c", "import whisper"]).output() {
+            if out.status.success() {
+                return Some(cmd.to_string());
+            }
+        }
+    }
+    for &cmd in candidates {
+        if std::process::Command::new(cmd).arg("--version").output().is_ok() {
+            return Some(cmd.to_string());
+        }
+    }
+    None
+}
+
 pub fn whisper_cli_exists() -> bool {
-    std::process::Command::new("whisper")
-        .arg("--help")
-        .output()
-        .map(|out| out.status.success())
-        .unwrap_or(false)
+    let candidates: &[&str] = if cfg!(windows) {
+        &["whisper", "whisper.exe"]
+    } else {
+        &["whisper"]
+    };
+
+    for &cmd in candidates {
+        if let Ok(out) = std::process::Command::new(cmd).arg("--help").output() {
+            if out.status.success() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 pub fn whisper_python_exists() -> bool {
-    std::process::Command::new("python3")
-        .args(["-c", "import whisper"])
-        .output()
-        .map(|out| out.status.success())
-        .unwrap_or(false)
+    let candidates: &[&str] = if cfg!(windows) {
+        &["python", "py", "python3"]
+    } else {
+        &["python3", "python"]
+    };
+
+    for &cmd in candidates {
+        if let Ok(out) = std::process::Command::new(cmd).args(["-c", "import whisper"]).output() {
+            if out.status.success() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn normalize_whisper_raw_json(raw: serde_json::Value) -> Result<NormalizedTranscript> {
@@ -322,13 +362,14 @@ if __name__ == "__main__":
         let output_json_path_str = output_json_path.to_string_lossy().to_string();
 
         tokio::task::spawn_blocking(move || {
-            let output = std::process::Command::new("python3")
+            let python_bin = find_python_command().unwrap_or_else(|| "python".to_string());
+            let output = std::process::Command::new(&python_bin)
                 .arg(&script_path_str)
                 .arg(&audio_path)
                 .arg(&output_json_path_str)
                 .arg("base") // default model size
                 .output()
-                .context("executing python3 transcribe.py")?;
+                .context("executing python transcribe.py")?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
