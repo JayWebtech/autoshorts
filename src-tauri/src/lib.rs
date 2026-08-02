@@ -487,7 +487,7 @@ async fn generate_candidates(
             let key = api_key
                 .or_else(|| std::env::var("DEEPSEEK_API_KEY").ok())
                 .ok_or_else(|| "Set DEEPSEEK_API_KEY or supply DeepSeek API Key to generate candidates.".to_string())?;
-            llm::detect_candidates_with_deepseek(&normalized, &key)
+            llm::detect_candidates_with_deepseek(&normalized, &key, model_name.as_deref())
                 .await
                 .map_err(to_command_error)?
         }

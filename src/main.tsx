@@ -143,6 +143,9 @@ function App() {
   const [deepseekKey, setDeepseekKey] = useState(() => {
     return localStorage.getItem("autoshorts_deepseek_key") || "";
   });
+  const [deepseekModel, setDeepseekModel] = useState(() => {
+    return localStorage.getItem("autoshorts_deepseek_model") || "";
+  });
   const [geminiKey, setGeminiKey] = useState(() => {
     return localStorage.getItem("autoshorts_gemini_key") || "";
   });
@@ -235,6 +238,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("autoshorts_deepseek_key", deepseekKey);
   }, [deepseekKey]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_deepseek_model", deepseekModel);
+  }, [deepseekModel]);
 
   useEffect(() => {
     localStorage.setItem("autoshorts_gemini_key", geminiKey);
@@ -413,7 +420,7 @@ function App() {
         projectId,
         apiKey: activeKey || null,
         provider: llmEngine,
-        modelName: llmEngine === "local" ? localLlmModel.trim() : null,
+        modelName: llmEngine === "local" ? localLlmModel.trim() : (llmEngine === "deepseek" ? (deepseekModel.trim() || null) : null),
         allowDemo: false,
       });
       await refresh(projectId);
@@ -495,7 +502,7 @@ function App() {
           projectId: detail.project.id,
           apiKey: activeKey || null,
           provider: llmEngine,
-          modelName: llmEngine === "local" ? localLlmModel.trim() : null,
+          modelName: llmEngine === "local" ? localLlmModel.trim() : (llmEngine === "deepseek" ? (deepseekModel.trim() || null) : null),
           allowDemo,
         });
         await refresh(detail.project.id);
@@ -707,15 +714,26 @@ function App() {
                       </label>
                     )}
                     {llmEngine === "deepseek" && (
-                      <label>
-                        <span>DeepSeek API Key</span>
-                        <input
-                          value={deepseekKey}
-                          onChange={(event) => setDeepseekKey(event.target.value)}
-                          placeholder={environment?.hasDeepseekKey ? "Loaded from env" : "Optional (DeepSeek API Key)"}
-                          type="password"
-                        />
-                      </label>
+                      <>
+                        <label>
+                          <span>DeepSeek API Key</span>
+                          <input
+                            value={deepseekKey}
+                            onChange={(event) => setDeepseekKey(event.target.value)}
+                            placeholder={environment?.hasDeepseekKey ? "Loaded from env" : "Optional (DeepSeek API Key)"}
+                            type="password"
+                          />
+                        </label>
+                        <label>
+                          <span>DeepSeek Model</span>
+                          <input
+                            value={deepseekModel}
+                            onChange={(event) => setDeepseekModel(event.target.value)}
+                            placeholder="Optional (e.g. deepseek-chat, deepseek-v4-pro)"
+                            type="text"
+                          />
+                        </label>
+                      </>
                     )}
                     {llmEngine === "gemini" && (
                       <label>
