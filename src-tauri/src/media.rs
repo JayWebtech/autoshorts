@@ -117,13 +117,14 @@ pub fn render_flat_clip(
     }
 
     let start = format!("{start_sec:.3}");
-    let end = format!("{end_sec:.3}");
+    let duration_sec = (end_sec - start_sec).max(0.1);
+    let duration = format!("{duration_sec:.3}");
 
     let probe = probe_media(source_path).ok();
     let has_video = probe.map(|p| p.has_video).unwrap_or(false);
 
     let mut cmd = Command::new("ffmpeg");
-    cmd.args(["-y", "-i", source_path, "-ss", &start, "-to", &end]);
+    cmd.args(["-y", "-ss", &start, "-i", source_path, "-t", &duration]);
 
     if has_video {
         let mut filter = "crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)'".to_string();
