@@ -54,9 +54,11 @@ async fn environment_status(state: tauri::State<'_, AppState>) -> Result<Environ
         has_gemini_key: std::env::var("GEMINI_API_KEY").is_ok(),
         has_openai_key: std::env::var("OPENAI_API_KEY").is_ok(),
         has_openrouter_key: std::env::var("OPENROUTER_API_KEY").is_ok(),
+        has_groq_key: std::env::var("GROQ_API_KEY").is_ok(),
         llm_provider,
         has_local_whisper_model,
         has_ollama,
+        has_ytdlp: media::command_exists("yt-dlp"),
     })
 }
 
@@ -483,6 +485,14 @@ async fn generate_candidates(
                 .await
                 .map_err(to_command_error)?
         }
+        "groq" => {
+            let key = api_key
+                .or_else(|| std::env::var("GROQ_API_KEY").ok())
+                .ok_or_else(|| "Set GROQ_API_KEY or supply Groq API Key to generate candidates.".to_string())?;
+            llm::detect_candidates_with_groq(&normalized, &key)
+                .await
+                .map_err(to_command_error)?
+        }
         _ => {
             let key = api_key
                 .or_else(|| std::env::var("DEEPSEEK_API_KEY").ok())
@@ -680,10 +690,86 @@ pub fn run() {
             set_selected_clip_count,
             render_flat_clip_for_candidate,
             delete_project,
-            rename_project
+            rename_project,
+            check_youtube_copyright,
+            download_youtube_video
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoShorts");
+}
+
+#[derive(serde::Serialize)]
+pub struct CopyrightCheckResult {
+    is_safe: bool,
+    license: Option<String>,
+}
+
+#[tauri::command]
+async fn check_youtube_copyright(url: String) -> Result<CopyrightCheckResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let output = std::process::Command::new("yt-dlp")
+            .args(&["--dump-json", &url])
+            .output()
+            .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+
+        if !output.status.success() {
+            return Err("Failed to fetch video metadata from YouTube.".to_string());
+        }
+
+        let json_str = String::from_utf8_lossy(&output.stdout);
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).map_err(|_| "Failed to parse yt-dlp output".to_string())?;
+
+        let license = parsed.get("license").and_then(|v| v.as_str()).map(|s| s.to_string());
+        
+        let is_safe = if let Some(lic) = &license {
+            lic.to_lowercase().contains("creative commons") || lic.to_lowercase().contains("reuse allowed")
+        } else {
+            false
+        };
+
+        Ok(CopyrightCheckResult { is_safe, license })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn download_youtube_video(url: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let downloads_dir = dirs::download_dir()
+            .ok_or_else(|| "Could not find Downloads folder".to_string())?;
+        
+        let output_template = downloads_dir.join("AutoShorts_%(id)s.%(ext)s");
+        let output_template_str = output_template.to_string_lossy().to_string();
+
+        let output = std::process::Command::new("yt-dlp")
+            .args(&[
+                "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                "--merge-output-format", "mp4",
+                "-o", &output_template_str,
+                "--print", "after_move:filepath",
+                "--no-simulate",
+                &url
+            ])
+            .output()
+            .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("yt-dlp failed: {}", stderr));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let filepath = stdout.lines().last().unwrap_or("").trim();
+
+        if filepath.is_empty() || !std::path::Path::new(filepath).exists() {
+            return Err("Could not locate downloaded file".to_string());
+        }
+
+        Ok(filepath.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 fn project_dir(state: &AppState, project_id: &str) -> PathBuf {
@@ -917,6 +1003,7 @@ fn build_drawtext_filters(
         // Responsive font size and padding box
         let fontsize = ((cropped_width as f64) * 0.075).clamp(16.0, 80.0).round() as i64;
         let padding = ((fontsize as f64) * 0.3).clamp(4.0, 24.0).round() as i64;
+
 
         let drawtext = match caption_style {
             "classic-outline" => {

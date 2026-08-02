@@ -22,6 +22,8 @@ import {
   Copy,
   Database,
   Cloud,
+  Youtube,
+  AlertTriangle,
 } from "lucide-react";
 import "./styles.css";
 
@@ -35,9 +37,11 @@ type EnvironmentStatus = {
   hasGeminiKey: boolean;
   hasOpenaiKey: boolean;
   hasOpenrouterKey: boolean;
+  hasGroqKey: boolean;
   llmProvider: string;
   hasLocalWhisperModel: boolean;
   hasOllama: boolean;
+  hasYtdlp: boolean;
 };
 
 type Project = {
@@ -123,13 +127,18 @@ function App() {
   const [selectedStyle, setSelectedStyle] = useState("modern-box");
   const [mediaPathToImport, setMediaPathToImport] = useState<string | null>(null);
 
+  const [youtubeModalOpen, setYoutubeModalOpen] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [youtubeStatus, setYoutubeStatus] = useState<"idle" | "checking" | "warning" | "downloading">("idle");
+  const [youtubeWarningLicense, setYoutubeWarningLicense] = useState<string | null>(null);
+
   // Persistence logic from localStorage
   const [isOnboarded, setIsOnboarded] = useState<boolean | null>(null);
   const [transcriptionEngine, setTranscriptionEngine] = useState<"deepgram" | "local">(() => {
     return (localStorage.getItem("autoshorts_transcription_engine") as "deepgram" | "local") || "local";
   });
-  const [llmEngine, setLlmEngine] = useState<"claude" | "deepseek" | "local" | "gemini" | "openai" | "openrouter">(() => {
-    return (localStorage.getItem("autoshorts_llm_engine") as "claude" | "deepseek" | "local" | "gemini" | "openai" | "openrouter") || "local";
+  const [llmEngine, setLlmEngine] = useState<"claude" | "deepseek" | "local" | "gemini" | "openai" | "openrouter" | "groq">(() => {
+    return (localStorage.getItem("autoshorts_llm_engine") as "claude" | "deepseek" | "local" | "gemini" | "openai" | "openrouter" | "groq") || "local";
   });
   const [localLlmModel, setLocalLlmModel] = useState(() => {
     return localStorage.getItem("autoshorts_local_llm_model") || "llama3.2";
@@ -154,6 +163,9 @@ function App() {
   });
   const [openrouterKey, setOpenrouterKey] = useState(() => {
     return localStorage.getItem("autoshorts_openrouter_key") || "";
+  });
+  const [groqKey, setGroqKey] = useState(() => {
+    return localStorage.getItem("autoshorts_groq_key") || "";
   });
   const [openrouterModel, setOpenrouterModel] = useState(() => {
     return localStorage.getItem("autoshorts_openrouter_model") || "";
@@ -191,6 +203,7 @@ function App() {
   const canUseGemini = environment?.hasGeminiKey || geminiKey.trim().length > 0;
   const canUseOpenai = environment?.hasOpenaiKey || openaiKey.trim().length > 0;
   const canUseOpenrouter = environment?.hasOpenrouterKey || openrouterKey.trim().length > 0;
+  const canUseGroq = environment?.hasGroqKey || groqKey.trim().length > 0;
 
   const canTranscribe = transcriptionEngine === "local"
     ? Boolean(environment?.hasLocalWhisperModel)
@@ -206,7 +219,11 @@ function App() {
           ? canUseGemini
           : llmEngine === "openai"
             ? canUseOpenai
-            : canUseOpenrouter;
+            : llmEngine === "openrouter"
+              ? canUseOpenrouter
+              : llmEngine === "groq"
+                ? canUseGroq
+                : false;
 
   useEffect(() => {
     void refresh();
@@ -257,6 +274,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("autoshorts_openrouter_key", openrouterKey);
   }, [openrouterKey]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_groq_key", groqKey);
+  }, [groqKey]);
 
   useEffect(() => {
     localStorage.setItem("autoshorts_openrouter_model", openrouterModel);
@@ -335,6 +356,40 @@ function App() {
     setShowStyleModal(true);
   }
 
+  async function handleYoutubeImport() {
+    if (!youtubeUrl) return;
+    setYoutubeStatus("checking");
+    setError(null);
+    try {
+      const result = await invoke<{isSafe: boolean; license: string | null}>("check_youtube_copyright", { url: youtubeUrl });
+      if (!result.isSafe) {
+        setYoutubeWarningLicense(result.license || "Unknown / Not specified");
+        setYoutubeStatus("warning");
+        return;
+      }
+      await executeYoutubeDownload();
+    } catch (err: any) {
+      setError(err.toString());
+      setYoutubeStatus("idle");
+    }
+  }
+
+  async function executeYoutubeDownload() {
+    setYoutubeStatus("downloading");
+    setError(null);
+    try {
+      const downloadedPath = await invoke<string>("download_youtube_video", { url: youtubeUrl });
+      setYoutubeModalOpen(false);
+      setYoutubeUrl("");
+      setYoutubeStatus("idle");
+      setMediaPathToImport(downloadedPath);
+      setShowStyleModal(true);
+    } catch (err: any) {
+      setError(err.toString());
+      setYoutubeStatus("idle");
+    }
+  }
+
   async function confirmImport(style: string) {
     if (!mediaPathToImport) return;
     const selected = mediaPathToImport;
@@ -385,20 +440,23 @@ function App() {
           llmEngine === "deepseek" ? deepseekKey :
             llmEngine === "gemini" ? geminiKey :
               llmEngine === "openai" ? openaiKey :
-                llmEngine === "openrouter" ? openrouterKey : "";
+                llmEngine === "openrouter" ? openrouterKey :
+                  llmEngine === "groq" ? groqKey : "";
       const hasActiveKey =
         llmEngine === "claude" ? (env.hasAnthropicKey || activeKey.trim().length > 0) :
           llmEngine === "deepseek" ? (env.hasDeepseekKey || activeKey.trim().length > 0) :
             llmEngine === "gemini" ? (env.hasGeminiKey || activeKey.trim().length > 0) :
               llmEngine === "openai" ? (env.hasOpenaiKey || activeKey.trim().length > 0) :
-                llmEngine === "openrouter" ? (env.hasOpenrouterKey || activeKey.trim().length > 0) : false;
+                llmEngine === "openrouter" ? (env.hasOpenrouterKey || activeKey.trim().length > 0) :
+                  llmEngine === "groq" ? (env.hasGroqKey || activeKey.trim().length > 0) : false;
       if (!hasActiveKey) {
         const engineName =
           llmEngine === "claude" ? "Claude" :
             llmEngine === "deepseek" ? "DeepSeek" :
               llmEngine === "gemini" ? "Gemini" :
                 llmEngine === "openai" ? "OpenAI" :
-                  llmEngine === "openrouter" ? "OpenRouter" : "LLM";
+                  llmEngine === "openrouter" ? "OpenRouter" :
+                    llmEngine === "groq" ? "Groq" : "LLM";
         setError(`Transcription complete. ${engineName} API Key is missing. Please add it in settings to analyze viral moments.`);
         return;
       }
@@ -427,7 +485,8 @@ function App() {
           llmEngine === "deepseek" ? deepseekKey.trim() :
             llmEngine === "gemini" ? geminiKey.trim() :
               llmEngine === "openai" ? openaiKey.trim() :
-                llmEngine === "openrouter" ? openrouterKey.trim() : "";
+                llmEngine === "openrouter" ? openrouterKey.trim() :
+                  llmEngine === "groq" ? groqKey.trim() : "";
       await invoke<Candidate[]>("generate_candidates", {
         projectId,
         apiKey: activeKey || null,
@@ -513,7 +572,8 @@ function App() {
           llmEngine === "deepseek" ? deepseekKey.trim() :
             llmEngine === "gemini" ? geminiKey.trim() :
               llmEngine === "openai" ? openaiKey.trim() :
-                llmEngine === "openrouter" ? openrouterKey.trim() : "";
+                llmEngine === "openrouter" ? openrouterKey.trim() :
+                  llmEngine === "groq" ? groqKey.trim() : "";
       try {
         await invoke<Candidate[]>("generate_candidates", {
           projectId: detail.project.id,
@@ -604,9 +664,11 @@ function App() {
         setDeepgramKey={setDeepgramKey}
         setAnthropicKey={setAnthropicKey}
         setDeepseekKey={setDeepseekKey}
+        setGroqKey={setGroqKey}
         deepgramKey={deepgramKey}
         anthropicKey={anthropicKey}
         deepseekKey={deepseekKey}
+        groqKey={groqKey}
         refreshEnv={() => refresh()}
       />
     );
@@ -634,6 +696,16 @@ function App() {
           <button className="primary-action" onClick={importMedia} disabled={busy !== "idle"}>
             {busy === "import" ? <Loader2 className="spin" size={18} /> : <FileVideo size={18} />}
             Import recording
+          </button>
+          <button 
+            className="secondary-action" 
+            onClick={() => setYoutubeModalOpen(true)} 
+            disabled={busy !== "idle" || !environment?.hasYtdlp}
+            title={!environment?.hasYtdlp ? "Please install yt-dlp to use this feature" : "Download a video from YouTube"}
+            style={{ width: "100%", padding: "0.75rem", borderRadius: "10px", marginTop: "0.5rem", display: "flex", gap: "0.5rem", alignItems: "center", justifyContent: "center", border: "1px solid var(--border)", background: "transparent", color: "var(--foreground)", cursor: "pointer", fontSize: "0.95rem" }}
+          >
+            <Youtube size={18} />
+            Import from YouTube
           </button>
 
           <section className="project-list" aria-label="Projects">
@@ -706,6 +778,7 @@ function App() {
                         <option value="gemini">Google Gemini (Cloud)</option>
                         <option value="openai">OpenAI (Cloud)</option>
                         <option value="openrouter">OpenRouter (Cloud)</option>
+                        <option value="groq">Groq (Cloud)</option>
                       </select>
                     </label>
                     {transcriptionEngine === "deepgram" && (
@@ -795,6 +868,17 @@ function App() {
                           />
                         </label>
                       </>
+                    )}
+                    {llmEngine === "groq" && (
+                      <label>
+                        <span>Groq API Key</span>
+                        <input
+                          value={groqKey}
+                          onChange={(event) => setGroqKey(event.target.value)}
+                          placeholder={environment?.hasGroqKey ? "Loaded from env" : "Optional (Groq API Key)"}
+                          type="password"
+                        />
+                      </label>
                     )}
 
                     {llmEngine === "local" && (
@@ -906,7 +990,8 @@ function App() {
                           llmEngine === "deepseek" ? "DeepSeek" :
                             llmEngine === "gemini" ? "Gemini" :
                               llmEngine === "openai" ? "OpenAI" :
-                                llmEngine === "openrouter" ? "OpenRouter" : "LLM"
+                                llmEngine === "openrouter" ? "OpenRouter" :
+                                  llmEngine === "groq" ? "Groq" : "LLM"
                         } API Key is missing. Viral moment identification will not work. Please add your key in API Settings.`}
                     </div>
                   )}
@@ -1002,6 +1087,16 @@ function App() {
                   {busy === "import" ? <Loader2 className="spin" size={18} /> : <FileVideo size={18} />}
                   Import recording
                 </button>
+                <button 
+                  className="secondary-action compact" 
+                  onClick={() => setYoutubeModalOpen(true)} 
+                  disabled={busy !== "idle" || !environment?.hasYtdlp}
+                  title={!environment?.hasYtdlp ? "Please install yt-dlp to use this feature" : "Download a video from YouTube"}
+                  style={{ display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.5rem 1rem", borderRadius: "8px", border: "1px solid var(--border)", background: "transparent", color: "var(--foreground)", cursor: "pointer", fontSize: "0.95rem", marginLeft: "1rem" }}
+                >
+                  <Youtube size={18} />
+                  Import from YouTube
+                </button>
               </header>
 
               {projects.length > 0 ? (
@@ -1054,6 +1149,7 @@ function App() {
           <div className="status-indicators">
             <span className={`indicator ${environment?.hasFfmpeg ? "active" : ""}`} title="FFmpeg status">ffmpeg</span>
             <span className={`indicator ${environment?.hasFfprobe ? "active" : ""}`} title="FFprobe status">ffprobe</span>
+            <span className={`indicator ${environment?.hasYtdlp ? "active" : ""}`} title="yt-dlp status">yt-dlp</span>
             <span className={`indicator ${environment?.hasLocalWhisperModel ? "active" : ""}`} title="Whisper Model status">Whisper Model</span>
             <span className={`indicator ${environment?.hasOllama ? "active" : ""}`} title="Ollama status">Ollama</span>
             <span className={`indicator ${canUseCloudKey ? "active" : ""}`} title="Deepgram Key status">Deepgram</span>
@@ -1186,6 +1282,67 @@ function App() {
           </div>
         </div>
       )}
+
+      {youtubeModalOpen && (
+        <div className="style-modal-overlay">
+          <div className="style-modal" style={{ maxWidth: "500px" }}>
+            <div className="style-modal-header">
+              <h3>Import from YouTube</h3>
+              <p>Paste a YouTube URL below to download and import it directly.</p>
+            </div>
+            <div style={{ padding: "1rem" }}>
+              <input
+                type="text"
+                placeholder="https://www.youtube.com/watch?v=..."
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                disabled={youtubeStatus !== "idle" && youtubeStatus !== "warning"}
+                style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--background)", color: "var(--foreground)", fontSize: "1rem", marginBottom: "1rem" }}
+              />
+
+              {youtubeStatus === "warning" && (
+                <div style={{ background: "rgba(255, 165, 0, 0.1)", border: "1px solid orange", padding: "1rem", borderRadius: "8px", marginBottom: "1rem", color: "orange" }}>
+                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.5rem", fontWeight: "bold" }}>
+                    <AlertTriangle size={20} />
+                    Copyright Warning
+                  </div>
+                  <p style={{ margin: 0, fontSize: "0.9rem" }}>
+                    This video is not explicitly marked for reuse (Creative Commons). Its license appears to be: <strong>{youtubeWarningLicense}</strong>.
+                    <br/><br/>
+                    Clipping this video may lead to copyright strikes. Are you sure you want to proceed?
+                  </p>
+                </div>
+              )}
+
+              <div className="style-modal-actions" style={{ marginTop: "1rem" }}>
+                <button 
+                  className="btn-cancel" 
+                  onClick={() => { setYoutubeModalOpen(false); setYoutubeUrl(""); setYoutubeStatus("idle"); }}
+                  disabled={youtubeStatus === "checking" || youtubeStatus === "downloading"}
+                >
+                  Cancel
+                </button>
+                {youtubeStatus === "warning" ? (
+                  <button className="btn-confirm" onClick={executeYoutubeDownload}>
+                    Yes, I understand the risks
+                  </button>
+                ) : (
+                  <button 
+                    className="btn-confirm" 
+                    onClick={handleYoutubeImport}
+                    disabled={!youtubeUrl || youtubeStatus !== "idle"}
+                    style={{ minWidth: "120px" }}
+                  >
+                    {youtubeStatus === "checking" ? <><Loader2 className="spin" size={18} /> Checking...</> :
+                     youtubeStatus === "downloading" ? <><Loader2 className="spin" size={18} /> Downloading...</> : 
+                     "Check & Download"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1231,14 +1388,16 @@ interface OnboardingProps {
   environment: EnvironmentStatus | null;
   onComplete: () => void;
   setTranscriptionEngine: (engine: "deepgram" | "local") => void;
-  setLlmEngine: (engine: "claude" | "deepseek" | "local") => void;
+  setLlmEngine: (engine: "claude" | "deepseek" | "local" | "groq") => void;
   setLocalLlmModel: (model: string) => void;
   setDeepgramKey: (key: string) => void;
   setAnthropicKey: (key: string) => void;
   setDeepseekKey: (key: string) => void;
+  setGroqKey: (key: string) => void;
   deepgramKey: string;
   anthropicKey: string;
   deepseekKey: string;
+  groqKey: string;
   refreshEnv: () => Promise<void>;
 }
 
@@ -1251,9 +1410,11 @@ function Onboarding({
   setDeepgramKey,
   setAnthropicKey,
   setDeepseekKey,
+  setGroqKey,
   deepgramKey: initialDeepgramKey,
   anthropicKey: initialAnthropicKey,
   deepseekKey: initialDeepseekKey,
+  groqKey: initialGroqKey,
   refreshEnv,
 }: OnboardingProps) {
   const [setupMode, setSetupMode] = useState<"choose" | "local" | "cloud" | "downloading">("choose");
@@ -1262,6 +1423,7 @@ function Onboarding({
   const [dgKey, setDgKey] = useState(initialDeepgramKey);
   const [antKey, setAntKey] = useState(initialAnthropicKey);
   const [dsKey, setDsKey] = useState(initialDeepseekKey);
+  const [grKey, setGrKey] = useState(initialGroqKey);
 
   const [downloadStatus, setDownloadStatus] = useState("Initializing download...");
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -1281,8 +1443,8 @@ function Onboarding({
       setError("Deepgram API Key is required for cloud mode.");
       return;
     }
-    if (!antKey.trim() && !dsKey.trim()) {
-      setError("Please provide at least one LLM Key (Claude or DeepSeek).");
+    if (!antKey.trim() && !dsKey.trim() && !grKey.trim()) {
+      setError("Please provide at least one LLM Key (Claude, DeepSeek, or Groq).");
       return;
     }
 
@@ -1301,6 +1463,11 @@ function Onboarding({
       setDeepseekKey(dsKey.trim());
       localStorage.setItem("autoshorts_deepseek_key", dsKey.trim());
       localStorage.setItem("autoshorts_llm_engine", "deepseek");
+    } else if (grKey.trim()) {
+      setLlmEngine("groq");
+      setGroqKey(grKey.trim());
+      localStorage.setItem("autoshorts_groq_key", grKey.trim());
+      localStorage.setItem("autoshorts_llm_engine", "groq");
     }
 
     localStorage.setItem("autoshorts_onboarded", "true");
@@ -1546,7 +1713,17 @@ function Onboarding({
                   placeholder="Insert your DeepSeek API Key (alternative moment detection)"
                 />
               </div>
-              <p className="form-help">* Deepgram Key + at least one LLM Key (Claude or DeepSeek) is required.</p>
+
+              <div className="input-group">
+                <label>Groq API Key</label>
+                <input
+                  type="password"
+                  value={grKey}
+                  onChange={(e) => setGrKey(e.target.value)}
+                  placeholder="Insert your Groq API Key (alternative moment detection)"
+                />
+              </div>
+              <p className="form-help">* Deepgram Key + at least one LLM Key (Claude, DeepSeek, or Groq) is required.</p>
             </div>
 
             <div className="onboarding-actions">
