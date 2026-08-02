@@ -838,12 +838,53 @@ fn build_drawtext_filters(
     cropped_width: i64,
     caption_style: &str,
 ) -> String {
-    let mut drawtext_filters = Vec::new();
-
     let candidate_words: Vec<&TranscriptWord> = words
         .iter()
         .filter(|w| w.end > start_sec && w.start < end_sec)
         .collect();
+
+    if candidate_words.is_empty() {
+        return String::new();
+    }
+
+    // Build font option once for drawtext filter
+    let mut font_paths = vec![
+        // macOS
+        "/System/Library/Fonts/Supplemental/Futura.ttc".to_string(),
+        "/System/Library/Fonts/Avenir Next.ttc".to_string(),
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf".to_string(),
+        "/System/Library/Fonts/Helvetica.ttc".to_string(),
+        // Windows standard
+        "C:/Windows/Fonts/SegoeUIb.ttf".to_string(),
+        "C:/Windows/Fonts/segoeuib.ttf".to_string(),
+        "C:/Windows/Fonts/SegoeUI.ttf".to_string(),
+        "C:/Windows/Fonts/segoeui.ttf".to_string(),
+        "C:/Windows/Fonts/arialbd.ttf".to_string(),
+        "C:/Windows/Fonts/arial.ttf".to_string(),
+        // Linux
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf".to_string(),
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf".to_string(),
+    ];
+    if let Ok(windir) = std::env::var("WINDIR").or_else(|_| std::env::var("SystemRoot")) {
+        let windir_fonts = format!("{}/Fonts", windir.replace('\\', "/"));
+        font_paths.push(format!("{}/SegoeUIb.ttf", windir_fonts));
+        font_paths.push(format!("{}/segoeuib.ttf", windir_fonts));
+        font_paths.push(format!("{}/SegoeUI.ttf", windir_fonts));
+        font_paths.push(format!("{}/arialbd.ttf", windir_fonts));
+        font_paths.push(format!("{}/arial.ttf", windir_fonts));
+    }
+
+    let mut font_option = String::new();
+    for path in &font_paths {
+        if std::path::Path::new(path).exists() {
+            let normalized_path = path.replace('\\', "/");
+            let escaped_path = normalized_path.replace('\'', "'\\''");
+            font_option = format!("fontfile='{}':", escaped_path);
+            break;
+        }
+    }
+
+    let mut drawtext_filters = Vec::new();
 
     // Group into chunks of 2 words for fast-paced style captions
     for chunk in candidate_words.chunks(2) {
@@ -875,34 +916,6 @@ fn build_drawtext_filters(
         let fontsize = ((cropped_width as f64) * 0.075).clamp(16.0, 80.0).round() as i64;
         let padding = ((fontsize as f64) * 0.3).clamp(4.0, 24.0).round() as i64;
 
-        // Premium system font hierarchy
-        let font_paths = [
-            // macOS
-            "/System/Library/Fonts/Supplemental/Futura.ttc",
-            "/System/Library/Fonts/Avenir Next.ttc",
-            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            // Windows
-            "C:/Windows/Fonts/SegoeUIb.ttf",
-            "C:/Windows/Fonts/arialbd.ttf",
-            "C:/Windows/Fonts/arial.ttf",
-            // Linux
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-        ];
-        let mut font_option = String::new();
-        for path in &font_paths {
-            if std::path::Path::new(path).exists() {
-                let escaped_path = path
-                    .replace('\\', "\\\\")
-                    .replace(':', "\\:")
-                    .replace('\'', "\\'")
-                    .replace(' ', "\\ ");
-                font_option = format!("fontfile={}:", escaped_path);
-                break;
-            }
-        }
-        
         let drawtext = match caption_style {
             "classic-outline" => {
                 // Classic yellow text with a bold outline (CapCut style)
@@ -961,4 +974,38 @@ fn build_drawtext_filters(
     }
 
     drawtext_filters.join(",")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::TranscriptWord;
+
+    #[test]
+    fn test_build_drawtext_filters_formatting() {
+        let words = vec![
+            TranscriptWord {
+                text: "Hello".to_string(),
+                start: 0.0,
+                end: 1.0,
+                speaker: None,
+            },
+            TranscriptWord {
+                text: "world".to_string(),
+                start: 1.0,
+                end: 2.0,
+                speaker: None,
+            },
+        ];
+
+        let result = build_drawtext_filters(&words, 0.0, 5.0, 1080, "classic-outline");
+        assert!(!result.is_empty());
+        assert!(result.contains("drawtext="));
+        assert!(result.contains("text='HELLO WORLD'"));
+
+        if result.contains("fontfile=") {
+            assert!(result.contains("fontfile='"));
+            assert!(!result.contains("\\:"));
+        }
+    }
 }
