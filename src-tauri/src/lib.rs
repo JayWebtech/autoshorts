@@ -706,62 +706,70 @@ pub struct CopyrightCheckResult {
 
 #[tauri::command]
 async fn check_youtube_copyright(url: String) -> Result<CopyrightCheckResult, String> {
-    let output = std::process::Command::new("yt-dlp")
-        .args(&["--dump-json", &url])
-        .output()
-        .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+    tokio::task::spawn_blocking(move || {
+        let output = std::process::Command::new("yt-dlp")
+            .args(&["--dump-json", &url])
+            .output()
+            .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
 
-    if !output.status.success() {
-        return Err("Failed to fetch video metadata from YouTube.".to_string());
-    }
+        if !output.status.success() {
+            return Err("Failed to fetch video metadata from YouTube.".to_string());
+        }
 
-    let json_str = String::from_utf8_lossy(&output.stdout);
-    let parsed: serde_json::Value = serde_json::from_str(&json_str).map_err(|_| "Failed to parse yt-dlp output".to_string())?;
+        let json_str = String::from_utf8_lossy(&output.stdout);
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).map_err(|_| "Failed to parse yt-dlp output".to_string())?;
 
-    let license = parsed.get("license").and_then(|v| v.as_str()).map(|s| s.to_string());
-    
-    let is_safe = if let Some(lic) = &license {
-        lic.to_lowercase().contains("creative commons") || lic.to_lowercase().contains("reuse allowed")
-    } else {
-        false
-    };
+        let license = parsed.get("license").and_then(|v| v.as_str()).map(|s| s.to_string());
+        
+        let is_safe = if let Some(lic) = &license {
+            lic.to_lowercase().contains("creative commons") || lic.to_lowercase().contains("reuse allowed")
+        } else {
+            false
+        };
 
-    Ok(CopyrightCheckResult { is_safe, license })
+        Ok(CopyrightCheckResult { is_safe, license })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 async fn download_youtube_video(url: String) -> Result<String, String> {
-    let downloads_dir = dirs::download_dir()
-        .ok_or_else(|| "Could not find Downloads folder".to_string())?;
-    
-    let output_template = downloads_dir.join("AutoShorts_%(id)s.%(ext)s");
-    let output_template_str = output_template.to_string_lossy().to_string();
+    tokio::task::spawn_blocking(move || {
+        let downloads_dir = dirs::download_dir()
+            .ok_or_else(|| "Could not find Downloads folder".to_string())?;
+        
+        let output_template = downloads_dir.join("AutoShorts_%(id)s.%(ext)s");
+        let output_template_str = output_template.to_string_lossy().to_string();
 
-    let output = std::process::Command::new("yt-dlp")
-        .args(&[
-            "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-            "--merge-output-format", "mp4",
-            "-o", &output_template_str,
-            "--print", "after_move:filepath",
-            "--no-simulate",
-            &url
-        ])
-        .output()
-        .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+        let output = std::process::Command::new("yt-dlp")
+            .args(&[
+                "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                "--merge-output-format", "mp4",
+                "-o", &output_template_str,
+                "--print", "after_move:filepath",
+                "--no-simulate",
+                &url
+            ])
+            .output()
+            .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("yt-dlp failed: {}", stderr));
-    }
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("yt-dlp failed: {}", stderr));
+        }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let filepath = stdout.lines().last().unwrap_or("").trim();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let filepath = stdout.lines().last().unwrap_or("").trim();
 
-    if filepath.is_empty() || !std::path::Path::new(filepath).exists() {
-        return Err("Could not locate downloaded file".to_string());
-    }
+        if filepath.is_empty() || !std::path::Path::new(filepath).exists() {
+            return Err("Could not locate downloaded file".to_string());
+        }
 
-    Ok(filepath.to_string())
+        Ok(filepath.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 fn project_dir(state: &AppState, project_id: &str) -> PathBuf {
