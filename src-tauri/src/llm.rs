@@ -33,6 +33,7 @@ struct DeepseekResponse {
 pub async fn detect_candidates_with_deepseek(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    model_name: Option<&str>,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
@@ -44,11 +45,18 @@ Avoid rambling setup, context-dependent references, and pure filler. Return up t
 {{\"candidates\":[{{\"start\":0.0,\"end\":0.0,\"score\":0.0,\"hook\":\"...\",\"rationale\":\"...\"}}]}}\n\nTranscript:\n{segments}"
     );
 
+    let default_model = "deepseek-chat".to_string();
+    let model = model_name
+        .filter(|m| !m.trim().is_empty())
+        .map(|m| m.trim().to_string())
+        .or_else(|| std::env::var("DEEPSEEK_MODEL").ok().filter(|m| !m.trim().is_empty()))
+        .unwrap_or(default_model);
+
     let response = reqwest::Client::new()
         .post("https://api.deepseek.com/chat/completions")
         .header("Authorization", format!("Bearer {api_key}"))
         .json(&json!({
-            "model": "deepseek-chat",
+            "model": model,
             "messages": [
                 {
                     "role": "user",
