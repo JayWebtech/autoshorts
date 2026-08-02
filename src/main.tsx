@@ -155,6 +155,9 @@ function App() {
   const [openrouterKey, setOpenrouterKey] = useState(() => {
     return localStorage.getItem("autoshorts_openrouter_key") || "";
   });
+  const [openrouterModel, setOpenrouterModel] = useState(() => {
+    return localStorage.getItem("autoshorts_openrouter_model") || "";
+  });
 
   const [downloadingModelName, setDownloadingModelName] = useState<string | null>(null);
   const [modelDownloadStatus, setModelDownloadStatus] = useState("");
@@ -254,6 +257,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("autoshorts_openrouter_key", openrouterKey);
   }, [openrouterKey]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_openrouter_model", openrouterModel);
+  }, [openrouterModel]);
 
   const pullModelDirectly = async (modelName: string) => {
     setDownloadingModelName(modelName);
@@ -420,7 +427,7 @@ function App() {
         projectId,
         apiKey: activeKey || null,
         provider: llmEngine,
-        modelName: llmEngine === "local" ? localLlmModel.trim() : (llmEngine === "deepseek" ? (deepseekModel.trim() || null) : null),
+        modelName: llmEngine === "local" ? localLlmModel.trim() : (llmEngine === "deepseek" ? (deepseekModel.trim() || null) : (llmEngine === "openrouter" ? (openrouterModel.trim() || null) : null)),
         allowDemo: false,
       });
       await refresh(projectId);
@@ -502,7 +509,7 @@ function App() {
           projectId: detail.project.id,
           apiKey: activeKey || null,
           provider: llmEngine,
-          modelName: llmEngine === "local" ? localLlmModel.trim() : (llmEngine === "deepseek" ? (deepseekModel.trim() || null) : null),
+          modelName: llmEngine === "local" ? localLlmModel.trim() : (llmEngine === "deepseek" ? (deepseekModel.trim() || null) : (llmEngine === "openrouter" ? (openrouterModel.trim() || null) : null)),
           allowDemo,
         });
         await refresh(detail.project.id);
@@ -758,15 +765,26 @@ function App() {
                       </label>
                     )}
                     {llmEngine === "openrouter" && (
-                      <label>
-                        <span>OpenRouter API Key</span>
-                        <input
-                          value={openrouterKey}
-                          onChange={(event) => setOpenrouterKey(event.target.value)}
-                          placeholder={environment?.hasOpenrouterKey ? "Loaded from env" : "Optional (OpenRouter API Key)"}
-                          type="password"
-                        />
-                      </label>
+                      <>
+                        <label>
+                          <span>OpenRouter API Key</span>
+                          <input
+                            value={openrouterKey}
+                            onChange={(event) => setOpenrouterKey(event.target.value)}
+                            placeholder={environment?.hasOpenrouterKey ? "Loaded from env" : "Optional (OpenRouter API Key)"}
+                            type="password"
+                          />
+                        </label>
+                        <label>
+                          <span>OpenRouter Model</span>
+                          <input
+                            value={openrouterModel}
+                            onChange={(event) => setOpenrouterModel(event.target.value)}
+                            placeholder="Optional (e.g. google/gemini-2.5-flash, deepseek/deepseek-r1)"
+                            type="text"
+                          />
+                        </label>
+                      </>
                     )}
 
                     {llmEngine === "local" && (
