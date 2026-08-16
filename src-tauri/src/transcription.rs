@@ -11,7 +11,7 @@ pub async fn transcribe_deepgram(audio_path: &str, api_key: &str) -> Result<Norm
         .with_context(|| format!("reading audio file {audio_path}"))?;
 
     let response = reqwest::Client::new()
-        .post("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&diarize=true&punctuate=true&filler_words=true")
+        .post("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&diarize=true&punctuate=true&filler_words=true&detect_language=true")
         .header("Authorization", format!("Token {api_key}"))
         .header("Content-Type", "audio/wav")
         .body(bytes)
@@ -263,7 +263,8 @@ pub async fn transcribe_local(audio_path: &str, model_path: &str) -> Result<Norm
         let audio_stem_clone = audio_stem.to_string();
 
         tokio::task::spawn_blocking(move || {
-            let output = std::process::Command::new("whisper")
+            let whisper_bin = crate::media::resolve_binary("whisper");
+            let output = std::process::Command::new(&whisper_bin)
                 .arg(&audio_path)
                 .args(["--model", "base"])
                 .args(["--output_format", "json"])

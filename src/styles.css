@@ -710,6 +710,99 @@ button:disabled {
   background: var(--accent-primary-hover);
 }
 
+.clip-open-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 10px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clip-open-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.clip-open-button.primary {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.38);
+  color: #34d399;
+}
+
+.clip-open-button.primary:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.28);
+  border-color: rgba(16, 185, 129, 0.6);
+  color: #6ee7b7;
+}
+
+.portrait-preview-mock.interactive {
+  cursor: pointer;
+}
+
+.portrait-preview-mock.interactive:hover .mock-video-active {
+  transform: scale(1.1);
+  filter: brightness(1.25);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+}
+
+.output-path-box {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.output-path-box .output-path-text {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.35;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--color-success-text);
+}
+
+.output-path-box .output-path-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.output-path-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.output-path-link-btn:hover {
+  background: rgba(16, 185, 129, 0.24);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #6ee7b7;
+}
+
 .output-path,
 .render-log {
   margin-top: 10px;
