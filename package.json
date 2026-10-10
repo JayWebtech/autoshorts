@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "python run.py",
     "dev": "vite --host 127.0.0.1 --port 1420",
     "build": "tsc && vite build",
     "tauri": "tauri",

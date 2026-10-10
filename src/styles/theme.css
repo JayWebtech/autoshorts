@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Surfaces - Linear / Vercel Precision Monochrome */
+  --bg-base: #000000;
+  --bg-app: #000000;
+  --bg-sidebar: #09090b;
+  --bg-panel: #0d0d10;
+  --bg-panel-header: #121216;
+  --bg-surface: #0f0f12;
+  --bg-surface-raised: #141418;
+  --bg-surface-hover: #1c1c22;
+  --bg-input: #09090b;
+  
+  --border-color: #27272a;
+  --border-subtle: #1c1c22;
+  --border-default: #27272a;
+  --border-hover: #3f3f46;
+  --border-focus: #fafafa;
+  --border-color-focus: #fafafa;
+  
+  --accent-primary: #fafafa;
+  --accent-primary-hover: #e4e4e7;
+  --accent-text: #09090b;
+  
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #52525b;
+  
+  --color-success-bg: #09261a;
+  --color-success-border: #135639;
+  --color-success-text: #34d399;
+  
+  --color-error-bg: #270e11;
+  --color-error-border: #5c1822;
+  --color-error-text: #f87171;
+
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  color: var(--text-primary);
+  background: var(--bg-base);
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 980px;
+  min-height: 100vh;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+/* Custom Scrollbars for a Native Feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+

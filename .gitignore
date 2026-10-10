@@ -5,3 +5,13 @@ src-tauri/target
 .env
 .DS_Store
 *.log
+*.pyc
+
+# Python & Build artifacts
+__pycache__/
+*.pyc
+build_tmp/
+release/
+data/
+scratch/
+repo-supoclip/
