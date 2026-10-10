@@ -84,6 +84,7 @@ export type Candidate = {
   virality?: ViralityBreakdown;
   rank: number;
   selected: boolean;
+  dismissed?: boolean;
 };
 
 export type Clip = {

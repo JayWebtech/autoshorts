@@ -848,6 +848,11 @@ class Api:
         count = int(args.get("count", 3))
         return self.db.set_selected_clip_count(project_id, count)
 
+    def toggle_candidate_dismissed(self, args: Any) -> bool:
+        candidate_id = args.get("candidateId") if isinstance(args, dict) else args
+        dismissed = bool(args.get("dismissed", True)) if isinstance(args, dict) else True
+        return self.db.toggle_candidate_dismissed(candidate_id, dismissed)
+
     def select_output_directory(self, _args: Any = None) -> Optional[str]:
         if not self._window:
             return None

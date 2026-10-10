@@ -285,6 +285,7 @@ export function App() {
                     cancelMoments={mediaPipeline.cancelMoments}
                     moments={mediaPipeline.moments}
                     updateClipCount={mediaPipeline.updateClipCount}
+                    toggleCandidateDismissed={mediaPipeline.toggleCandidateDismissed}
                     clipByCandidate={mediaPipeline.clipByCandidate}
                     copiedDescId={mediaPipeline.copiedDescId}
                     copyDescription={mediaPipeline.copyDescription}

@@ -493,8 +493,7 @@ textarea:focus {
   opacity: 0.35;
 }
 
-.transcript-list,
-.candidate-list {
+.transcript-list {
   display: grid;
   align-content: start;
   gap: 12px;
@@ -506,4 +505,25 @@ textarea:focus {
   box-sizing: border-box;
   flex: 1;
 }
+
+.candidate-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 14px;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+}
+
+@media (max-width: 960px) {
+  .candidate-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 

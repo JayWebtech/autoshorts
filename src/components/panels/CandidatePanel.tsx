@@ -11,6 +11,8 @@ import {
   Filter,
   FileText,
   CheckCheck,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
 import type {
   Candidate,
@@ -50,6 +52,7 @@ interface CandidatePanelProps {
   candidateProgress?: { message: string; current: number; total: number } | null;
   regenerateCandidateCopy?: (candidateId: string) => Promise<void>;
   regeneratingCopyCandidateId?: string | null;
+  toggleCandidateDismissed?: (candidateId: string, dismissed: boolean) => void;
 }
 
 export const CandidatePanel: React.FC<CandidatePanelProps> = ({
@@ -79,8 +82,9 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
   candidateProgress,
   regenerateCandidateCopy,
   regeneratingCopyCandidateId,
+  toggleCandidateDismissed,
 }) => {
-  const [filterTab, setFilterTab] = useState<"all" | "pending" | "exported">("all");
+  const [filterTab, setFilterTab] = useState<"all" | "pending" | "exported" | "dismissed">("pending");
   const [copiedClipPathId, setCopiedClipPathId] = useState<string | null>(null);
   const [copiedHookId, setCopiedHookId] = useState<string | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
@@ -91,22 +95,30 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
     }
   }, [filterTab]);
 
+  const dismissedCandidates = detail.candidates.filter((c) => Boolean(c.dismissed));
+
   const exportedCandidates = detail.candidates.filter((c) => {
+    if (c.dismissed) return false;
     const clip = clipByCandidate.get(c.id);
     return clip?.status === "done" && Boolean(clip.outputPath);
   });
 
   const pendingCandidates = detail.candidates.filter((c) => {
+    if (c.dismissed) return false;
     const clip = clipByCandidate.get(c.id);
     return !(clip?.status === "done" && Boolean(clip.outputPath));
   });
+
+  const activeCandidates = detail.candidates.filter((c) => !c.dismissed);
 
   const displayedCandidates =
     filterTab === "exported"
       ? exportedCandidates
       : filterTab === "pending"
       ? pendingCandidates
-      : detail.candidates;
+      : filterTab === "dismissed"
+      ? dismissedCandidates
+      : activeCandidates;
 
   const handleCopyPath = (candidateId: string, path: string) => {
     void navigator.clipboard.writeText(path);
@@ -394,7 +406,7 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
               >
                 <span>Todos</span>
                 <span style={{ fontSize: "0.7rem", opacity: 0.8, fontFamily: "var(--font-mono)" }}>
-                  {detail.candidates.length}
+                  {activeCandidates.length}
                 </span>
               </button>
 
@@ -452,6 +464,40 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                   }}
                 >
                   {exportedCandidates.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilterTab("dismissed")}
+                style={{
+                  padding: "0.22rem 0.6rem",
+                  borderRadius: "5px",
+                  fontSize: "0.74rem",
+                  fontWeight: filterTab === "dismissed" ? 600 : 400,
+                  background: filterTab === "dismissed" ? "#fafafa" : "var(--bg-surface-raised)",
+                  color: filterTab === "dismissed" ? "#09090b" : "var(--text-secondary)",
+                  border: filterTab === "dismissed" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <Trash2 size={12} color={filterTab === "dismissed" ? "#09090b" : dismissedCandidates.length > 0 ? "#f43f5e" : "var(--text-secondary)"} />
+                <span>Descartados</span>
+                <span
+                  style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    fontFamily: "var(--font-mono)",
+                    padding: "1px 5px",
+                    borderRadius: "8px",
+                    background: filterTab === "dismissed" ? "#09090b" : dismissedCandidates.length > 0 ? "rgba(244, 63, 94, 0.15)" : "var(--bg-base)",
+                    color: filterTab === "dismissed" ? "#fafafa" : dismissedCandidates.length > 0 ? "#f43f5e" : "var(--text-secondary)",
+                  }}
+                >
+                  {dismissedCandidates.length}
                 </span>
               </button>
             </div>
@@ -533,6 +579,26 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                     >
                       <CheckCheck size={11} />
                       Exportado
+                    </span>
+                  )}
+                  {candidate.dismissed && (
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontSize: "0.72rem",
+                        padding: "1px 6px",
+                        borderRadius: "4px",
+                        background: "rgba(244, 63, 94, 0.15)",
+                        color: "#f43f5e",
+                        border: "1px solid rgba(244, 63, 94, 0.3)",
+                        fontWeight: 600,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "3px",
+                      }}
+                    >
+                      <Trash2 size={11} />
+                      Descartado
                     </span>
                   )}
                 </div>
@@ -737,6 +803,43 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                   </div>
 
                   <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                    {candidate.dismissed ? (
+                      <button
+                        className="icon-button"
+                        style={{
+                          padding: "0.25rem 0.6rem",
+                          fontSize: "0.78rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          color: "#38bdf8",
+                          borderColor: "rgba(56, 189, 248, 0.3)",
+                        }}
+                        onClick={() => toggleCandidateDismissed?.(candidate.id, false)}
+                        title="Restaurar a momentos pendientes"
+                      >
+                        <RotateCcw size={12} />
+                        <span>Restaurar</span>
+                      </button>
+                    ) : (
+                      <button
+                        className="icon-button"
+                        style={{
+                          padding: "0.25rem 0.55rem",
+                          fontSize: "0.78rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          color: "var(--text-secondary)",
+                        }}
+                        onClick={() => toggleCandidateDismissed?.(candidate.id, true)}
+                        title="Descartar este momento"
+                      >
+                        <Trash2 size={12} />
+                        <span>Descartar</span>
+                      </button>
+                    )}
+
                     <button
                       className="icon-button"
                       style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem", display: "inline-flex", alignItems: "center", gap: "4px" }}
@@ -865,6 +968,16 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                 </p>
                 <p style={{ margin: "4px 0 0", fontSize: "0.76rem", color: "var(--text-muted)" }}>
                   Puedes verlos en la pestaña "Exportados" o buscar nuevos momentos virales.
+                </p>
+              </>
+            ) : filterTab === "dismissed" ? (
+              <>
+                <Trash2 size={28} style={{ opacity: 0.5, color: "#f43f5e" }} />
+                <p style={{ margin: "6px 0 0", fontSize: "0.85rem", color: "var(--text-primary)", fontWeight: 600 }}>
+                  No tienes momentos descartados
+                </p>
+                <p style={{ margin: "4px 0 0", fontSize: "0.76rem", color: "var(--text-muted)" }}>
+                  Los momentos que descartes con el botón "Descartar" aparecerán aquí para que puedas recuperarlos cuando desees.
                 </p>
               </>
             ) : null}

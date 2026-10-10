@@ -58,7 +58,8 @@ class Database:
                 rationale TEXT NOT NULL,
                 description TEXT,
                 rank INTEGER NOT NULL,
-                selected INTEGER NOT NULL DEFAULT 0
+                selected INTEGER NOT NULL DEFAULT 0,
+                dismissed INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS clips (
@@ -115,6 +116,11 @@ class Database:
 
             try:
                 conn.execute("ALTER TABLE candidates ADD COLUMN virality_json TEXT;")
+            except Exception:
+                pass
+
+            try:
+                conn.execute("ALTER TABLE candidates ADD COLUMN dismissed INTEGER DEFAULT 0;")
             except Exception:
                 pass
 
@@ -295,8 +301,8 @@ class Database:
                 virality_json = json.dumps(virality, ensure_ascii=False)
 
                 conn.execute(
-                    """INSERT INTO candidates (id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected, hook_title, virality_json)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    """INSERT INTO candidates (id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected, hook_title, virality_json, dismissed)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
                     (c_id, project_id, draft["start"], draft["end"], draft["score"], draft["hook"], draft["rationale"], desc, idx, selected, hook_title, virality_json)
                 )
                 conn.execute(
@@ -316,6 +322,7 @@ class Database:
                     "virality": virality,
                     "rank": idx,
                     "selected": bool(selected),
+                    "dismissed": False,
                 })
             conn.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (now, project_id))
         return candidates
@@ -336,7 +343,7 @@ class Database:
     def get_candidates(self, project_id: str) -> List[Dict[str, Any]]:
         with self.get_conn() as conn:
             rows = conn.execute(
-                "SELECT id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected, hook_title, virality_json FROM candidates WHERE project_id = ? ORDER BY rank ASC",
+                "SELECT id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected, hook_title, virality_json, dismissed FROM candidates WHERE project_id = ? ORDER BY rank ASC",
                 (project_id,)
             ).fetchall()
             result = []
@@ -374,6 +381,7 @@ class Database:
                     "virality": v_obj,
                     "rank": r["rank"],
                     "selected": bool(r["selected"]),
+                    "dismissed": bool(r["dismissed"] if "dismissed" in r.keys() else 0),
                 })
             return result
 
@@ -398,7 +406,7 @@ class Database:
                 (candidate_id,)
             )
             r = conn.execute(
-                "SELECT id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected FROM candidates WHERE id = ?",
+                "SELECT id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected, dismissed FROM candidates WHERE id = ?",
                 (candidate_id,)
             ).fetchone()
             if not r:
@@ -414,7 +422,16 @@ class Database:
                 "description": r["description"] or "",
                 "rank": r["rank"],
                 "selected": bool(r["selected"]),
+                "dismissed": bool(r["dismissed"] if "dismissed" in r.keys() else 0),
             }
+
+    def toggle_candidate_dismissed(self, candidate_id: str, dismissed: bool) -> bool:
+        with self.get_conn() as conn:
+            conn.execute(
+                "UPDATE candidates SET dismissed = ? WHERE id = ?",
+                (1 if dismissed else 0, candidate_id)
+            )
+        return True
 
     def get_clips(self, project_id: str) -> List[Dict[str, Any]]:
         with self.get_conn() as conn:
@@ -452,7 +469,7 @@ class Database:
     def get_candidate_with_project(self, candidate_id: str) -> tuple:
         with self.get_conn() as conn:
             c = conn.execute(
-                "SELECT id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected FROM candidates WHERE id = ?",
+                "SELECT id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected, dismissed FROM candidates WHERE id = ?",
                 (candidate_id,)
             ).fetchone()
             if not c:
@@ -468,6 +485,7 @@ class Database:
                 "description": c["description"] or "",
                 "rank": c["rank"],
                 "selected": bool(c["selected"]),
+                "dismissed": bool(c["dismissed"] if "dismissed" in c.keys() else 0),
             }
             project = self.get_project(candidate["projectId"])
             return candidate, project

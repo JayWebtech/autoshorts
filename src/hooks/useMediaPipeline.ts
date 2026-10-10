@@ -501,6 +501,28 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
     [detail, setDetail, setError]
   );
 
+  const toggleCandidateDismissed = useCallback(
+    async (candidateId: string, dismissed: boolean) => {
+      if (!detail) return;
+      const prevCandidates = detail.candidates;
+      const updatedCandidates = detail.candidates.map((c) =>
+        c.id === candidateId ? { ...c, dismissed } : c
+      );
+      setDetail({ ...detail, candidates: updatedCandidates });
+
+      try {
+        await invoke("toggle_candidate_dismissed", {
+          candidateId,
+          dismissed,
+        });
+      } catch (err) {
+        setDetail({ ...detail, candidates: prevCandidates });
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [detail, setDetail, setError]
+  );
+
   const cutCandidate = useCallback(
     async (candidateId: string, options?: CutClipOptions) => {
       if (!detail) return;
@@ -683,6 +705,7 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
     openCandidatePreview,
     saveCandidateTrim,
     updateClipCount,
+    toggleCandidateDismissed,
     cutCandidate,
     cutSelected,
     previewCandidate,
