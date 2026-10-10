@@ -417,6 +417,23 @@ textarea:focus {
   flex: 1;
 }
 
+/* Full-width single view workspace layout */
+.work-full-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.work-full-container .panel {
+  width: 100%;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+}
+
 .panel {
   display: flex;
   flex-direction: column;

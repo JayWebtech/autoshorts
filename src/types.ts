@@ -62,6 +62,15 @@ export type Transcript = {
   createdAt: string;
 };
 
+export type ViralityBreakdown = {
+  hook_score: number;
+  engagement_score: number;
+  value_score: number;
+  shareability_score: number;
+  total_score: number;
+  hook_type?: string;
+};
+
 export type Candidate = {
   id: string;
   projectId: string;
@@ -71,6 +80,8 @@ export type Candidate = {
   hook: string;
   rationale: string;
   description?: string;
+  hookTitle?: string;
+  virality?: ViralityBreakdown;
   rank: number;
   selected: boolean;
 };

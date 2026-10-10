@@ -18,7 +18,7 @@ interface UseAutoEditStateOptions {
 export function useAutoEditState(options: UseAutoEditStateOptions) {
   const { detail, localLlmModel, customOutputDir, setError } = options;
 
-  const [projectViewTab, setProjectViewTab] = useState<"moments" | "autoedit">("moments");
+  const [projectViewTab, setProjectViewTab] = useState<"transcript" | "moments" | "autoedit">("moments");
   const [autoedits, setAutoedits] = useState<AutoEditRecord[]>([]);
   const [isLoadingAutoedits, setIsLoadingAutoedits] = useState<boolean>(false);
   const [isGeneratingCopyId, setIsGeneratingCopyId] = useState<string | null>(null);

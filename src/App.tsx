@@ -250,8 +250,8 @@ export function App() {
                   onGenerateCopy={autoEditState.generateAutoeditSocialCopy}
                   isGeneratingCopyId={autoEditState.isGeneratingCopyId}
                 />
-              ) : (
-                <div className="work-grid">
+              ) : autoEditState.projectViewTab === "transcript" ? (
+                <div className="work-full-container">
                   <TranscriptPanel
                     detail={projectActions.detail}
                     transcript={mediaPipeline.transcript}
@@ -266,7 +266,9 @@ export function App() {
                     onRefineTranscript={mediaPipeline.refineTranscript}
                     onDetectActionCues={mediaPipeline.detectActionCues}
                   />
-
+                </div>
+              ) : (
+                <div className="work-full-container">
                   <CandidatePanel
                     detail={projectActions.detail}
                     selectedCount={mediaPipeline.selectedCount}

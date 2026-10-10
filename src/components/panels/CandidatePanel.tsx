@@ -536,7 +536,32 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                     </span>
                   )}
                 </div>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginTop: "6px" }}>
+                {candidate.hookTitle && (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      background: "rgba(234, 179, 8, 0.12)",
+                      border: "1px solid rgba(234, 179, 8, 0.3)",
+                      color: "#facc15",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      letterSpacing: "0.02em",
+                      marginTop: "6px",
+                      marginBottom: "2px",
+                      width: "fit-content",
+                    }}
+                    title="Titular corto sugerido por IA para colocar en pantalla grande al inicio del clip"
+                  >
+                    <span style={{ opacity: 0.8 }}>TITULAR:</span>
+                    <span>"{candidate.hookTitle}"</span>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginTop: candidate.hookTitle ? "2px" : "6px" }}>
                   <h4 style={{ margin: 0, flex: 1, minWidth: 0, wordBreak: "break-word" }}>{candidate.hook}</h4>
                   <button
                     type="button"
@@ -567,6 +592,62 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                 </div>
                 <p className="candidate-rationale">{candidate.rationale}</p>
 
+                {candidate.virality && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: "6px",
+                      marginTop: "6px",
+                      marginBottom: "4px",
+                      padding: "5px 8px",
+                      background: "rgba(24, 24, 27, 0.8)",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border-default)",
+                      fontSize: "0.71rem",
+                      fontFamily: "var(--font-mono, monospace)",
+                    }}
+                    title="Desglose analítico de potencial viral calculado por IA"
+                  >
+                    <span style={{ fontWeight: 700, color: "#fafafa", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                      ⚡ Viral {candidate.virality.total_score}/100:
+                    </span>
+                    <span
+                      style={{ color: "#38bdf8", background: "rgba(56, 189, 248, 0.1)", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(56, 189, 248, 0.25)" }}
+                      title="Hook (0-25): Fuerza del primer impacto"
+                    >
+                      🪝 Hook: {candidate.virality.hook_score}/25
+                    </span>
+                    <span
+                      style={{ color: "#c084fc", background: "rgba(192, 132, 252, 0.1)", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(192, 132, 252, 0.25)" }}
+                      title="Engagement (0-25): Retención y emoción"
+                    >
+                      🔥 Engag: {candidate.virality.engagement_score}/25
+                    </span>
+                    <span
+                      style={{ color: "#4ade80", background: "rgba(74, 222, 128, 0.1)", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(74, 222, 128, 0.25)" }}
+                      title="Valor (0-25): Interés y utilidad del clip"
+                    >
+                      💡 Valor: {candidate.virality.value_score}/25
+                    </span>
+                    <span
+                      style={{ color: "#fb923c", background: "rgba(251, 146, 60, 0.1)", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(251, 146, 60, 0.25)" }}
+                      title="Compartir (0-25): Potencial de reenvío a amigos"
+                    >
+                      🚀 Share: {candidate.virality.shareability_score}/25
+                    </span>
+                    {candidate.virality.hook_type && (
+                      <span
+                        style={{ color: "#e4e4e7", background: "rgba(255, 255, 255, 0.06)", padding: "1px 5px", borderRadius: "3px", marginLeft: "auto", textTransform: "capitalize" }}
+                        title="Tipo de gancho"
+                      >
+                        Tipo: {candidate.virality.hook_type}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {(candidate.description || isCut) && (
                   <div className="candidate-description-box">
                     <div className="desc-header">
@@ -576,7 +657,12 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                           <button
                             type="button"
                             className="desc-copy-btn"
-                            onClick={() => copyDescription(candidate.id, candidate.description!)}
+                            onClick={() => {
+                              const cleanDesc = candidate.description!.includes("```")
+                                ? candidate.description!.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()
+                                : candidate.description!;
+                              copyDescription(candidate.id, cleanDesc);
+                            }}
                             title="Copiar texto para redes sociales"
                           >
                             <Copy size={11} />
@@ -609,7 +695,12 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                       </div>
                     </div>
                     {candidate.description ? (
-                      <p className="desc-text">{candidate.description}</p>
+                      <p className="desc-text">
+                        {candidate.description.includes("```") || candidate.description.includes('"full_copy":')
+                          ? (candidate.description.match(/"(?:full_copy|fullCopy)"\s*:\s*"((?:\\.|[^"\\])*)"/)?.[1]?.replace(/\\n/g, "\n") ||
+                             candidate.description.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim())
+                          : candidate.description}
+                      </p>
                     ) : (
                       <p className="desc-text" style={{ fontStyle: "italic", opacity: 0.6, fontSize: "0.78rem" }}>
                         Clip exportado con .SRT listo. Haz clic en "Generar Copy con IA" para redactar su texto viral.

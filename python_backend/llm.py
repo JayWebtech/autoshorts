@@ -240,11 +240,27 @@ def parse_candidate_json(
 
             effective_min = min_floor if target_duration == "30s" else max(30.0, target_min * 0.6)
             if dur >= effective_min and hook:
+                hook_title = str(item.get("hook_title") or item.get("hookTitle") or "").strip()
+                virality = item.get("virality")
+                if not isinstance(virality, dict):
+                    score_val = max(0.0, min(1.0, score))
+                    total_s = max(50, min(99, int(round(score_val * 100))))
+                    hook_type = "pregunta" if "?" in hook else "reacción" if "!" in hook else "destacado"
+                    virality = {
+                        "hook_score": max(12, min(25, int(round((total_s / 100.0) * 25)))),
+                        "engagement_score": max(12, min(25, int(round((total_s / 100.0) * 24)))),
+                        "value_score": max(10, min(25, int(round((total_s / 100.0) * 22)))),
+                        "shareability_score": max(12, min(25, int(round((total_s / 100.0) * 24)))),
+                        "total_score": total_s,
+                        "hook_type": hook_type
+                    }
                 drafts.append({
                     "start": round(start, 2),
                     "end": round(end, 2),
                     "score": max(0.0, min(1.0, score)),
                     "hook": hook,
+                    "hook_title": hook_title,
+                    "virality": virality,
                     "rationale": rationale,
                     "description": description
                 })
@@ -1837,27 +1853,152 @@ IMPORTANTE: Escribe en Español natural, convincente, fresco y sin rodeos."""
         elif provider == "lmstudio":
             unload_all_lmstudio_models()
 
-    # Clean and parse JSON
-    if "<think>" in content:
-        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-    if "<think>" in content:
-        content = re.sub(r"<think>.*$", "", content, flags=re.DOTALL).strip()
+    return repair_and_extract_copy_json(content)
 
-    # Extract JSON block
-    m = re.search(r"(\{.*\})", content, re.DOTALL)
-    if m:
+
+def repair_and_extract_copy_json(raw_text: str) -> Dict[str, Any]:
+    """
+    Robust extractor and repairer for LLM social copy output.
+    Ensures that trailing commas, broken hashtags, unescaped characters, or markdown fences
+    never leak raw JSON strings into the user interface.
+    """
+    if not raw_text:
+        return {
+            "hooks": ["¡No te pierdas este momento!"],
+            "caption": "¡Increíble clip recién salido del horno! Cuéntanos qué opinas.",
+            "cta": "¿Qué te pareció este momento? Déjamelo en los comentarios.",
+            "hashtags": ["#gaming", "#clipviral", "#shorts"],
+            "full_copy": "¡Increíble clip! Cuéntanos qué opinas en los comentarios 👇 #gaming #clipviral"
+        }
+
+    text = raw_text
+    # 1. Strip thinking tags
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<think>.*$", "", text, flags=re.DOTALL).strip()
+
+    # 2. Strip surrounding markdown fences
+    clean_text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
+    clean_text = re.sub(r"\s*```$", "", clean_text.strip())
+
+    # Find JSON curly block
+    json_match = re.search(r"(\{.*\})", clean_text, re.DOTALL)
+    candidate_json = json_match.group(1) if json_match else clean_text
+
+    # Attempt 1: Direct JSON parse
+    try:
+        data = json.loads(candidate_json)
+        if isinstance(data, dict):
+            return _normalize_social_copy_dict(data)
+    except Exception:
+        pass
+
+    # Attempt 2: Auto-repair common LLM JSON syntax errors
+    repaired = candidate_json
+    # Fix broken unquoted or double-hash hashtags: ,# #Word, or ,#Word, -> ,"#Word",
+    repaired = re.sub(r',\s*#+\s*([A-Za-z0-9_]+)', r', "#\1"', repaired)
+    repaired = re.sub(r'\[\s*#+\s*([A-Za-z0-9_]+)', r'["#\1"', repaired)
+    # Fix trailing commas before } or ]
+    repaired = re.sub(r',\s*([\]\}])', r'\1', repaired)
+
+    try:
+        data = json.loads(repaired)
+        if isinstance(data, dict):
+            return _normalize_social_copy_dict(data)
+    except Exception:
+        pass
+
+    # Attempt 3: Regex field-by-field extraction
+    extracted: Dict[str, Any] = {}
+    
+    # Extract full_copy
+    fc_m = re.search(r'"(?:full_copy|fullCopy)"\s*:\s*"((?:\\.|[^"\\])*)"', candidate_json)
+    if fc_m:
         try:
-            return json.loads(m.group(1))
+            extracted["full_copy"] = fc_m.group(1).encode("utf-8").decode("unicode_escape", errors="replace")
         except Exception:
-            pass
+            extracted["full_copy"] = fc_m.group(1).replace("\\n", "\n")
 
-    # Fallback if raw text returned
-    lines = [l.strip() for l in content.splitlines() if l.strip()]
+    # Extract caption
+    cap_m = re.search(r'"(?:caption|description)"\s*:\s*"((?:\\.|[^"\\])*)"', candidate_json)
+    if cap_m:
+        try:
+            extracted["caption"] = cap_m.group(1).encode("utf-8").decode("unicode_escape", errors="replace")
+        except Exception:
+            extracted["caption"] = cap_m.group(1).replace("\\n", "\n")
+
+    # Extract cta
+    cta_m = re.search(r'"(?:cta|call_to_action)"\s*:\s*"((?:\\.|[^"\\])*)"', candidate_json)
+    if cta_m:
+        try:
+            extracted["cta"] = cta_m.group(1).encode("utf-8").decode("unicode_escape", errors="replace")
+        except Exception:
+            extracted["cta"] = cta_m.group(1).replace("\\n", "\n")
+
+    # Extract hooks
+    hooks_m = re.search(r'"(?:hooks)"\s*:\s*\[(.*?)\]', candidate_json, re.DOTALL)
+    if hooks_m:
+        extracted["hooks"] = [
+            h.strip().strip('"\'') 
+            for h in re.findall(r'"((?:\\.|[^"\\])*)"', hooks_m.group(1)) 
+            if h.strip()
+        ]
+
+    # Extract hashtags
+    tags = re.findall(r'#([A-Za-z0-9_]+)', candidate_json)
+    if tags:
+        extracted["hashtags"] = [f"#{t}" for t in dict.fromkeys(tags)]
+
+    if extracted.get("full_copy") or extracted.get("caption"):
+        return _normalize_social_copy_dict(extracted)
+
+    # Attempt 4: Clean plain text fallback (NEVER return raw JSON fences)
+    fallback_text = clean_text
+    fallback_text = re.sub(r'^[{\[].*?[}\]]$', '', fallback_text, flags=re.DOTALL).strip()
+    if not fallback_text:
+        fallback_text = "¡Increíble clip! Cuéntanos qué opinas en los comentarios 👇 #gaming #clipviral"
+
     return {
-        "hooks": lines[:3] if len(lines) >= 3 else ["¡No te pierdas este momento!", "Mira lo que pasó aquí", "El final te va a sorprender"],
-        "caption": content[:300] if content else "¡Mira este increíble clip recién salido del horno! Cuéntanos qué opinas.",
-        "cta": "¿Tú qué hubieras hecho en esta situación? Déjamelo en los comentarios.",
-        "hashtags": ["#viral", "#shorts", "#video", "#fyp", "#clips"],
-        "full_copy": content or "¡Increíble momento! ¿Qué opinas? Déjamelo en los comentarios 👇 #viral #shorts"
+        "hooks": ["¡No te pierdas este momento!"],
+        "caption": fallback_text[:300],
+        "cta": "¿Qué opinas de esta jugada?",
+        "hashtags": [f"#{t}" for t in dict.fromkeys(tags)] if tags else ["#gaming", "#clipviral"],
+        "full_copy": fallback_text
     }
+
+
+def _normalize_social_copy_dict(data: Dict[str, Any]) -> Dict[str, Any]:
+    caption = str(data.get("caption") or "").strip()
+    full_copy = str(data.get("full_copy") or "").strip()
+    cta = str(data.get("cta") or "").strip()
+    hooks = data.get("hooks", [])
+    if isinstance(hooks, str):
+        hooks = [hooks]
+    hashtags = data.get("hashtags", [])
+    if isinstance(hashtags, str):
+        hashtags = [t.strip() for t in hashtags.split() if t.startswith("#")]
+
+    if not full_copy:
+        parts = []
+        if hooks:
+            parts.append(hooks[0])
+        if caption:
+            parts.append(caption)
+        if cta:
+            parts.append(cta)
+        if hashtags:
+            parts.append(" ".join(hashtags))
+        full_copy = "\n\n".join(parts)
+
+    # Clean any accidental wrapping code fences in full_copy
+    full_copy = re.sub(r"^```(?:json)?\s*", "", full_copy).strip()
+    full_copy = re.sub(r"\s*```$", "", full_copy).strip()
+
+    return {
+        "hooks": hooks,
+        "caption": caption,
+        "cta": cta,
+        "hashtags": hashtags,
+        "full_copy": full_copy
+    }
+
 

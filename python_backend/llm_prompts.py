@@ -148,14 +148,16 @@ REGLAS DE DURACIÓN Y TIMESTAMPS:
 - NO elijas solo una frase corta de 2 a 5 segundos. El timestamp 'start' debe marcar el inicio del momento y 'end' debe abarcar el desarrollo completo hasta alcanzar la duración objetivo indicada.
 - SILENCIO Y ACCIÓN: En streams de gaming, a veces el streamer se concentra y no habla mientras dispara o juega una ronda tensa. Si la transcripción incluye notas como [ACCIÓN DE JUEGO / DISPAROS / ALTA CONCENTRACIÓN] o si hay una jugada tensa con poco diálogo, selecciónala como un clip épico de gameplay.
 - 'hook': Título gancho llamativo, directo y viral (en Español).
+- 'hook_title': Titular corto y punchy de 3 a 7 palabras para mostrar en pantalla grande al inicio del clip (ej. "¡Clutch 1v3 Imposible!", "¿Quién me invitó a la sala?", "El fallo más tonto").
 - 'rationale': Explicación breve de por qué este momento es entretenido o viral.
+- 'virality': Desglose de puntuación viral (0 a 25 cada métrica): {{"hook_score": 24, "engagement_score": 23, "value_score": 19, "shareability_score": 24, "hook_type": "reacción"}} (donde hook_type es: "pregunta", "reacción", "anécdota", "contraste" o "destacado").
 - 'description': Descripción optimizada para redes sociales (TikTok, Reels, Shorts, X) de 1 a 2 frases vendedoras invitando a interactuar, con 3 a 4 hashtags relevantes (ej. #gaming #clipviral).{thinking_guide}
 
 REGLAS ESTRICTAS DE RESPUESTA:
 - NUNCA devuelvas puntos suspensivos ("...") ni valores en 0.0.
 - Extrae momentos reales con timestamps y textos concretos de la transcripción.
 - Devuelve entre 1 y 5 candidatos en formato JSON exactamente con esta estructura:
-{{"candidates":[{{"start":15.0,"end":315.0,"score":0.95,"hook":"¡Jugada Épica y Victoria!","rationale":"Momento de alta tensión y clutch impresionante","description":"¡Mira lo que pasó en esta partida! 🔥 #gaming #viral"}}]}}
+{{"candidates":[{{"start":15.0,"end":315.0,"score":0.95,"hook":"¡Jugada Épica y Victoria!","hook_title":"¡Clutch 1v3 Imposible!","rationale":"Momento de alta tensión y clutch impresionante","virality":{{"hook_score":24,"engagement_score":23,"value_score":19,"shareability_score":24,"hook_type":"reacción"}},"description":"¡Mira lo que pasó en esta partida! 🔥 #gaming #viral"}}]}}
 
 IMPORTANTE: Analiza en español y genera todos los textos estrictamente en Español. No traduzcas al inglés."""
 

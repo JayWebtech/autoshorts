@@ -108,6 +108,16 @@ class Database:
                 pass
 
             try:
+                conn.execute("ALTER TABLE candidates ADD COLUMN hook_title TEXT;")
+            except Exception:
+                pass
+
+            try:
+                conn.execute("ALTER TABLE candidates ADD COLUMN virality_json TEXT;")
+            except Exception:
+                pass
+
+            try:
                 conn.execute("ALTER TABLE projects ADD COLUMN project_dir TEXT;")
             except Exception:
                 pass
@@ -264,10 +274,29 @@ class Database:
                 clip_id = str(uuid.uuid4())
                 selected = 1 if idx <= 3 else 0
                 desc = draft.get("description") or ""
+                hook_title = draft.get("hook_title") or draft.get("hookTitle") or ""
+                
+                # Process or infer virality breakdown
+                virality = draft.get("virality")
+                if not isinstance(virality, dict):
+                    score_val = float(draft.get("score", 0.85))
+                    total_score = max(50, min(99, int(round(score_val * 100 if score_val <= 1.0 else score_val))))
+                    hook_txt = draft.get("hook", "")
+                    hook_type = "pregunta" if "?" in hook_txt else "reacción" if "!" in hook_txt else "destacado"
+                    virality = {
+                        "hook_score": max(12, min(25, int(round((total_score / 100.0) * 25)))),
+                        "engagement_score": max(12, min(25, int(round((total_score / 100.0) * 24)))),
+                        "value_score": max(10, min(25, int(round((total_score / 100.0) * 22)))),
+                        "shareability_score": max(12, min(25, int(round((total_score / 100.0) * 24)))),
+                        "total_score": total_score,
+                        "hook_type": hook_type
+                    }
+                virality_json = json.dumps(virality, ensure_ascii=False)
+
                 conn.execute(
-                    """INSERT INTO candidates (id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (c_id, project_id, draft["start"], draft["end"], draft["score"], draft["hook"], draft["rationale"], desc, idx, selected)
+                    """INSERT INTO candidates (id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected, hook_title, virality_json)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (c_id, project_id, draft["start"], draft["end"], draft["score"], draft["hook"], draft["rationale"], desc, idx, selected, hook_title, virality_json)
                 )
                 conn.execute(
                     """INSERT INTO clips (id, candidate_id, status) VALUES (?, ?, ?)""",
@@ -282,6 +311,8 @@ class Database:
                     "hook": draft["hook"],
                     "rationale": draft["rationale"],
                     "description": desc,
+                    "hookTitle": hook_title,
+                    "virality": virality,
                     "rank": idx,
                     "selected": bool(selected),
                 })
@@ -304,11 +335,32 @@ class Database:
     def get_candidates(self, project_id: str) -> List[Dict[str, Any]]:
         with self.get_conn() as conn:
             rows = conn.execute(
-                "SELECT id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected FROM candidates WHERE project_id = ? ORDER BY rank ASC",
+                "SELECT id, project_id, start_sec, end_sec, score, hook, rationale, description, rank, selected, hook_title, virality_json FROM candidates WHERE project_id = ? ORDER BY rank ASC",
                 (project_id,)
             ).fetchall()
-            return [
-                {
+            result = []
+            for r in rows:
+                v_obj = None
+                raw_v = r["virality_json"] if "virality_json" in r.keys() else None
+                if raw_v:
+                    try:
+                        v_obj = json.loads(raw_v)
+                    except Exception:
+                        pass
+                if not v_obj:
+                    score_val = float(r["score"] or 0.85)
+                    total_score = max(50, min(99, int(round(score_val * 100 if score_val <= 1.0 else score_val))))
+                    hook_txt = r["hook"] or ""
+                    hook_type = "pregunta" if "?" in hook_txt else "reacción" if "!" in hook_txt else "destacado"
+                    v_obj = {
+                        "hook_score": max(12, min(25, int(round((total_score / 100.0) * 25)))),
+                        "engagement_score": max(12, min(25, int(round((total_score / 100.0) * 24)))),
+                        "value_score": max(10, min(25, int(round((total_score / 100.0) * 22)))),
+                        "shareability_score": max(12, min(25, int(round((total_score / 100.0) * 24)))),
+                        "total_score": total_score,
+                        "hook_type": hook_type
+                    }
+                result.append({
                     "id": r["id"],
                     "projectId": r["project_id"],
                     "startSec": r["start_sec"],
@@ -317,11 +369,12 @@ class Database:
                     "hook": r["hook"],
                     "rationale": r["rationale"],
                     "description": r["description"] or "",
+                    "hookTitle": (r["hook_title"] if "hook_title" in r.keys() else "") or "",
+                    "virality": v_obj,
                     "rank": r["rank"],
                     "selected": bool(r["selected"]),
-                }
-                for r in rows
-            ]
+                })
+            return result
 
     def update_candidate_description(self, candidate_id: str, description: str):
         with self.get_conn() as conn:

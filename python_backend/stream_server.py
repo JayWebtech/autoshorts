@@ -2,12 +2,16 @@ import os
 import mimetypes
 import re
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import threading
 
+CHUNK_SIZE = 256 * 1024  # 256 KB buffer for high-throughput local media streaming
+
 
 class VideoStreamHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/stream":
@@ -36,13 +40,14 @@ class VideoStreamHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Length", str(length))
                     self.send_header("Accept-Ranges", "bytes")
                     self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_header("Connection", "keep-alive")
                     self.end_headers()
 
                     with open(file_path, "rb") as f:
                         f.seek(start)
                         bytes_to_send = length
                         while bytes_to_send > 0:
-                            chunk_size = min(64 * 1024, bytes_to_send)
+                            chunk_size = min(CHUNK_SIZE, bytes_to_send)
                             data = f.read(chunk_size)
                             if not data:
                                 break
@@ -58,11 +63,12 @@ class VideoStreamHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(file_size))
             self.send_header("Accept-Ranges", "bytes")
             self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Connection", "keep-alive")
             self.end_headers()
 
             with open(file_path, "rb") as f:
                 while True:
-                    data = f.read(64 * 1024)
+                    data = f.read(CHUNK_SIZE)
                     if not data:
                         break
                     try:
@@ -112,7 +118,9 @@ class VideoStreamHandler(BaseHTTPRequestHandler):
         pass
 
 
-class SilentHTTPServer(HTTPServer):
+class SilentThreadingHTTPServer(ThreadingHTTPServer):
+    daemon_threads = True
+
     def handle_error(self, request, client_address):
         # Suppress harmless client disconnects during HTML5 video streaming/seeking
         pass
@@ -120,10 +128,10 @@ class SilentHTTPServer(HTTPServer):
 
 def start_stream_server(port: int = 1422):
     try:
-        server = SilentHTTPServer(("127.0.0.1", port), VideoStreamHandler)
+        server = SilentThreadingHTTPServer(("127.0.0.1", port), VideoStreamHandler)
         t = threading.Thread(target=server.serve_forever, daemon=True)
         t.start()
-        print(f"Local media preview server running on port {port}...")
+        print(f"Local media preview server (multithreaded 256KB buffer) running on port {port}...")
         return server
     except Exception as e:
         print(f"Preview server already running or port in use: {e}")

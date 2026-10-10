@@ -82,6 +82,14 @@ export function CandidatePreviewModal({
   const clipDuration = Math.max(0.1, trimEnd - trimStart);
   const isExported = Boolean(clipByCandidate.get(candidate.id)?.outputPath);
 
+  useEffect(() => {
+    if (!videoRef.current || isExported) return;
+    const curr = videoRef.current.currentTime;
+    if (curr < trimStart || curr > trimEnd) {
+      videoRef.current.currentTime = trimStart;
+    }
+  }, [trimStart, trimEnd, isExported]);
+
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
     const time = videoRef.current.currentTime;
@@ -142,15 +150,21 @@ export function CandidatePreviewModal({
             "{cleanHook(candidate.hook)}"
           </h4>
 
-          {/* Reproductor de Video */}
+          {/* Reproductor de Video Optimizado sin desmontaje destructivo */}
           <div style={{ background: "#000", borderRadius: "8px 8px 0 0", overflow: "hidden", maxHeight: "360px", display: "flex", justifyContent: "center" }}>
             <video
               ref={videoRef}
-              key={`${candidate.id}-${trimStart}-${trimEnd}`}
+              key={candidate.id}
               src={`http://127.0.0.1:1422/stream?file=${encodeURIComponent(
                 clipByCandidate.get(candidate.id)?.outputPath || detail.project.sourcePath
-              )}#t=${isExported ? 0 : trimStart},${isExported ? '' : trimEnd}`}
+              )}`}
               autoPlay
+              preload="auto"
+              onLoadedMetadata={() => {
+                if (videoRef.current) {
+                  videoRef.current.currentTime = isExported ? 0 : trimStart;
+                }
+              }}
               onTimeUpdate={handleTimeUpdate}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}

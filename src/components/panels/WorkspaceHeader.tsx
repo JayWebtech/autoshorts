@@ -12,6 +12,7 @@ import {
   FolderSync,
   Zap,
   Scissors,
+  FileText,
 } from "lucide-react";
 import type { ProjectDetail } from "../../types";
 import { fileName } from "../../utils/format";
@@ -31,8 +32,8 @@ interface WorkspaceHeaderProps {
   selectedCount?: number;
   selectedCutCount?: number;
   selectedCaptionsCount?: number;
-  activeView?: "moments" | "autoedit";
-  onChangeView?: (view: "moments" | "autoedit") => void;
+  activeView?: "transcript" | "moments" | "autoedit";
+  onChangeView?: (view: "transcript" | "moments" | "autoedit") => void;
 }
 
 export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
@@ -189,22 +190,46 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             </button>
           )}
 
-          {/* Segmented View Switcher */}
+          {/* Segmented View Switcher: Transcripción | Clips y Momentos | AutoEdición con IA */}
           <div className="view-mode-segmented">
+            <button
+              type="button"
+              className={`view-mode-pill ${activeView === "transcript" ? "active" : ""}`}
+              onClick={() => onChangeView?.("transcript")}
+              title="Ver y editar la transcripción completa del video"
+            >
+              <FileText size={13} />
+              <span>Transcripción</span>
+            </button>
             <button
               type="button"
               className={`view-mode-pill ${activeView === "moments" ? "active" : ""}`}
               onClick={() => onChangeView?.("moments")}
-              title="Ver clips individuales, transcripción y momentos"
+              title="Explorar, previsualizar y cortar los clips candidatos detectados"
             >
               <Scissors size={13} />
               <span>Clips y Momentos</span>
+              {detail.candidates.length > 0 && (
+                <span
+                  style={{
+                    fontSize: "0.68rem",
+                    padding: "1px 5px",
+                    borderRadius: "10px",
+                    background: activeView === "moments" ? "rgba(255, 255, 255, 0.2)" : "var(--bg-surface-raised)",
+                    color: activeView === "moments" ? "#fafafa" : "var(--text-secondary)",
+                    fontFamily: "var(--font-mono, monospace)",
+                    marginLeft: "2px",
+                  }}
+                >
+                  {detail.candidates.length}
+                </span>
+              )}
             </button>
             <button
               type="button"
               className={`view-mode-pill ${activeView === "autoedit" ? "active" : ""}`}
               onClick={() => onChangeView?.("autoedit")}
-              title="Sección de montaje automático con IA y galería de autoedits"
+              title="Sección de montaje automático con IA y galería de autoedits para YouTube"
             >
               <Zap size={13} />
               <span>AutoEdición con IA</span>
