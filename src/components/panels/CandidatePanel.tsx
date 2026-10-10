@@ -87,7 +87,32 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
   const [filterTab, setFilterTab] = useState<"all" | "pending" | "exported" | "dismissed">("pending");
   const [copiedClipPathId, setCopiedClipPathId] = useState<string | null>(null);
   const [copiedHookId, setCopiedHookId] = useState<string | null>(null);
+  const [activeHoverVideoId, setActiveHoverVideoId] = useState<string | null>(null);
+  const hoverTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleThumbMouseEnter = (candidateId: string) => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    hoverTimeoutRef.current = setTimeout(() => {
+      setActiveHoverVideoId(candidateId);
+    }, 380);
+  };
+
+  const handleThumbMouseLeave = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setActiveHoverVideoId(null);
+  };
 
   React.useEffect(() => {
     if (listRef.current) {
@@ -541,8 +566,56 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                 style={{ cursor: "pointer" }}
                 title="Haz clic para previsualizar este fragmento"
               >
-                <div className="media-preview-thumb">
-                  <div className="mock-video-active" style={{ opacity: isCut ? 1 : 0.85 }}>
+                <div
+                  className="media-preview-thumb"
+                  onMouseEnter={() => handleThumbMouseEnter(candidate.id)}
+                  onMouseLeave={handleThumbMouseLeave}
+                >
+                  <img
+                    src={`http://127.0.0.1:1422/thumbnail?file=${encodeURIComponent(
+                      clip?.outputPath || detail.project.sourcePath
+                    )}&time=${clip?.outputPath ? 0.5 : candidate.startSec + 0.5}`}
+                    alt={`Preview momento #${candidate.rank}`}
+                    className="candidate-thumb-img"
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = "none";
+                    }}
+                  />
+
+                  {activeHoverVideoId === candidate.id && (
+                    <video
+                      className="candidate-thumb-video"
+                      src={`http://127.0.0.1:1422/stream?file=${encodeURIComponent(
+                        clip?.outputPath || detail.project.sourcePath
+                      )}`}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      onLoadedMetadata={(e) => {
+                        const vid = e.currentTarget;
+                        if (!clip?.outputPath) {
+                          vid.currentTime = candidate.startSec;
+                        }
+                      }}
+                      onTimeUpdate={(e) => {
+                        const vid = e.currentTarget;
+                        if (!clip?.outputPath) {
+                          if (vid.currentTime >= candidate.endSec || vid.currentTime < candidate.startSec) {
+                            vid.currentTime = candidate.startSec;
+                          }
+                        }
+                      }}
+                    />
+                  )}
+
+                  <div
+                    className="mock-video-active"
+                    style={{
+                      opacity: activeHoverVideoId === candidate.id ? 0 : isCut ? 1 : 0.85,
+                    }}
+                  >
                     <Play size={16} className="play-icon-mock" />
                   </div>
                   <span className="media-preview-dur">

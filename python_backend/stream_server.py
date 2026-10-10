@@ -1,6 +1,9 @@
 import os
 import mimetypes
 import re
+import subprocess
+import hashlib
+import shutil
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -76,6 +79,84 @@ class VideoStreamHandler(BaseHTTPRequestHandler):
                     except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
                         break
             return
+
+        elif parsed.path == "/thumbnail":
+            query = parse_qs(parsed.query)
+            file_path = query.get("file", [None])[0]
+            time_str = query.get("time", ["0"])[0]
+            if not file_path or not os.path.isfile(file_path):
+                self.send_error(404, "File not found")
+                return
+
+            try:
+                time_sec = max(0.0, float(time_str))
+            except ValueError:
+                time_sec = 0.0
+
+            try:
+                mtime = os.path.getmtime(file_path)
+            except Exception:
+                mtime = 0
+            raw_key = f"{file_path}_{mtime}_{round(time_sec, 1)}"
+            cache_hash = hashlib.md5(raw_key.encode("utf-8")).hexdigest()
+            cache_dir = Path("data") / "thumb_cache"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_file = cache_dir / f"{cache_hash}.jpg"
+
+            if not cache_file.exists():
+                ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+                cmd = [
+                    ffmpeg,
+                    "-y",
+                    "-ss", f"{time_sec:.2f}",
+                    "-noaccurate_seek",
+                    "-i", file_path,
+                    "-frames:v", "1",
+                    "-vf", "scale=200:-2",
+                    "-q:v", "4",
+                    str(cache_file)
+                ]
+                try:
+                    subprocess.run(
+                        cmd,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=6,
+                        check=True
+                    )
+                except Exception:
+                    try:
+                        cmd_fb = [
+                            ffmpeg,
+                            "-y",
+                            "-ss", f"{time_sec:.2f}",
+                            "-i", file_path,
+                            "-frames:v", "1",
+                            "-q:v", "4",
+                            str(cache_file)
+                        ]
+                        subprocess.run(
+                            cmd_fb,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            timeout=6
+                        )
+                    except Exception:
+                        pass
+
+            if cache_file.exists() and cache_file.stat().st_size > 0:
+                self.send_response(200)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Content-Length", str(cache_file.stat().st_size))
+                self.send_header("Cache-Control", "public, max-age=604800")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                with open(cache_file, "rb") as f:
+                    shutil.copyfileobj(f, self.wfile)
+                return
+            else:
+                self.send_error(500, "Could not generate thumbnail")
+                return
 
         # Serve static assets from dist/
         base_dir = Path(__file__).resolve().parent.parent
