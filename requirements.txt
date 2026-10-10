@@ -1,0 +1,14 @@
+# Core Backend & Desktop GUI
+pywebview>=5.0.0
+pythonnet>=3.0.0; sys_platform == 'win32'
+requests>=2.31.0
+tqdm>=4.66.0
+yt-dlp>=2024.0.0
+
+# IA & Transcripción Local
+openai-whisper>=20231117
+
+# NOTA PARA USUARIOS CON GPU NVIDIA:
+# Para aprovechar aceleración por hardware con CUDA en Whisper local, instala PyTorch con CUDA antes de correr requirements:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+torch>=2.0.0
