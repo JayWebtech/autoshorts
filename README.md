@@ -1,4 +1,4 @@
-⭐ [Support AutoShorts](#support)
+[![Fund my work on FLOSSAfrica](https://flossafrica.com/badge.svg)](https://flossafrica.com/m/jaywebtech?p=autoshorts)
 
 # AutoShorts
 
