@@ -35,9 +35,6 @@ interface WorkspaceHeaderProps {
   selectedCaptionsCount?: number;
   activeView?: "transcript" | "moments" | "autoedit";
   onChangeView?: (view: "transcript" | "moments" | "autoedit") => void;
-  llmMemoryStatus?: LlmMemoryStatus | null;
-  onUnloadActiveModel?: () => Promise<void>;
-  isMemoryActionBusy?: boolean;
 }
 
 export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
@@ -54,9 +51,6 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   error,
   activeView = "moments",
   onChangeView,
-  llmMemoryStatus,
-  onUnloadActiveModel,
-  isMemoryActionBusy = false,
 }) => {
   const isCompleted = detail.project.status === "completed";
   const isMissing = detail.project.sourceExists === false;
@@ -242,51 +236,6 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
               <span>AutoEdición con IA</span>
             </button>
           </div>
-
-          {llmMemoryStatus?.isLoaded && (
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "3px 8px",
-                borderRadius: "6px",
-                background: "rgba(16, 185, 129, 0.12)",
-                border: "1px solid rgba(16, 185, 129, 0.35)",
-                color: "#34d399",
-                fontSize: "0.72rem",
-                fontFamily: "var(--font-mono)",
-              }}
-              title={`Modelo activo en VRAM/RAM: ${llmMemoryStatus.loadedModel}`}
-            >
-              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981" }} />
-              <span>{llmMemoryStatus.loadedModel} {llmMemoryStatus.sizeMb ? `(${llmMemoryStatus.sizeMb}MB)` : ""}</span>
-              {onUnloadActiveModel && (
-                <button
-                  type="button"
-                  onClick={() => void onUnloadActiveModel()}
-                  disabled={isMemoryActionBusy}
-                  style={{
-                    background: "rgba(239, 68, 68, 0.15)",
-                    border: "1px solid rgba(239, 68, 68, 0.35)",
-                    color: "#f87171",
-                    borderRadius: "4px",
-                    padding: "1px 5px",
-                    fontSize: "0.68rem",
-                    cursor: isMemoryActionBusy ? "not-allowed" : "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "3px",
-                    fontWeight: 500,
-                  }}
-                  title="Liberar VRAM de inmediato"
-                >
-                  <Trash2 size={10} />
-                  <span>Liberar</span>
-                </button>
-              )}
-            </div>
-          )}
 
           <button
             className={`secondary-action settings-toggle ${showSettings ? "active" : ""}`}

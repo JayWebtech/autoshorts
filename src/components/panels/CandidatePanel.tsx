@@ -386,78 +386,53 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
               </label>
             )}
 
-            {llmMemoryStatus?.isLoaded ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    padding: "2px 7px",
-                    borderRadius: "4px",
-                    fontSize: "0.72rem",
-                    background: "rgba(16, 185, 129, 0.12)",
-                    border: "1px solid rgba(16, 185, 129, 0.3)",
-                    color: "#34d399",
-                    fontWeight: 500,
-                    fontFamily: "var(--font-mono)",
-                  }}
-                  title={`Modelo cargado y activo en memoria: ${llmMemoryStatus.loadedModel}`}
-                >
-                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981" }} />
-                  <span>{llmMemoryStatus.loadedModel} {llmMemoryStatus.sizeMb ? `(${llmMemoryStatus.sizeMb}MB)` : ""}</span>
-                </span>
-                {unloadActiveModel && (
-                  <button
-                    type="button"
-                    onClick={() => void unloadActiveModel()}
-                    disabled={isMemoryActionBusy}
-                    title="Descargar modelo y liberar memoria VRAM/RAM de inmediato"
-                    style={{
-                      padding: "2px 8px",
-                      fontSize: "0.72rem",
-                      borderRadius: "4px",
-                      background: "rgba(239, 68, 68, 0.12)",
-                      border: "1px solid rgba(239, 68, 68, 0.3)",
-                      color: "#f87171",
-                      cursor: isMemoryActionBusy ? "not-allowed" : "pointer",
-                      fontWeight: 500,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "4px",
-                    }}
-                  >
-                    {isMemoryActionBusy ? <Loader2 className="spin" size={11} /> : <Trash2 size={11} />}
-                    <span>Descargar</span>
-                  </button>
-                )}
-              </div>
-            ) : (
-              preloadActiveModel && (
-                <button
-                  type="button"
-                  onClick={() => void preloadActiveModel()}
-                  disabled={isMemoryActionBusy}
-                  title="Cargar modelo en memoria ahora para que los copys salgan al instante"
-                  style={{
-                    padding: "2px 8px",
-                    fontSize: "0.72rem",
-                    borderRadius: "4px",
-                    background: "var(--bg-surface-raised)",
-                    border: "1px solid var(--border-default)",
-                    color: "var(--text-secondary)",
-                    cursor: isMemoryActionBusy ? "not-allowed" : "pointer",
-                    fontWeight: 500,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
-                  {isMemoryActionBusy ? <Loader2 className="spin" size={11} /> : <Zap size={11} color="#f59e0b" />}
-                  <span>Cargar en VRAM</span>
-                </button>
-              )
-            )}
+            {llmMemoryStatus?.isLoaded && unloadActiveModel ? (
+              <button
+                type="button"
+                onClick={() => void unloadActiveModel()}
+                disabled={isMemoryActionBusy}
+                title={`Modelo cargado en memoria (${llmMemoryStatus.loadedModel}). Clic para liberar RAM.`}
+                style={{
+                  padding: "2px 8px",
+                  fontSize: "0.72rem",
+                  borderRadius: "4px",
+                  background: "rgba(239, 68, 68, 0.12)",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  color: "#f87171",
+                  cursor: isMemoryActionBusy ? "not-allowed" : "pointer",
+                  fontWeight: 500,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                {isMemoryActionBusy ? <Loader2 className="spin" size={11} /> : <Trash2 size={11} />}
+                <span>Liberar RAM</span>
+              </button>
+            ) : keepModelLoaded && preloadActiveModel ? (
+              <button
+                type="button"
+                onClick={() => void preloadActiveModel()}
+                disabled={isMemoryActionBusy}
+                title="Cargar modelo en memoria ahora para empezar a generar copys al instante"
+                style={{
+                  padding: "2px 8px",
+                  fontSize: "0.72rem",
+                  borderRadius: "4px",
+                  background: "var(--bg-surface-raised)",
+                  border: "1px solid var(--border-default)",
+                  color: "var(--text-secondary)",
+                  cursor: isMemoryActionBusy ? "not-allowed" : "pointer",
+                  fontWeight: 500,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                {isMemoryActionBusy ? <Loader2 className="spin" size={11} /> : <Zap size={11} color="#f59e0b" />}
+                <span>Cargar RAM</span>
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

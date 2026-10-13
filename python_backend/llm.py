@@ -19,40 +19,46 @@ from python_backend.llm_prompts import (
 def unload_all_ollama_models(specific_model: Optional[str] = None):
     """
     Unloads Ollama models from VRAM immediately so RAM/VRAM is freed for other tasks or models.
+    Fails silently if Ollama server is not running.
     """
     try:
-        if specific_model:
-            requests.post("http://127.0.0.1:11434/api/generate", json={"model": specific_model, "keep_alive": 0}, timeout=5)
-        resp = requests.get("http://127.0.0.1:11434/api/ps", timeout=5)
+        resp = requests.get("http://127.0.0.1:11434/api/ps", timeout=1.0)
         if resp.ok:
             data = resp.json()
-            for m in data.get("models", []):
+            models = data.get("models", [])
+            for m in models:
                 m_name = m.get("name") or m.get("model")
                 if m_name:
-                    requests.post("http://127.0.0.1:11434/api/generate", json={"model": m_name, "keep_alive": 0}, timeout=5)
-        print("VRAM liberada: Modelos de Ollama descargados de memoria.")
-    except Exception as e:
-        print(f"Nota al descargar modelos de Ollama: {e}")
+                    requests.post("http://127.0.0.1:11434/api/generate", json={"model": m_name, "keep_alive": 0}, timeout=2)
+            if specific_model and not any((m.get("name") or m.get("model")) == specific_model for m in models):
+                requests.post("http://127.0.0.1:11434/api/generate", json={"model": specific_model, "keep_alive": 0}, timeout=2)
+            if models or specific_model:
+                print("VRAM liberada: Modelos de Ollama descargados de memoria.")
+    except Exception:
+        pass
 
 
 def unload_all_lmstudio_models(base_url: Optional[str] = None):
     """
     Unloads all LM Studio models/instances from VRAM immediately and aborts active generations.
+    Fails silently if LM Studio server is not running.
     """
     try:
         raw_url = (base_url or os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")).rstrip("/")
         root_url = raw_url[:-3] if raw_url.endswith("/v1") else raw_url
-        resp = requests.get(f"{root_url}/api/v1/models", timeout=3)
+        resp = requests.get(f"{root_url}/api/v1/models", timeout=1.0)
         if resp.ok:
             data = resp.json()
+            unloaded = False
             for m in data.get("models", []):
                 for inst in m.get("loaded_instances", []):
                     inst_id = inst.get("id")
                     if inst_id:
-                        requests.post(f"{root_url}/api/v1/models/unload", json={"instance_id": inst_id}, timeout=3)
+                        requests.post(f"{root_url}/api/v1/models/unload", json={"instance_id": inst_id}, timeout=2)
                         print(f"VRAM liberada: Modelo de LM Studio '{inst_id}' descargado de memoria.")
-    except Exception as e:
-        print(f"Nota al descargar modelos de LM Studio: {e}")
+                        unloaded = True
+    except Exception:
+        pass
 
 
 def get_loaded_models_status(provider: Optional[str] = None, lmstudio_base_url: Optional[str] = None) -> Dict[str, Any]:

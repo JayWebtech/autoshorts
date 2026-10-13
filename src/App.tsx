@@ -221,9 +221,6 @@ export function App() {
                 selectedCaptionsCount={mediaPipeline.selectedCaptionsCount}
                 activeView={autoEditState.projectViewTab}
                 onChangeView={autoEditState.setProjectViewTab}
-                llmMemoryStatus={settings.llmMemoryStatus}
-                onUnloadActiveModel={settings.unloadActiveModel}
-                isMemoryActionBusy={settings.isMemoryActionBusy}
               />
 
               {autoEditState.projectViewTab === "autoedit" ? (

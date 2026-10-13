@@ -37,10 +37,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               borderRadius: "4px",
               border: "1px solid rgba(16, 185, 129, 0.3)",
             }}
-            title="Modelo de IA cargado y listo en memoria para copys ultrarrápidos"
+            title={`Modelo en memoria: ${llmMemoryStatus.loadedModel || 'Cargado'}. Clic en ✕ para liberar RAM.`}
           >
             <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981" }} />
-            <span>IA en VRAM: {llmMemoryStatus.loadedModel} {llmMemoryStatus.sizeMb ? `(${llmMemoryStatus.sizeMb}MB)` : ""}</span>
+            <span>IA en RAM {llmMemoryStatus.sizeMb ? `(${(llmMemoryStatus.sizeMb / 1024).toFixed(1)} GB)` : ""}</span>
             {onUnloadLlm && (
               <button
                 type="button"
