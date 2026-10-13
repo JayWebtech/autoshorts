@@ -46,13 +46,14 @@ export function App() {
         await mediaPipelineRef.current.runAutoPipeline(projectId, contentType, dur);
       }
     },
-    onProjectSelected: (projectId) => {
+    onProjectSelected: (projectId, goal) => {
       if (autoEditStateRef.current) {
         if (!projectId) {
           autoEditStateRef.current.setAutoedits([]);
           autoEditStateRef.current.setProjectViewTab("moments");
         } else {
           void autoEditStateRef.current.loadAutoedits(projectId);
+          autoEditStateRef.current.setProjectViewTab(goal === "autoedit" ? "autoedit" : "moments");
         }
       }
     },
@@ -226,6 +227,7 @@ export function App() {
                 selectedCaptionsCount={mediaPipeline.selectedCaptionsCount}
                 activeView={autoEditState.projectViewTab}
                 onChangeView={autoEditState.setProjectViewTab}
+                onUpdateWorkflowGoal={projectActions.updateProjectWorkflowGoal}
               />
 
               {autoEditState.projectViewTab === "autoedit" ? (

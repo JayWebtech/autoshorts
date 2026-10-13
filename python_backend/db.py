@@ -130,6 +130,11 @@ class Database:
                 pass
 
             try:
+                conn.execute("ALTER TABLE projects ADD COLUMN workflow_goal TEXT DEFAULT 'clips';")
+            except Exception:
+                pass
+
+            try:
                 rows = conn.execute("SELECT id, source_path, name FROM projects WHERE name IS NULL OR name = ''").fetchall()
                 for r in rows:
                     stem = Path(r["source_path"]).stem
@@ -137,22 +142,22 @@ class Database:
             except Exception:
                 pass
 
-    def create_project(self, source_path: str, transcription_mode: str = "local", caption_style: str = "modern-box", source_duration: Optional[float] = None, project_dir: Optional[str] = None) -> Dict[str, Any]:
+    def create_project(self, source_path: str, transcription_mode: str = "local", caption_style: str = "modern-box", source_duration: Optional[float] = None, project_dir: Optional[str] = None, workflow_goal: str = "clips") -> Dict[str, Any]:
         proj_id = str(uuid.uuid4())
         name = Path(source_path).stem
         now = utc_now_iso()
         with self.get_conn() as conn:
             conn.execute(
-                """INSERT INTO projects (id, name, source_path, source_duration, status, transcription_mode, caption_style, project_dir, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (proj_id, name, source_path, source_duration, "ingest", transcription_mode, caption_style, project_dir, now, now)
+                """INSERT INTO projects (id, name, source_path, source_duration, status, transcription_mode, caption_style, project_dir, workflow_goal, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (proj_id, name, source_path, source_duration, "ingest", transcription_mode, caption_style, project_dir, workflow_goal, now, now)
             )
         return self.get_project(proj_id)
 
     def list_projects(self) -> List[Dict[str, Any]]:
         with self.get_conn() as conn:
             rows = conn.execute(
-                "SELECT id, name, source_path, source_duration, status, transcription_mode, created_at, updated_at, caption_style, project_dir FROM projects ORDER BY updated_at DESC"
+                "SELECT id, name, source_path, source_duration, status, transcription_mode, created_at, updated_at, caption_style, project_dir, workflow_goal FROM projects ORDER BY updated_at DESC"
             ).fetchall()
             return [
                 {
@@ -164,6 +169,7 @@ class Database:
                     "transcriptionMode": r["transcription_mode"],
                     "captionStyle": r["caption_style"],
                     "projectDir": r["project_dir"],
+                    "workflowGoal": r["workflow_goal"] or "clips",
                     "createdAt": r["created_at"],
                     "updatedAt": r["updated_at"],
                 }
@@ -173,7 +179,7 @@ class Database:
     def get_project(self, project_id: str) -> Dict[str, Any]:
         with self.get_conn() as conn:
             r = conn.execute(
-                "SELECT id, name, source_path, source_duration, status, transcription_mode, created_at, updated_at, caption_style, project_dir FROM projects WHERE id = ?",
+                "SELECT id, name, source_path, source_duration, status, transcription_mode, created_at, updated_at, caption_style, project_dir, workflow_goal FROM projects WHERE id = ?",
                 (project_id,)
             ).fetchone()
             if not r:
@@ -187,9 +193,16 @@ class Database:
                 "transcriptionMode": r["transcription_mode"],
                 "captionStyle": r["caption_style"],
                 "projectDir": r["project_dir"],
+                "workflowGoal": r["workflow_goal"] or "clips",
                 "createdAt": r["created_at"],
                 "updatedAt": r["updated_at"],
             }
+
+    def update_project_workflow_goal(self, project_id: str, workflow_goal: str) -> Dict[str, Any]:
+        now = utc_now_iso()
+        with self.get_conn() as conn:
+            conn.execute("UPDATE projects SET workflow_goal = ?, updated_at = ? WHERE id = ?", (workflow_goal, now, project_id))
+        return self.get_project(project_id)
 
     def update_project_dir(self, project_id: str, project_dir: str) -> Dict[str, Any]:
         now = utc_now_iso()

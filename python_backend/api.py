@@ -271,12 +271,14 @@ class Api:
             caption_style = args.get("captionStyle", "modern-box")
             custom_project_dir = args.get("projectDir")
             move_source_video = bool(args.get("moveSourceVideo", False))
+            workflow_goal = args.get("workflowGoal", "clips")
         else:
             source_path = args
             transcription_mode = "local"
             caption_style = "modern-box"
             custom_project_dir = None
             move_source_video = False
+            workflow_goal = "clips"
 
         if not os.path.exists(source_path):
             raise FileNotFoundError(f"File not found: {source_path}")
@@ -320,8 +322,14 @@ class Api:
             transcription_mode=transcription_mode,
             caption_style=caption_style,
             source_duration=duration,
-            project_dir=str(target_dir)
+            project_dir=str(target_dir),
+            workflow_goal=workflow_goal
         )
+
+    def update_project_workflow_goal(self, args: Any) -> Dict[str, Any]:
+        project_id = args.get("projectId")
+        workflow_goal = args.get("workflowGoal", "clips")
+        return self.db.update_project_workflow_goal(project_id, workflow_goal)
 
     def probe_project(self, args: Any) -> Dict[str, Any]:
         project_id = args.get("projectId") if isinstance(args, dict) else args

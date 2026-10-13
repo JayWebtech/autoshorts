@@ -49,6 +49,7 @@ export type Project = {
   aspectRatio?: string | null;
   sourceExists?: boolean;
   projectDir?: string | null;
+  workflowGoal?: "clips" | "autoedit";
   createdAt: string;
   updatedAt: string;
 };

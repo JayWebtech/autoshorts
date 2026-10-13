@@ -131,7 +131,7 @@ export function StyleModal({
             </h3>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span style={{ fontSize: "0.72rem", padding: "0.2rem 0.55rem", borderRadius: "4px", background: "var(--bg-surface)", border: "1px solid var(--border-default)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
-                {importModalTab === "subtitles" ? "Pestaña 1 de 2: Subtítulos y Formato" : "Pestaña 2 de 2: Procesamiento e IA"}
+                {importModalTab === "subtitles" ? "Pestaña 1 de 2: Objetivo y Formato" : "Pestaña 2 de 2: Procesamiento e IA"}
               </span>
               <button
                 type="button"
@@ -178,7 +178,7 @@ export function StyleModal({
                   )}
                 </div>
                 <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", lineHeight: 1.35, marginTop: "2px" }}>
-                  TikTok, Reels y Shorts (9:16 vertical, ganchos clave y subtítulos palabra por palabra).
+                  TikTok, Reels y Shorts (9:16 vertical, ganchos clave y subtítulos dinámicos).
                 </div>
               </div>
 
@@ -239,7 +239,7 @@ export function StyleModal({
               }}
             >
               <Captions size={15} color={importModalTab === "subtitles" ? "#09090b" : "currentColor"} />
-              Subtítulos y Formato
+              Objetivo y Formato
             </button>
 
             <button
@@ -272,107 +272,42 @@ export function StyleModal({
         <div style={{ padding: "1.25rem 1.5rem", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "1.25rem" }}>
           {importModalTab === "subtitles" ? (
             <>
-              {/* Estilo de Subtítulos */}
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-                  <label style={{ fontSize: "0.86rem", fontWeight: 600, color: "var(--foreground)" }}>
-                    Estilo de Subtítulos:
-                  </label>
-                  <span style={{ fontSize: "0.72rem", opacity: 0.7 }}>
-                    Desplaza la lista para ver todos los estilos
-                  </span>
-                </div>
-
-                <div className="style-grid">
-                  <div
-                    className={`style-card ${selectedStyle === "none" ? "selected" : ""}`}
-                    onClick={() => setSelectedStyle("none")}
-                  >
-                    <div className="style-preview-box">
-                      <span style={{ fontSize: "0.75rem", fontWeight: "bold", opacity: 0.85, color: "var(--accent-primary)" }}>[VIDEO LIMPIO RAW]</span>
-                    </div>
-                    <div className="style-card-title">Sin Subtítulos (Raw)</div>
-                    <div className="style-card-desc">Corte limpio sin texto quemado (conserva formato original o 9:16 vertical). Incluye el archivo .SRT aparte para edición manual.</div>
-                  </div>
-
-                  <div
-                    className={`style-card ${selectedStyle === "modern-box" ? "selected" : ""}`}
-                    onClick={() => setSelectedStyle("modern-box")}
-                  >
-                    <div className="style-preview-box">
-                      <span className="preview-text-box">BRAINFOOD BECAUSE</span>
-                    </div>
-                    <div className="style-card-title">Modern Box</div>
-                    <div className="style-card-desc">Texto blanco nítido dentro de una caja oscura semitransparente. Alta legibilidad.</div>
-                  </div>
-
-                  <div
-                    className={`style-card ${selectedStyle === "classic-outline" ? "selected" : ""}`}
-                    onClick={() => setSelectedStyle("classic-outline")}
-                  >
-                    <div className="style-preview-box">
-                      <span className="preview-text-outline">BRAINFOOD BECAUSE</span>
-                    </div>
-                    <div className="style-card-title">Classic Outline</div>
-                    <div className="style-card-desc">Texto amarillo con trazo negro marcado. Formato dinámico estilo CapCut.</div>
-                  </div>
-
-                  <div
-                    className={`style-card ${selectedStyle === "minimal-shadow" ? "selected" : ""}`}
-                    onClick={() => setSelectedStyle("minimal-shadow")}
-                  >
-                    <div className="style-preview-box">
-                      <span className="preview-text-shadow">BRAINFOOD BECAUSE</span>
-                    </div>
-                    <div className="style-card-title">Minimal Shadow</div>
-                    <div className="style-card-desc">Texto blanco limpio con sombra suave y elegante sin recargar la imagen.</div>
-                  </div>
-
-                  <div
-                    className={`style-card ${selectedStyle === "vibrant-cyan" ? "selected" : ""}`}
-                    onClick={() => setSelectedStyle("vibrant-cyan")}
-                  >
-                    <div className="style-preview-box">
-                      <span className="preview-text-cyan">BRAINFOOD BECAUSE</span>
-                    </div>
-                    <div className="style-card-title">Vibrant Cyan</div>
-                    <div className="style-card-desc">Tono cian tecnológico con sombra oscura para un look fresco y moderno.</div>
-                  </div>
-
-                  <div
-                    className={`style-card ${selectedStyle === "vibrant-yellow-box" ? "selected" : ""}`}
-                    onClick={() => setSelectedStyle("vibrant-yellow-box")}
-                  >
-                    <div className="style-preview-box">
-                      <span className="preview-text-yellow-box">BRAINFOOD BECAUSE</span>
-                    </div>
-                    <div className="style-card-title">Vibrant Yellow Box</div>
-                    <div className="style-card-desc">Texto negro dentro de una caja amarilla sólida. Máxima visibilidad e impacto.</div>
-                  </div>
-
-                  <div
-                    className={`style-card ${selectedStyle === "vibrant-green" ? "selected" : ""}`}
-                    onClick={() => setSelectedStyle("vibrant-green")}
-                  >
-                    <div className="style-preview-box">
-                      <span className="preview-text-green">BRAINFOOD BECAUSE</span>
-                    </div>
-                    <div className="style-card-title">Vibrant Green</div>
-                    <div className="style-card-desc">Verde neón enérgico con contorno negro (estilo Hormozi).</div>
-                  </div>
-
-                  <div
-                    className={`style-card ${selectedStyle === "vibrant-red" ? "selected" : ""}`}
-                    onClick={() => setSelectedStyle("vibrant-red")}
-                  >
-                    <div className="style-preview-box">
-                      <span className="preview-text-red">BRAINFOOD BECAUSE</span>
-                    </div>
-                    <div className="style-card-title">Vibrant Red</div>
-                    <div className="style-card-desc">Rojo carmesí con relieve para momentos de acción, tensión o gaming.</div>
+              {/* Nota contextual de subtítulos en vivo */}
+              {workflowGoal === "clips" ? (
+                <div
+                  style={{
+                    padding: "0.8rem 1rem",
+                    borderRadius: "8px",
+                    background: "rgba(16, 185, 129, 0.06)",
+                    border: "1px solid rgba(16, 185, 129, 0.2)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <Captions size={18} style={{ color: "#34d399", flexShrink: 0 }} />
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.45 }}>
+                    <strong style={{ color: "#34d399" }}>Subtítulos dinámicos activados:</strong> La tipografía, estilos, colores y animación palabra por palabra se personalizan con vista previa en vivo directamente en cada clip al momento de exportar.
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div
+                  style={{
+                    padding: "0.8rem 1rem",
+                    borderRadius: "8px",
+                    background: "rgba(59, 130, 246, 0.06)",
+                    border: "1px solid rgba(59, 130, 246, 0.2)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <Sparkles size={18} style={{ color: "#60a5fa", flexShrink: 0 }} />
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.45 }}>
+                    <strong style={{ color: "#60a5fa" }}>Flujo AutoEdición para YouTube:</strong> Montaje panorámico 16:9 con corte de silencios, capítulos y resumen narrativo listo para exportar a Premiere o video final.
+                  </div>
+                </div>
+              )}
 
               {/* Selector de Duración Objetivo de Clips */}
               <div>

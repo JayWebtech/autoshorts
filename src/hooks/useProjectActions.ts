@@ -13,7 +13,7 @@ import { fileName } from "../utils/format";
 interface UseProjectActionsOptions {
   transcriptionEngine: string;
   onAutoPipeline?: (projectId: string, contentType: ContentType, dur: TargetDuration) => Promise<void>;
-  onProjectSelected?: (projectId: string | null) => void;
+  onProjectSelected?: (projectId: string | null, workflowGoal?: "clips" | "autoedit") => void;
   onWorkflowGoalSelected?: (goal: "clips" | "autoedit") => void;
   setEnvironment?: (env: EnvironmentStatus) => void;
 }
@@ -90,10 +90,22 @@ export function useProjectActions(options: UseProjectActionsOptions) {
       await run("idle", async () => {
         const nextDetail = await invoke<ProjectDetail>("get_project_detail", { projectId });
         setDetail(nextDetail);
-        if (onProjectSelected) onProjectSelected(projectId);
+        if (onProjectSelected) onProjectSelected(projectId, nextDetail.project.workflowGoal || "clips");
       });
     },
     [run, onProjectSelected]
+  );
+
+  const updateProjectWorkflowGoal = useCallback(
+    async (projectId: string, goal: "clips" | "autoedit") => {
+      try {
+        await invoke("update_project_workflow_goal", { projectId, workflowGoal: goal });
+        await refresh(projectId);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [refresh]
   );
 
   const renameProject = useCallback(
@@ -264,6 +276,7 @@ export function useProjectActions(options: UseProjectActionsOptions) {
           captionStyle: style,
           projectDir: projDir,
           moveSourceVideo: shouldMove,
+          workflowGoal: workflowGoal,
         });
         newProjectId = project.id;
         await refresh(project.id);
@@ -355,6 +368,7 @@ export function useProjectActions(options: UseProjectActionsOptions) {
     relinkProjectVideo,
     openProjectFolder,
     moveProjectFolder,
+    updateProjectWorkflowGoal,
     // Import state & actions
     showStyleModal,
     setShowStyleModal,

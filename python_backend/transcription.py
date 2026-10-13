@@ -8,28 +8,48 @@ warnings.filterwarnings("ignore", message=".*Triton.*")
 
 
 WHISPER_SPECS = {
-    "tiny": {"vram": "~1 GB", "desc": "Ultra rápido, precisión básica", "recommended": False},
-    "base": {"vram": "~1.5 GB", "desc": "Rápido y ligero", "recommended": False},
-    "small": {"vram": "~2.5 GB", "desc": "Equilibrado", "recommended": False},
-    "medium": {"vram": "~5 GB", "desc": "Buena precisión", "recommended": False},
-    "large-v3-turbo": {"vram": "~6 GB", "desc": "Alta precisión y velocidad optimizada (Recomendado para RTX 2060 12GB)", "recommended": True},
-    "large-v3": {"vram": "~10 GB", "desc": "Máxima precisión en español y jerga (Alto consumo de VRAM)", "recommended": False},
+    "tiny": {"vram": "~0.5 GB (Faster)", "desc": "Ultra rápido, precisión básica", "recommended": False},
+    "base": {"vram": "~0.7 GB (Faster)", "desc": "Rápido y ligero", "recommended": False},
+    "small": {"vram": "~1.2 GB (Faster)", "desc": "Equilibrado para pruebas rápidas", "recommended": False},
+    "medium": {"vram": "~2.5 GB (Faster)", "desc": "Gran precisión para la mayoría de audios", "recommended": False},
+    "large-v3-turbo": {"vram": "~3.2 GB (Faster)", "desc": "Máxima velocidad + Altísima precisión (Recomendado para RTX 2060 12GB)", "recommended": True},
+    "large-v3": {"vram": "~4.5 GB (Faster)", "desc": "Máxima precisión absoluta en español y jerga gamer", "recommended": False},
 }
 
 
+def faster_whisper_available() -> bool:
+    try:
+        import faster_whisper
+        return True
+    except ImportError:
+        return False
+
+
 def get_installed_whisper_models() -> List[Dict[str, Any]]:
+    installed_ids = set()
+
+    # 1. Check standard OpenAI Whisper cache
     cache_dir = os.path.expanduser("~/.cache/whisper")
-    installed_files = set()
     if os.path.exists(cache_dir):
         for f in os.listdir(cache_dir):
             if f.endswith(".pt"):
-                installed_files.add(f[:-3])
+                installed_ids.add(f[:-3])
+
+    # 2. Check faster-whisper Hugging Face cache
+    hf_hub_dir = os.path.expanduser("~/.cache/huggingface/hub")
+    if os.path.exists(hf_hub_dir):
+        for d in os.listdir(hf_hub_dir):
+            dl = d.lower()
+            if "faster-whisper" in dl:
+                for mid in ["large-v3-turbo", "large-v3", "medium", "small", "base", "tiny"]:
+                    if mid in dl:
+                        installed_ids.add(mid)
 
     models = []
-    ordered_ids = ["base", "large-v3-turbo", "large-v3", "small", "medium", "tiny"]
+    ordered_ids = ["large-v3-turbo", "large-v3", "medium", "base", "small", "tiny"]
     for mid in ordered_ids:
         spec = WHISPER_SPECS.get(mid, {"vram": "~2 GB", "desc": "Modelo estándar", "recommended": False})
-        is_installed = mid in installed_files or (mid == "large-v3-turbo" and "turbo" in installed_files)
+        is_installed = mid in installed_ids or (mid == "large-v3-turbo" and "turbo" in installed_ids)
         models.append({
             "id": mid,
             "name": mid,
@@ -42,6 +62,8 @@ def get_installed_whisper_models() -> List[Dict[str, Any]]:
 
 
 def whisper_available() -> bool:
+    if faster_whisper_available():
+        return True
     try:
         import whisper
         return True
@@ -51,29 +73,119 @@ def whisper_available() -> bool:
 
 def transcribe_local(
     audio_path: str,
-    model_name: str = "base",
+    model_name: str = "large-v3-turbo",
     progress_callback: Optional[Any] = None,
     is_cancelled: Optional[Callable[[], bool]] = None
 ) -> Dict[str, Any]:
     import torch
-    import whisper
-    import tqdm
 
     if is_cancelled and is_cancelled():
         raise InterruptedError("Transcripción cancelada antes de cargar el modelo.")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Loading Whisper model '{model_name}' on device: {device} (FP16: {device == 'cuda'})...")
-    model = whisper.load_model(model_name, device=device)
-
-    print(f"Transcribing audio '{audio_path}' in Spanish...")
     gamer_initial_prompt = (
         "clutch, headshot, rushear, lootear, drop, respawn, hitbox, nerfeo, buff, "
         "streamer, lag, ping, push, dault, noob, ace, pentakill, clip, directo, "
         "discord, twitch, youtube, shorts, partida, gameplay, sniper, kill"
     )
 
+    # 1. Try faster-whisper first (CTranslate2, ~4x faster, much lower VRAM)
+    if faster_whisper_available():
+        from faster_whisper import WhisperModel
+
+        compute_type = "float16" if device == "cuda" else "int8"
+        print(f"🚀 Using faster-whisper CTranslate2 '{model_name}' on {device} ({compute_type})...")
+
+        if progress_callback:
+            try:
+                progress_callback(5)
+            except Exception:
+                pass
+
+        try:
+            model = WhisperModel(model_name, device=device, compute_type=compute_type)
+
+            if is_cancelled and is_cancelled():
+                del model
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                raise InterruptedError("Transcripción cancelada por el usuario.")
+
+            segments_gen, info = model.transcribe(
+                audio_path,
+                language="es",
+                initial_prompt=gamer_initial_prompt,
+                word_timestamps=True,
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500),
+            )
+
+            total_duration = float(info.duration) if info and info.duration else 1.0
+            segments = []
+            words = []
+
+            for seg in segments_gen:
+                if is_cancelled and is_cancelled():
+                    del model
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    raise InterruptedError("Transcripción cancelada por el usuario.")
+
+                if progress_callback:
+                    pct = min(99, max(5, int((float(seg.end) / total_duration) * 100)))
+                    try:
+                        progress_callback(pct)
+                    except Exception:
+                        pass
+
+                segments.append({
+                    "start": float(seg.start),
+                    "end": float(seg.end),
+                    "speaker": "S1",
+                    "text": str(seg.text).strip()
+                })
+
+                if getattr(seg, "words", None):
+                    for w in seg.words:
+                        words.append({
+                            "text": str(w.word).strip(),
+                            "start": float(w.start),
+                            "end": float(w.end),
+                            "speaker": "S1"
+                        })
+
+            if progress_callback:
+                try:
+                    progress_callback(100)
+                except Exception:
+                    pass
+
+            del model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            return {
+                "language": getattr(info, "language", "es") or "es",
+                "duration": total_duration,
+                "speakers": ["S1"],
+                "words": words,
+                "segments": segments
+            }
+
+        except InterruptedError:
+            print("🛑 Transcripción con faster-whisper cancelada.")
+            raise
+        except Exception as e:
+            print(f"⚠️ faster-whisper error: {e}. Falling back to standard Whisper...")
+
+    # 2. Fallback to standard OpenAI Whisper
+    import whisper
+    import tqdm
     import sys
+
+    print(f"Loading standard Whisper model '{model_name}' on device: {device} (FP16: {device == 'cuda'})...")
+    model = whisper.load_model(model_name, device=device)
+
     _ORIGINAL_TQDM = getattr(tqdm, "_ORIGINAL_TQDM", None)
     if _ORIGINAL_TQDM is None:
         _ORIGINAL_TQDM = tqdm.tqdm
