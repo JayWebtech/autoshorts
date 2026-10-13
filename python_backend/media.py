@@ -535,6 +535,98 @@ def hex_to_ass_color(hex_str: Optional[str], default: str = "&H00FFFFFF&") -> st
     return default
 
 
+def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = True) -> str:
+    """
+    Renders a stunning, pixel-perfect rounded pill badge with:
+    - True color emojis (using Segoe UI Emoji)
+    - Bold, modern typography (Segoe UI Bold)
+    - Translucent dark glass pill with glowing red/pink border
+    """
+    from PIL import Image, ImageDraw, ImageFont
+    import re
+
+    text = text.strip()
+    emoji_part = ""
+    rest_text = text
+
+    # Extract leading emoji if present (e.g. 🔥, ❤️, 🔔, 💬, ⭐)
+    m = re.match(r"^([\U00010000-\U0010ffff\u2600-\u27bf\ufe00-\ufe0f\u200d\u2300-\u23ff\u2b50-\u2b55]+|\u2764\ufe0f|\u2764)\s*(.*)$", text)
+    if m:
+        emoji_part = m.group(1)
+        rest_text = m.group(2)
+
+    scale = 1.35 if is_vertical else 1.10
+    font_size = int(36 * scale)
+
+    # Resolve fonts with safe fallbacks
+    emoji_font = None
+    if os.path.exists("C:/Windows/Fonts/seguiemj.ttf"):
+        try:
+            emoji_font = ImageFont.truetype("C:/Windows/Fonts/seguiemj.ttf", int(font_size * 1.15))
+        except Exception:
+            emoji_font = None
+
+    text_font = None
+    for fp in ["C:/Windows/Fonts/segoeuib.ttf", "C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/arial.ttf"]:
+        if os.path.exists(fp):
+            try:
+                text_font = ImageFont.truetype(fp, font_size)
+                break
+            except Exception:
+                continue
+    if not text_font:
+        text_font = ImageFont.load_default()
+    if not emoji_font:
+        emoji_font = text_font
+
+    dummy = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+    draw_d = ImageDraw.Draw(dummy)
+
+    emoji_w = 0
+    if emoji_part:
+        try:
+            bbox_e = draw_d.textbbox((0, 0), emoji_part, font=emoji_font, embedded_color=True)
+            emoji_w = bbox_e[2] - bbox_e[0] + int(14 * scale)
+        except Exception:
+            bbox_e = draw_d.textbbox((0, 0), emoji_part, font=text_font)
+            emoji_w = bbox_e[2] - bbox_e[0] + int(14 * scale)
+
+    bbox_t = draw_d.textbbox((0, 0), rest_text, font=text_font)
+    text_w = bbox_t[2] - bbox_t[0]
+    text_h = max(bbox_t[3] - bbox_t[1], int(font_size * 1.15))
+
+    pad_x = int(28 * scale)
+    pad_y = int(14 * scale)
+    total_w = emoji_w + text_w + pad_x * 2
+    total_h = text_h + pad_y * 2
+
+    img = Image.new("RGBA", (total_w, total_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    radius = total_h // 2
+    # Translucent dark glass pill with subtle glowing border
+    draw.rounded_rectangle(
+        [(1, 1), (total_w - 2, total_h - 2)],
+        radius=radius,
+        fill=(22, 22, 26, 230),
+        outline=(244, 63, 94, 210),
+        width=max(2, int(2.5 * scale))
+    )
+
+    cur_x = pad_x
+    if emoji_part:
+        try:
+            draw.text((cur_x, pad_y - int(2 * scale)), emoji_part, font=emoji_font, embedded_color=True)
+        except Exception:
+            draw.text((cur_x, pad_y - int(2 * scale)), emoji_part, font=text_font, fill=(255, 255, 255, 255))
+        cur_x += emoji_w
+
+    draw.text((cur_x, pad_y), rest_text, font=text_font, fill=(255, 255, 255, 255))
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    img.save(output_path, "PNG")
+    return output_path
+
+
 def generate_ass_subtitles(
     words: List[Dict[str, Any]],
     start_sec: float,
@@ -544,18 +636,17 @@ def generate_ass_subtitles(
     aspect_ratio: str = "9:16",
     primary_color_hex: Optional[str] = None,
     highlight_color_hex: Optional[str] = None,
-    cta_enabled: bool = False,
-    cta_text: Optional[str] = None,
-    cta_position: str = "top"
+    single_line: bool = True
 ) -> str:
     clip_words = [w for w in words if w.get("end", 0) > start_sec and w.get("start", 0) < end_sec]
-    if not clip_words and not cta_enabled:
+    if not clip_words:
         return ""
 
     is_vertical = (aspect_ratio == "9:16")
     res_x = 1080 if is_vertical else 1920
     res_y = 1920 if is_vertical else 1080
-    font_size = 72 if is_vertical else 56
+    # Clean font size that stays comfortably on one line
+    font_size = 62 if is_vertical else 50
 
     # Alignment and vertical margin
     # ASS alignments: 2 = Bottom Center, 5 = Middle Center, 8 = Top Center
@@ -567,7 +658,7 @@ def generate_ass_subtitles(
         margin_v = 0
     else:  # bottom default
         alignment = 2
-        margin_v = 160 if is_vertical else 80
+        margin_v = 180 if is_vertical else 90
 
     # Colors in ASS: &HAABBGGRR& (ABGR hex format)
     primary_color = hex_to_ass_color(primary_color_hex, "&H00FFFFFF&") if primary_color_hex else "&H00FFFFFF&"
@@ -600,34 +691,17 @@ def generate_ass_subtitles(
         outline_size = 1
         shadow_size = 3
 
-    # CTA Badge configuration (Píldora animada moderna)
-    cta_font_size = 46 if is_vertical else 38
-    cta_style_def = ""
-    has_active_cta = cta_enabled and bool(cta_text and cta_text.strip())
-    if has_active_cta:
-        if cta_position == "top":
-            cta_alignment = 8
-            # If speech captions are also on top, offset CTA below them
-            cta_margin_v = (320 if is_vertical else 180) if (position == "top" and caption_style != "none") else (150 if is_vertical else 80)
-        elif cta_position == "center":
-            cta_alignment = 5
-            cta_margin_v = (130 if is_vertical else 80) if (position == "center" and caption_style != "none") else 0
-        else:  # bottom
-            cta_alignment = 2
-            # If speech captions are also on bottom, offset CTA above them
-            cta_margin_v = (320 if is_vertical else 180) if (position == "bottom" and caption_style != "none") else (150 if is_vertical else 80)
-
-        cta_style_def = f"\nStyle: CtaBadge,Arial Black,{cta_font_size},&H00FFFFFF&,&H000000FF,&H00000000,&H9918181A,-1,0,0,0,100,100,1,0,3,5,0,{cta_alignment},40,40,{cta_margin_v},1"
-
+    # WrapStyle: 2 forces libass to NEVER wrap onto a second line
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {res_x}
 PlayResY: {res_y}
 ScaledBorderAndShadow: yes
+WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: AutoStyle,Arial Black,{font_size},{primary_color},&H000000FF,&H00000000,{back_colour},-1,0,0,0,100,100,1,0,{border_style},{outline_size},{shadow_size},{alignment},40,40,{margin_v},1{cta_style_def}
+Style: AutoStyle,Arial Black,{font_size},{primary_color},&H000000FF,&H00000000,{back_colour},-1,0,0,0,100,100,1,0,{border_style},{outline_size},{shadow_size},{alignment},30,30,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -635,22 +709,44 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     dialogue_lines = []
 
-    # 1. Speech captions dialogue lines (if enabled)
     if caption_style != "none":
-        chunk_size = 3 if is_vertical else 4
+        # Smart chunking based on word & character count to guarantee exactly 1 single line!
+        if single_line:
+            max_words = 3 if is_vertical else 4
+            max_chars = 18 if is_vertical else 30
+        else:
+            max_words = 4 if is_vertical else 6
+            max_chars = 34 if is_vertical else 50
 
-        for i in range(0, len(clip_words), chunk_size):
-            chunk = clip_words[i:i + chunk_size]
-            if not chunk:
+        chunks = []
+        current_chunk = []
+        current_char_count = 0
+
+        for w in clip_words:
+            raw = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", "")).strip()
+            if not raw:
+                raw = w.get("text", "").strip()
+            if not raw:
                 continue
+            w_len = len(raw)
+            if current_chunk and (len(current_chunk) >= max_words or (current_char_count + 1 + w_len) > max_chars):
+                chunks.append(current_chunk)
+                current_chunk = [w]
+                current_char_count = w_len
+            else:
+                current_chunk.append(w)
+                current_char_count += (1 if current_char_count > 0 else 0) + w_len
 
+        if current_chunk:
+            chunks.append(current_chunk)
+
+        for chunk in chunks:
             chunk_start = max(0.0, chunk[0]["start"] - start_sec)
             chunk_end = max(0.0, min(end_sec - start_sec, chunk[-1]["end"] - start_sec))
             if chunk_end <= chunk_start:
                 continue
 
             if caption_style == "tiktok-karaoke":
-                # Word-by-word active pop jump for each word in this chunk
                 for w_idx, active_w in enumerate(chunk):
                     w_start = max(chunk_start, active_w["start"] - start_sec)
                     w_end = min(chunk_end, active_w["end"] - start_sec)
@@ -686,21 +782,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                         f"Dialogue: 0,{format_ass_time(chunk_start)},{format_ass_time(chunk_end)},AutoStyle,,0,0,0,,{text_line}"
                     )
 
-    # 2. Animated Call-To-Action badge line (with bounce + smooth fade in/out)
-    if has_active_cta:
-        clean_cta = cta_text.strip()
-        clip_dur = max(0.5, end_sec - start_sec)
-        if clip_dur >= 7.0:
-            c_start = max(0.5, clip_dur - 5.5)
-            c_end = max(c_start + 1.0, clip_dur - 0.5)
-        else:
-            c_start = max(0.2, clip_dur * 0.35)
-            c_end = max(c_start + 1.0, clip_dur - 0.2)
-        anim_tag = r"{\fad(350,300)\t(0,250,\fscx108\fscy108)\t(250,500,\fscx100\fscy100)}"
-        dialogue_lines.append(
-            f"Dialogue: 1,{format_ass_time(c_start)},{format_ass_time(c_end)},CtaBadge,,0,0,0,,{anim_tag}{clean_cta}"
-        )
-
     return header + "\n".join(dialogue_lines) + "\n"
 
 
@@ -711,7 +792,10 @@ def render_flat_clip(
     output_path: Path,
     drawtext_filters: Optional[str] = None,
     aspect_ratio: str = "9:16",
-    subtitle_filter: Optional[str] = None
+    subtitle_filter: Optional[str] = None,
+    cta_badge_path: Optional[str] = None,
+    cta_position: str = "top",
+    caption_position: str = "bottom"
 ) -> Path:
     if not command_exists("ffmpeg"):
         raise RuntimeError("ffmpeg is not installed or not available on PATH")
@@ -732,27 +816,99 @@ def render_flat_clip(
         "-t", dur_str
     ]
 
+    has_cta = bool(cta_badge_path and os.path.exists(str(cta_badge_path)))
+
     if has_video:
-        filters = []
-        if aspect_ratio == "9:16":
-            filters.append("crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)'")
+        if has_cta:
+            # Add PNG pill badge as second looped input
+            cmd.extend(["-loop", "1", "-i", str(cta_badge_path)])
 
-        if subtitle_filter and subtitle_filter.strip():
-            filters.append(subtitle_filter.strip())
-        elif drawtext_filters and drawtext_filters.strip():
-            filters.append(drawtext_filters.strip())
+            is_vertical = (aspect_ratio == "9:16")
+            crop_prep = "[0:v]crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)'[vbase]; " if is_vertical else "[0:v]null[vbase]; "
 
-        vf = ",".join(filters) if filters else None
+            # Calculate appearances:
+            # 1. At start (around second 2.5 - 5.8)
+            # 2. Near the end (last ~4 seconds)
+            if dur_sec >= 8.0:
+                t1_start = 2.5
+                t1_end = min(t1_start + 3.5, dur_sec - 4.5)
+                t2_start = max(t1_end + 1.0, dur_sec - 4.2)
+                t2_end = dur_sec - 0.5
+            elif dur_sec >= 5.0:
+                t1_start = 1.2
+                t1_end = 3.5
+                t2_start = max(3.8, dur_sec - 2.5)
+                t2_end = dur_sec - 0.3
+            else:
+                t1_start = 0.5
+                t1_end = max(1.0, dur_sec - 0.3)
+                t2_start = None
+                t2_end = None
 
-        if vf:
-            cmd.extend(["-vf", vf])
+            # Calculate Y offset avoiding collision with subtitles if they share the same position
+            has_sub_collision = bool(subtitle_filter and (cta_position == caption_position))
+            if cta_position == "top":
+                y_expr = "280" if (has_sub_collision and is_vertical) else ("160" if has_sub_collision else ("130" if is_vertical else "65"))
+            elif cta_position == "center":
+                y_expr = "(H-h)/2+90" if has_sub_collision else "(H-h)/2"
+            else:  # bottom
+                margin_b = 300 if is_vertical else 160
+                normal_b = 140 if is_vertical else 70
+                y_expr = f"H-h-{margin_b}" if has_sub_collision else f"H-h-{normal_b}"
 
-        cmd.extend([
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "18",
-            "-pix_fmt", "yuv420p"
-        ])
+            if t2_start is not None and t2_end is not None:
+                fc = (
+                    f"[1:v]format=rgba,split=2[b1][b2]; "
+                    f"[b1]fade=in:st={t1_start:.2f}:d=0.3:alpha=1,fade=out:st={t1_end-0.3:.2f}:d=0.3:alpha=1[b1f]; "
+                    f"[b2]fade=in:st={t2_start:.2f}:d=0.3:alpha=1,fade=out:st={t2_end-0.3:.2f}:d=0.3:alpha=1[b2f]; "
+                    f"{crop_prep}"
+                    f"[vbase][b1f]overlay=(W-w)/2:{y_expr}:shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vmid]; "
+                    f"[vmid][b2f]overlay=(W-w)/2:{y_expr}:shortest=1:enable='between(t,{t2_start:.2f},{t2_end:.2f})'[vpost_cta]"
+                )
+            else:
+                fc = (
+                    f"[1:v]format=rgba,fade=in:st={t1_start:.2f}:d=0.3:alpha=1,fade=out:st={t1_end-0.3:.2f}:d=0.3:alpha=1[b1f]; "
+                    f"{crop_prep}"
+                    f"[vbase][b1f]overlay=(W-w)/2:{y_expr}:shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vpost_cta]"
+                )
+
+            if subtitle_filter and subtitle_filter.strip():
+                fc += f"; [vpost_cta]{subtitle_filter.strip()}[vout]"
+            elif drawtext_filters and drawtext_filters.strip():
+                fc += f"; [vpost_cta]{drawtext_filters.strip()}[vout]"
+            else:
+                fc += "; [vpost_cta]null[vout]"
+
+            cmd.extend([
+                "-filter_complex", fc,
+                "-map", "[vout]",
+                "-map", "0:a?",
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "18",
+                "-pix_fmt", "yuv420p"
+            ])
+        else:
+            # Standard single-input pipeline
+            filters = []
+            if aspect_ratio == "9:16":
+                filters.append("crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)'")
+
+            if subtitle_filter and subtitle_filter.strip():
+                filters.append(subtitle_filter.strip())
+            elif drawtext_filters and drawtext_filters.strip():
+                filters.append(drawtext_filters.strip())
+
+            vf = ",".join(filters) if filters else None
+            if vf:
+                cmd.extend(["-vf", vf])
+
+            cmd.extend([
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "18",
+                "-pix_fmt", "yuv420p"
+            ])
     else:
         cmd.append("-vn")
 
@@ -765,8 +921,8 @@ def render_flat_clip(
     res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if res.returncode != 0:
         # Fallback without subtitle/drawtext if filters caused error
-        if subtitle_filter or drawtext_filters:
-            return render_flat_clip(source_path, start_sec, end_sec, output_path, None, aspect_ratio, None)
+        if subtitle_filter or drawtext_filters or has_cta:
+            return render_flat_clip(source_path, start_sec, end_sec, output_path, None, aspect_ratio, None, None)
         raise RuntimeError(f"ffmpeg clip render failed: {res.stderr.strip()}")
 
     return output_path

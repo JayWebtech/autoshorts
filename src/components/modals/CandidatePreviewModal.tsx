@@ -78,6 +78,10 @@ export function CandidatePreviewModal({
     return localStorage.getItem("autoshorts_caption_highlight") || "#facc15";
   });
 
+  const [captionLines, setCaptionLines] = useState<"1" | "2">(() => {
+    return (localStorage.getItem("autoshorts_caption_lines") as "1" | "2") || "1";
+  });
+
   const [ctaEnabled, setCtaEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem("autoshorts_cta_enabled");
     return saved !== null ? saved === "true" : false;
@@ -110,6 +114,10 @@ export function CandidatePreviewModal({
   useEffect(() => {
     localStorage.setItem("autoshorts_caption_highlight", captionHighlight);
   }, [captionHighlight]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_caption_lines", captionLines);
+  }, [captionLines]);
 
   useEffect(() => {
     localStorage.setItem("autoshorts_cta_enabled", String(ctaEnabled));
@@ -693,6 +701,54 @@ export function CandidatePreviewModal({
                     </div>
                   </div>
                 </div>
+
+                {/* Formato de Líneas (1 Sola Línea vs 2 Líneas) */}
+                <div style={{ marginTop: "0.6rem", paddingTop: "0.5rem", borderTop: "1px dashed var(--border-default)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 500 }}>
+                      Distribución de líneas:
+                    </label>
+                    <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>
+                      {captionLines === "1" ? "⚡ Obligar a 1 sola línea (rápido y directo)" : "Dividir en 2 líneas si es largo"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.3rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setCaptionLines("1")}
+                      title="Obligar a 1 sola línea fija (estilo TikTok/Shorts)"
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        borderRadius: "5px",
+                        border: captionLines === "1" ? "1px solid #38bdf8" : "1px solid var(--border-default)",
+                        background: captionLines === "1" ? "#0284c7" : "var(--bg-surface-raised)",
+                        color: "#fafafa",
+                        fontSize: "0.72rem",
+                        fontWeight: captionLines === "1" ? 700 : 400,
+                        cursor: "pointer",
+                      }}
+                    >
+                      1 Sola Línea
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCaptionLines("2")}
+                      title="Permitir hasta 2 líneas de texto"
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        borderRadius: "5px",
+                        border: captionLines === "2" ? "1px solid #38bdf8" : "1px solid var(--border-default)",
+                        background: captionLines === "2" ? "#0284c7" : "var(--bg-surface-raised)",
+                        color: "#fafafa",
+                        fontSize: "0.72rem",
+                        fontWeight: captionLines === "2" ? 700 : 400,
+                        cursor: "pointer",
+                      }}
+                    >
+                      2 Líneas
+                    </button>
+                  </div>
+                </div>
               </>
             )}
           </div>
@@ -861,7 +917,7 @@ export function CandidatePreviewModal({
                   Simulación de pantalla (Subtítulos & CTA):
                 </span>
                 <span style={{ fontSize: "0.68rem", opacity: 0.8, fontFamily: "var(--font-mono)" }}>
-                  {burnSubtitles ? `Subs: ${captionPosition}` : "Sin subs"} | {ctaEnabled ? `CTA: ${ctaPosition}` : "Sin CTA"}
+                  {burnSubtitles ? `Subs: ${captionPosition} (${captionLines === "1" ? "1 línea" : "2 líneas"})` : "Sin subs"} | {ctaEnabled ? `CTA: ${ctaPosition} (inicio & final)` : "Sin CTA"}
                 </span>
               </div>
 
@@ -1105,6 +1161,7 @@ export function CandidatePreviewModal({
                   captionPosition,
                   captionColor,
                   captionHighlight,
+                  captionLines,
                   ctaEnabled,
                   ctaText,
                   ctaPosition,

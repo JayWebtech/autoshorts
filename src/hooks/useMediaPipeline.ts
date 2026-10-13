@@ -17,6 +17,7 @@ export interface CutClipOptions {
   captionPosition?: "bottom" | "center" | "top";
   captionColor?: string;
   captionHighlight?: string;
+  captionLines?: "1" | "2";
   ctaEnabled?: boolean;
   ctaText?: string;
   ctaPosition?: "top" | "center" | "bottom";
@@ -550,6 +551,8 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           options?.captionColor || localStorage.getItem("autoshorts_caption_color") || "#ffffff";
         const captionHighlight =
           options?.captionHighlight || localStorage.getItem("autoshorts_caption_highlight") || "#facc15";
+        const captionLines =
+          options?.captionLines || (localStorage.getItem("autoshorts_caption_lines") as "1" | "2") || "1";
         const ctaEnabled =
           options?.ctaEnabled !== undefined
             ? options.ctaEnabled
@@ -569,6 +572,7 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           captionPosition,
           captionColor,
           captionHighlight,
+          captionLines,
           ctaEnabled,
           ctaText,
           ctaPosition,

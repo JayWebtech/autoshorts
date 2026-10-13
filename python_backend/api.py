@@ -17,6 +17,7 @@ from .media import (
     extract_video_thumbnail,
     generate_srt,
     generate_ass_subtitles,
+    generate_cta_badge_image,
     build_drawtext_filters,
     probe_media,
     render_flat_clip,
@@ -911,6 +912,12 @@ class Api:
             if isinstance(args, dict)
             else "top"
         )
+        caption_lines = (
+            args.get("captionLines", "1")
+            if isinstance(args, dict)
+            else "1"
+        )
+        single_line = (str(caption_lines) != "2")
 
         if custom_dir:
             out_dir = Path(custom_dir)
@@ -931,7 +938,23 @@ class Api:
         drawtext_filters = None
         subtitle_filter = None
         srt_path = None
+        cta_badge_path = None
 
+        # 1. Generate high-fidelity CTA badge PNG if enabled
+        if cta_enabled and cta_text and cta_text.strip():
+            try:
+                badge_file = out_dir / f"{base_name}_cta.png"
+                generate_cta_badge_image(
+                    text=cta_text,
+                    output_path=str(badge_file),
+                    is_vertical=(aspect_ratio == "9:16")
+                )
+                if badge_file.exists():
+                    cta_badge_path = badge_file
+            except Exception as e:
+                print(f"Warning generating CTA badge: {e}")
+
+        # 2. Generate Subtitles
         transcript_record = self.db.latest_transcript(project["id"])
         if transcript_record:
             try:
@@ -947,20 +970,18 @@ class Api:
                     f.write(srt_content)
                 srt_path = str(exported_srt_path)
 
-                # If subtitles are burned or animated CTA is enabled
-                if (burn_subtitles and caption_style != "none") or cta_enabled:
+                # If subtitles are burned
+                if burn_subtitles and caption_style != "none":
                     ass_content = generate_ass_subtitles(
                         words=words,
                         start_sec=start_sec,
                         end_sec=end_sec,
-                        caption_style=caption_style if burn_subtitles else "none",
+                        caption_style=caption_style,
                         position=caption_position,
                         aspect_ratio=aspect_ratio,
                         primary_color_hex=caption_color,
                         highlight_color_hex=caption_highlight,
-                        cta_enabled=cta_enabled,
-                        cta_text=cta_text,
-                        cta_position=cta_position
+                        single_line=single_line
                     )
                     if ass_content:
                         exported_ass_path = out_dir / f"{base_name}.ass"
@@ -981,7 +1002,10 @@ class Api:
             output_path=output_path,
             drawtext_filters=drawtext_filters,
             aspect_ratio=aspect_ratio,
-            subtitle_filter=subtitle_filter
+            subtitle_filter=subtitle_filter,
+            cta_badge_path=cta_badge_path,
+            cta_position=cta_position,
+            caption_position=caption_position
         )
 
         self.db.update_clip_for_candidate(
