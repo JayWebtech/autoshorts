@@ -92,6 +92,8 @@ export interface ModalContainerProps {
   // Import / Style Modal
   showStyleModal: boolean;
   setShowStyleModal: (show: boolean) => void;
+  workflowGoal?: "clips" | "autoedit";
+  setWorkflowGoal?: (goal: "clips" | "autoedit") => void;
   setMediaPathToImport: (path: string | null) => void;
   selectedStyle: string;
   setSelectedStyle: (style: string) => void;
@@ -256,6 +258,8 @@ export function ModalContainer(props: ModalContainerProps) {
           props.setMediaPathToImport(null);
         }}
         telemetry={props.telemetry}
+        workflowGoal={props.workflowGoal}
+        setWorkflowGoal={props.setWorkflowGoal}
         selectedStyle={props.selectedStyle}
         setSelectedStyle={props.setSelectedStyle}
         selectedContentType={props.selectedContentType}

@@ -14,11 +14,12 @@ interface UseProjectActionsOptions {
   transcriptionEngine: string;
   onAutoPipeline?: (projectId: string, contentType: ContentType, dur: TargetDuration) => Promise<void>;
   onProjectSelected?: (projectId: string | null) => void;
+  onWorkflowGoalSelected?: (goal: "clips" | "autoedit") => void;
   setEnvironment?: (env: EnvironmentStatus) => void;
 }
 
 export function useProjectActions(options: UseProjectActionsOptions) {
-  const { transcriptionEngine, onAutoPipeline, onProjectSelected, setEnvironment } = options;
+  const { transcriptionEngine, onAutoPipeline, onProjectSelected, onWorkflowGoalSelected, setEnvironment } = options;
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
@@ -27,6 +28,7 @@ export function useProjectActions(options: UseProjectActionsOptions) {
 
   // Import state
   const [showStyleModal, setShowStyleModal] = useState(false);
+  const [workflowGoal, setWorkflowGoal] = useState<"clips" | "autoedit">("clips");
   const [selectedStyle, setSelectedStyle] = useState("modern-box");
   const [selectedContentType, setSelectedContentType] = useState<ContentType>("gaming");
   const [targetDuration, setTargetDuration] = useState<TargetDuration>(() => {
@@ -267,6 +269,10 @@ export function useProjectActions(options: UseProjectActionsOptions) {
         await refresh(project.id);
       });
 
+      if (newProjectId && onWorkflowGoalSelected) {
+        onWorkflowGoalSelected(workflowGoal);
+      }
+
       if (newProjectId && autoTranscribeOnImport && onAutoPipeline) {
         await onAutoPipeline(newProjectId, contentType, dur);
       }
@@ -279,6 +285,8 @@ export function useProjectActions(options: UseProjectActionsOptions) {
       selectedContentType,
       targetDuration,
       autoTranscribeOnImport,
+      workflowGoal,
+      onWorkflowGoalSelected,
       run,
       refresh,
       onAutoPipeline,
@@ -350,6 +358,8 @@ export function useProjectActions(options: UseProjectActionsOptions) {
     // Import state & actions
     showStyleModal,
     setShowStyleModal,
+    workflowGoal,
+    setWorkflowGoal,
     selectedStyle,
     setSelectedStyle,
     selectedContentType,

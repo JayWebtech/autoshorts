@@ -19,6 +19,8 @@ interface StyleModalProps {
   isOpen: boolean;
   onClose: () => void;
   telemetry?: HardwareTelemetry | null;
+  workflowGoal?: "clips" | "autoedit";
+  setWorkflowGoal?: (goal: "clips" | "autoedit") => void;
   selectedStyle: string;
   setSelectedStyle: (style: string) => void;
   selectedContentType: ContentType;
@@ -69,6 +71,8 @@ export function StyleModal({
   isOpen,
   onClose,
   telemetry,
+  workflowGoal = "clips",
+  setWorkflowGoal,
   selectedStyle,
   setSelectedStyle,
   selectedContentType,
@@ -140,8 +144,77 @@ export function StyleModal({
             </div>
           </div>
           <p style={{ margin: "0.2rem 0 0.85rem", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
-            Personaliza el formato visual y las opciones de procesamiento para este proyecto.
+            Elige qué tipo de contenido deseas producir para configurar el flujo óptimo automáticamente.
           </p>
+
+          {/* Selector de Objetivo de Producción (Clips vs AutoEdición) */}
+          <div style={{ marginBottom: "0.85rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
+              <div
+                onClick={() => {
+                  setWorkflowGoal?.("clips");
+                  setAutoDetectMoments(true);
+                }}
+                style={{
+                  padding: "0.75rem 0.9rem",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  border: workflowGoal === "clips" ? "2px solid #10b981" : "1px solid var(--border-default)",
+                  background: workflowGoal === "clips" ? "rgba(16, 185, 129, 0.08)" : "var(--bg-surface)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                  transition: "all 0.15s ease",
+                  boxShadow: workflowGoal === "clips" ? "0 0 12px rgba(16, 185, 129, 0.12)" : "none",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "0.88rem", color: workflowGoal === "clips" ? "#34d399" : "var(--text-primary)" }}>
+                    <span style={{ fontSize: "1rem" }}>📱</span>
+                    <span>Clips & Shorts Virales</span>
+                  </div>
+                  {workflowGoal === "clips" && (
+                    <span style={{ fontSize: "0.64rem", fontWeight: 700, padding: "1px 5px", borderRadius: "10px", background: "#10b981", color: "#000" }}>ACTIVO</span>
+                  )}
+                </div>
+                <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", lineHeight: 1.35, marginTop: "2px" }}>
+                  TikTok, Reels y Shorts (9:16 vertical, ganchos clave y subtítulos palabra por palabra).
+                </div>
+              </div>
+
+              <div
+                onClick={() => {
+                  setWorkflowGoal?.("autoedit");
+                  setAutoDetectMoments(false);
+                }}
+                style={{
+                  padding: "0.75rem 0.9rem",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  border: workflowGoal === "autoedit" ? "2px solid #3b82f6" : "1px solid var(--border-default)",
+                  background: workflowGoal === "autoedit" ? "rgba(59, 130, 246, 0.08)" : "var(--bg-surface)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                  transition: "all 0.15s ease",
+                  boxShadow: workflowGoal === "autoedit" ? "0 0 12px rgba(59, 130, 246, 0.12)" : "none",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "0.88rem", color: workflowGoal === "autoedit" ? "#60a5fa" : "var(--text-primary)" }}>
+                    <span style={{ fontSize: "1rem" }}>🎬</span>
+                    <span>AutoEdición para YouTube</span>
+                  </div>
+                  {workflowGoal === "autoedit" && (
+                    <span style={{ fontSize: "0.64rem", fontWeight: 700, padding: "1px 5px", borderRadius: "10px", background: "#3b82f6", color: "#fff" }}>ACTIVO</span>
+                  )}
+                </div>
+                <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", lineHeight: 1.35, marginTop: "2px" }}>
+                  Montaje narrativo en 16:9 con IA (capítulos de YouTube, teaser inicial y corte de silencios).
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Tabs Navigation */}
           <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -766,7 +839,7 @@ export function StyleModal({
               className="btn-confirm"
               onClick={onConfirm}
             >
-              Confirmar e Importar
+              {workflowGoal === "autoedit" ? "🎬 Importar e Ir a AutoEdición" : "📱 Importar y Buscar Clips"}
             </button>
           </div>
         </div>

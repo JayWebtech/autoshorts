@@ -36,6 +36,11 @@ export function App() {
   const projectActions = useProjectActions({
     transcriptionEngine: settings.transcriptionEngine,
     setEnvironment: settings.setEnvironment,
+    onWorkflowGoalSelected: (goal) => {
+      if (autoEditStateRef.current) {
+        autoEditStateRef.current.setProjectViewTab(goal === "autoedit" ? "autoedit" : "moments");
+      }
+    },
     onAutoPipeline: async (projectId, contentType, dur) => {
       if (mediaPipelineRef.current) {
         await mediaPipelineRef.current.runAutoPipeline(projectId, contentType, dur);
@@ -400,6 +405,8 @@ export function App() {
         // Import / Style Modal
         showStyleModal={projectActions.showStyleModal}
         setShowStyleModal={projectActions.setShowStyleModal}
+        workflowGoal={projectActions.workflowGoal}
+        setWorkflowGoal={projectActions.setWorkflowGoal}
         setMediaPathToImport={projectActions.setMediaPathToImport}
         selectedStyle={projectActions.selectedStyle}
         setSelectedStyle={projectActions.setSelectedStyle}
