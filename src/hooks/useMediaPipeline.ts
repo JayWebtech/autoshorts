@@ -15,6 +15,11 @@ export interface CutClipOptions {
   burnSubtitles?: boolean;
   captionStyle?: string;
   captionPosition?: "bottom" | "center" | "top";
+  captionColor?: string;
+  captionHighlight?: string;
+  ctaEnabled?: boolean;
+  ctaText?: string;
+  ctaPosition?: "top" | "center" | "bottom";
   aspectRatio?: "original" | "9:16";
   startSec?: number;
   endSec?: number;
@@ -541,6 +546,18 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           options?.captionStyle || localStorage.getItem("autoshorts_caption_style") || "tiktok-karaoke";
         const captionPosition =
           options?.captionPosition || (localStorage.getItem("autoshorts_caption_position") as "bottom" | "center" | "top") || "bottom";
+        const captionColor =
+          options?.captionColor || localStorage.getItem("autoshorts_caption_color") || "#ffffff";
+        const captionHighlight =
+          options?.captionHighlight || localStorage.getItem("autoshorts_caption_highlight") || "#facc15";
+        const ctaEnabled =
+          options?.ctaEnabled !== undefined
+            ? options.ctaEnabled
+            : localStorage.getItem("autoshorts_cta_enabled") === "true";
+        const ctaText =
+          options?.ctaText || localStorage.getItem("autoshorts_cta_text") || "❤️ ¡Sígueme y dale like!";
+        const ctaPosition =
+          options?.ctaPosition || (localStorage.getItem("autoshorts_cta_position") as "top" | "center" | "bottom") || "top";
         const aspectRatio = options?.aspectRatio || clipAspectRatio;
 
         await invoke<string>("render_flat_clip_for_candidate", {
@@ -550,6 +567,11 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           burnSubtitles,
           captionStyle,
           captionPosition,
+          captionColor,
+          captionHighlight,
+          ctaEnabled,
+          ctaText,
+          ctaPosition,
           ...(options?.startSec !== undefined ? { startSec: options.startSec } : {}),
           ...(options?.endSec !== undefined ? { endSec: options.endSec } : {}),
         });

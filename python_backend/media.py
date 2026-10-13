@@ -523,16 +523,33 @@ def format_ass_time(sec: float) -> str:
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
 
+def hex_to_ass_color(hex_str: Optional[str], default: str = "&H00FFFFFF&") -> str:
+    if not hex_str:
+        return default
+    clean = hex_str.lstrip("#").strip()
+    if len(clean) == 6:
+        r = clean[0:2]
+        g = clean[2:4]
+        b = clean[4:6]
+        return f"&H00{b}{g}{r}&".upper()
+    return default
+
+
 def generate_ass_subtitles(
     words: List[Dict[str, Any]],
     start_sec: float,
     end_sec: float,
     caption_style: str = "tiktok-karaoke",
     position: str = "bottom",
-    aspect_ratio: str = "9:16"
+    aspect_ratio: str = "9:16",
+    primary_color_hex: Optional[str] = None,
+    highlight_color_hex: Optional[str] = None,
+    cta_enabled: bool = False,
+    cta_text: Optional[str] = None,
+    cta_position: str = "top"
 ) -> str:
     clip_words = [w for w in words if w.get("end", 0) > start_sec and w.get("start", 0) < end_sec]
-    if not clip_words:
+    if not clip_words and not cta_enabled:
         return ""
 
     is_vertical = (aspect_ratio == "9:16")
@@ -553,30 +570,54 @@ def generate_ass_subtitles(
         margin_v = 160 if is_vertical else 80
 
     # Colors in ASS: &HAABBGGRR& (ABGR hex format)
-    primary_color = "&H00FFFFFF&"
-    highlight_color = "&H0000FFFF&"  # Yellow pop
+    primary_color = hex_to_ass_color(primary_color_hex, "&H00FFFFFF&") if primary_color_hex else "&H00FFFFFF&"
+    highlight_color = hex_to_ass_color(highlight_color_hex, "&H0015CCFA&") if highlight_color_hex else "&H0015CCFA&"  # Yellow pop
     border_style = 1  # 1 = outline + shadow, 3 = opaque box
     outline_size = 5 if is_vertical else 4
     shadow_size = 3 if is_vertical else 2
     back_colour = "&H80000000&"
 
     if caption_style == "tiktok-karaoke":
-        highlight_color = "&H0000FFFF&"
-        primary_color = "&H00FFFFFF&"
+        if not highlight_color_hex:
+            highlight_color = "&H0015CCFA&"
+        if not primary_color_hex:
+            primary_color = "&H00FFFFFF&"
     elif caption_style == "modern-box":
-        primary_color = "&H00FFFFFF&"
+        if not primary_color_hex:
+            primary_color = "&H00FFFFFF&"
         border_style = 3
         outline_size = 2
         shadow_size = 0
         back_colour = "&H99000000&"
     elif caption_style == "classic-outline":
-        primary_color = "&H0000FFFF&"
+        if not primary_color_hex:
+            primary_color = "&H0015CCFA&"
         outline_size = 6 if is_vertical else 5
         shadow_size = 2
     elif caption_style == "minimal-shadow":
-        primary_color = "&H00FFFFFF&"
+        if not primary_color_hex:
+            primary_color = "&H00FFFFFF&"
         outline_size = 1
         shadow_size = 3
+
+    # CTA Badge configuration (Píldora animada moderna)
+    cta_font_size = 46 if is_vertical else 38
+    cta_style_def = ""
+    has_active_cta = cta_enabled and bool(cta_text and cta_text.strip())
+    if has_active_cta:
+        if cta_position == "top":
+            cta_alignment = 8
+            # If speech captions are also on top, offset CTA below them
+            cta_margin_v = (320 if is_vertical else 180) if (position == "top" and caption_style != "none") else (150 if is_vertical else 80)
+        elif cta_position == "center":
+            cta_alignment = 5
+            cta_margin_v = (130 if is_vertical else 80) if (position == "center" and caption_style != "none") else 0
+        else:  # bottom
+            cta_alignment = 2
+            # If speech captions are also on bottom, offset CTA above them
+            cta_margin_v = (320 if is_vertical else 180) if (position == "bottom" and caption_style != "none") else (150 if is_vertical else 80)
+
+        cta_style_def = f"\nStyle: CtaBadge,Arial Black,{cta_font_size},&H00FFFFFF&,&H000000FF,&H00000000,&H9918181A,-1,0,0,0,100,100,1,0,3,5,0,{cta_alignment},40,40,{cta_margin_v},1"
 
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -586,61 +627,79 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: AutoStyle,Arial Black,{font_size},{primary_color},&H000000FF,&H00000000,{back_colour},-1,0,0,0,100,100,1,0,{border_style},{outline_size},{shadow_size},{alignment},40,40,{margin_v},1
+Style: AutoStyle,Arial Black,{font_size},{primary_color},&H000000FF,&H00000000,{back_colour},-1,0,0,0,100,100,1,0,{border_style},{outline_size},{shadow_size},{alignment},40,40,{margin_v},1{cta_style_def}
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
     dialogue_lines = []
-    chunk_size = 3 if is_vertical else 4
 
-    for i in range(0, len(clip_words), chunk_size):
-        chunk = clip_words[i:i + chunk_size]
-        if not chunk:
-            continue
+    # 1. Speech captions dialogue lines (if enabled)
+    if caption_style != "none":
+        chunk_size = 3 if is_vertical else 4
 
-        chunk_start = max(0.0, chunk[0]["start"] - start_sec)
-        chunk_end = max(0.0, min(end_sec - start_sec, chunk[-1]["end"] - start_sec))
-        if chunk_end <= chunk_start:
-            continue
+        for i in range(0, len(clip_words), chunk_size):
+            chunk = clip_words[i:i + chunk_size]
+            if not chunk:
+                continue
 
-        if caption_style == "tiktok-karaoke":
-            # Word-by-word active pop jump for each word in this chunk
-            for w_idx, active_w in enumerate(chunk):
-                w_start = max(chunk_start, active_w["start"] - start_sec)
-                w_end = min(chunk_end, active_w["end"] - start_sec)
-                if w_end <= w_start:
-                    w_end = min(chunk_end, w_start + 0.3)
+            chunk_start = max(0.0, chunk[0]["start"] - start_sec)
+            chunk_end = max(0.0, min(end_sec - start_sec, chunk[-1]["end"] - start_sec))
+            if chunk_end <= chunk_start:
+                continue
 
-                words_text = []
-                for idx, w in enumerate(chunk):
-                    raw_w = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", "")).upper()
-                    if not raw_w:
-                        raw_w = w.get("text", "").strip().upper()
-                    if not raw_w:
-                        continue
-                    if idx == w_idx:
-                        # Pop animation (118% scale) & vibrant color
-                        words_text.append(f"{{\\fscx118\\fscy118\\c{highlight_color}}}{raw_w}{{\\rAutoStyle\\fscx100\\fscy100}}")
-                    else:
-                        words_text.append(raw_w)
+            if caption_style == "tiktok-karaoke":
+                # Word-by-word active pop jump for each word in this chunk
+                for w_idx, active_w in enumerate(chunk):
+                    w_start = max(chunk_start, active_w["start"] - start_sec)
+                    w_end = min(chunk_end, active_w["end"] - start_sec)
+                    if w_end <= w_start:
+                        w_end = min(chunk_end, w_start + 0.3)
 
-                text_line = " ".join(words_text)
+                    words_text = []
+                    for idx, w in enumerate(chunk):
+                        raw_w = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", "")).upper()
+                        if not raw_w:
+                            raw_w = w.get("text", "").strip().upper()
+                        if not raw_w:
+                            continue
+                        if idx == w_idx:
+                            # Pop animation (118% scale) & user-selected highlight color
+                            words_text.append(f"{{\\fscx118\\fscy118\\c{highlight_color}}}{raw_w}{{\\rAutoStyle\\fscx100\\fscy100}}")
+                        else:
+                            words_text.append(raw_w)
+
+                    text_line = " ".join(words_text)
+                    if text_line.strip():
+                        dialogue_lines.append(
+                            f"Dialogue: 0,{format_ass_time(w_start)},{format_ass_time(w_end)},AutoStyle,,0,0,0,,{text_line}"
+                        )
+            else:
+                clean_chunk = []
+                for w in chunk:
+                    c = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", "")).upper()
+                    clean_chunk.append(c if c else w.get("text", "").strip().upper())
+                text_line = " ".join(clean_chunk)
                 if text_line.strip():
                     dialogue_lines.append(
-                        f"Dialogue: 0,{format_ass_time(w_start)},{format_ass_time(w_end)},AutoStyle,,0,0,0,,{text_line}"
+                        f"Dialogue: 0,{format_ass_time(chunk_start)},{format_ass_time(chunk_end)},AutoStyle,,0,0,0,,{text_line}"
                     )
+
+    # 2. Animated Call-To-Action badge line (with bounce + smooth fade in/out)
+    if has_active_cta:
+        clean_cta = cta_text.strip()
+        clip_dur = max(0.5, end_sec - start_sec)
+        if clip_dur >= 7.0:
+            c_start = max(0.5, clip_dur - 5.5)
+            c_end = max(c_start + 1.0, clip_dur - 0.5)
         else:
-            clean_chunk = []
-            for w in chunk:
-                c = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", "")).upper()
-                clean_chunk.append(c if c else w.get("text", "").strip().upper())
-            text_line = " ".join(clean_chunk)
-            if text_line.strip():
-                dialogue_lines.append(
-                    f"Dialogue: 0,{format_ass_time(chunk_start)},{format_ass_time(chunk_end)},AutoStyle,,0,0,0,,{text_line}"
-                )
+            c_start = max(0.2, clip_dur * 0.35)
+            c_end = max(c_start + 1.0, clip_dur - 0.2)
+        anim_tag = r"{\fad(350,300)\t(0,250,\fscx108\fscy108)\t(250,500,\fscx100\fscy100)}"
+        dialogue_lines.append(
+            f"Dialogue: 1,{format_ass_time(c_start)},{format_ass_time(c_end)},CtaBadge,,0,0,0,,{anim_tag}{clean_cta}"
+        )
 
     return header + "\n".join(dialogue_lines) + "\n"
 

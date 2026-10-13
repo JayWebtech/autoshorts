@@ -890,6 +890,27 @@ class Api:
             if isinstance(args, dict)
             else "bottom"
         )
+        caption_color = (
+            args.get("captionColor")
+            if isinstance(args, dict) and args.get("captionColor")
+            else None
+        )
+        caption_highlight = (
+            args.get("captionHighlight")
+            if isinstance(args, dict) and args.get("captionHighlight")
+            else None
+        )
+        cta_enabled = bool(args.get("ctaEnabled", False)) if isinstance(args, dict) else False
+        cta_text = (
+            args.get("ctaText")
+            if isinstance(args, dict) and args.get("ctaText")
+            else None
+        )
+        cta_position = (
+            args.get("ctaPosition", "top")
+            if isinstance(args, dict)
+            else "top"
+        )
 
         if custom_dir:
             out_dir = Path(custom_dir)
@@ -926,15 +947,20 @@ class Api:
                     f.write(srt_content)
                 srt_path = str(exported_srt_path)
 
-                # If the user chose to burn in subtitles into the video
-                if burn_subtitles and caption_style != "none":
+                # If subtitles are burned or animated CTA is enabled
+                if (burn_subtitles and caption_style != "none") or cta_enabled:
                     ass_content = generate_ass_subtitles(
                         words=words,
                         start_sec=start_sec,
                         end_sec=end_sec,
-                        caption_style=caption_style,
+                        caption_style=caption_style if burn_subtitles else "none",
                         position=caption_position,
-                        aspect_ratio=aspect_ratio
+                        aspect_ratio=aspect_ratio,
+                        primary_color_hex=caption_color,
+                        highlight_color_hex=caption_highlight,
+                        cta_enabled=cta_enabled,
+                        cta_text=cta_text,
+                        cta_position=cta_position
                     )
                     if ass_content:
                         exported_ass_path = out_dir / f"{base_name}.ass"
