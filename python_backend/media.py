@@ -811,9 +811,9 @@ def render_flat_clip(
     cmd = [
         "ffmpeg",
         "-y",
+        "-threads", "0",
         "-ss", start_str,
-        "-i", source_path,
-        "-t", dur_str
+        "-i", source_path
     ]
 
     has_cta = bool(cta_badge_path and os.path.exists(str(cta_badge_path)))
@@ -883,6 +883,7 @@ def render_flat_clip(
                 "-filter_complex", fc,
                 "-map", "[vout]",
                 "-map", "0:a?",
+                "-threads", "0",
                 "-c:v", "libx264",
                 "-preset", "fast",
                 "-crf", "18",
@@ -904,6 +905,7 @@ def render_flat_clip(
                 cmd.extend(["-vf", vf])
 
             cmd.extend([
+                "-threads", "0",
                 "-c:v", "libx264",
                 "-preset", "fast",
                 "-crf", "18",
@@ -913,8 +915,10 @@ def render_flat_clip(
         cmd.append("-vn")
 
     cmd.extend([
+        "-threads", "0",
         "-c:a", "aac",
         "-b:a", "192k",
+        "-t", dur_str,
         str(output_path)
     ])
 
@@ -982,6 +986,7 @@ def render_compilation_video(
             # Fast input seeking before -i (-ss {start} -to {end}) consumes virtually 0 extra RAM
             cmd = [
                 "ffmpeg", "-y",
+                "-threads", "0",
                 "-ss", f"{start:.3f}",
                 "-to", f"{end:.3f}",
                 "-i", str(source_path)
@@ -999,6 +1004,7 @@ def render_compilation_video(
 
             if has_video:
                 cmd.extend([
+                    "-threads", "0",
                     "-c:v", "libx264",
                     "-preset", "fast",
                     "-crf", "19",
@@ -1008,6 +1014,7 @@ def render_compilation_video(
                 cmd.extend(["-vn"])
 
             cmd.extend([
+                "-threads", "0",
                 "-c:a", "aac",
                 "-b:a", "192k",
                 "-ar", "48000",
@@ -1229,6 +1236,7 @@ def render_autoedit_video(
 
             cmd = [
                 "ffmpeg", "-y",
+                "-threads", "0",
                 "-ss", f"{unit['start']:.3f}",
                 "-t", f"{unit_dur:.3f}",
                 "-i", source_path
@@ -1258,10 +1266,12 @@ def render_autoedit_video(
             cmd.extend([
                 "-vf", ",".join(filters),
                 "-r", "30",
+                "-threads", "0",
                 "-c:v", "libx264",
                 "-preset", "fast",
                 "-crf", "19",
                 "-pix_fmt", "yuv420p",
+                "-threads", "0",
                 "-c:a", "aac",
                 "-b:a", "192k",
                 "-ar", "48000",
