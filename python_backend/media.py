@@ -645,8 +645,8 @@ def generate_ass_subtitles(
     is_vertical = (aspect_ratio == "9:16")
     res_x = 1080 if is_vertical else 1920
     res_y = 1920 if is_vertical else 1080
-    # Clean font size that stays comfortably on one line
-    font_size = 62 if is_vertical else 50
+    # Clean font size that stays comfortably within screen boundaries
+    font_size = 50 if is_vertical else 44
 
     # Alignment and vertical margin
     # ASS alignments: 2 = Bottom Center, 5 = Middle Center, 8 = Top Center
@@ -664,8 +664,8 @@ def generate_ass_subtitles(
     primary_color = hex_to_ass_color(primary_color_hex, "&H00FFFFFF&") if primary_color_hex else "&H00FFFFFF&"
     highlight_color = hex_to_ass_color(highlight_color_hex, "&H0015CCFA&") if highlight_color_hex else "&H0015CCFA&"  # Yellow pop
     border_style = 1  # 1 = outline + shadow, 3 = opaque box
-    outline_size = 5 if is_vertical else 4
-    shadow_size = 3 if is_vertical else 2
+    outline_size = 4 if is_vertical else 3
+    shadow_size = 2 if is_vertical else 2
     back_colour = "&H80000000&"
 
     if caption_style == "tiktok-karaoke":
@@ -683,15 +683,16 @@ def generate_ass_subtitles(
     elif caption_style == "classic-outline":
         if not primary_color_hex:
             primary_color = "&H0015CCFA&"
-        outline_size = 6 if is_vertical else 5
+        outline_size = 5 if is_vertical else 4
         shadow_size = 2
     elif caption_style == "minimal-shadow":
         if not primary_color_hex:
             primary_color = "&H00FFFFFF&"
         outline_size = 1
-        shadow_size = 3
+        shadow_size = 2
 
     # WrapStyle: 2 forces libass to NEVER wrap onto a second line
+    # MarginL: 60, MarginR: 60 guarantees generous safety margins from screen edges
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {res_x}
@@ -701,7 +702,7 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: AutoStyle,Arial Black,{font_size},{primary_color},&H000000FF,&H00000000,{back_colour},-1,0,0,0,100,100,1,0,{border_style},{outline_size},{shadow_size},{alignment},30,30,{margin_v},1
+Style: AutoStyle,Arial Black,{font_size},{primary_color},&H000000FF,&H00000000,{back_colour},-1,0,0,0,100,100,1,0,{border_style},{outline_size},{shadow_size},{alignment},60,60,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -710,13 +711,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     dialogue_lines = []
 
     if caption_style != "none":
-        # Smart chunking based on word & character count to guarantee exactly 1 single line!
+        # Smart chunking based on word & character count to guarantee exactly 1 single line within margins!
         if single_line:
-            max_words = 3 if is_vertical else 4
-            max_chars = 18 if is_vertical else 30
+            max_words = 2 if is_vertical else 3
+            max_chars = 14 if is_vertical else 20
         else:
-            max_words = 4 if is_vertical else 6
-            max_chars = 34 if is_vertical else 50
+            max_words = 4 if is_vertical else 5
+            max_chars = 26 if is_vertical else 38
 
         chunks = []
         current_chunk = []
@@ -746,6 +747,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if chunk_end <= chunk_start:
                 continue
 
+            # Calculate total raw characters to dynamically downscale font if any word is exceptionally long
+            plain_len = sum(len(w.get("text", "").strip()) for w in chunk) + max(0, len(chunk) - 1)
+            max_safe_len = 13 if is_vertical else 18
+            if plain_len > max_safe_len:
+                line_fs = max(34 if is_vertical else 30, int(font_size - (plain_len - max_safe_len) * 2))
+                fs_tag = f"{{\\fs{line_fs}}}"
+            else:
+                fs_tag = ""
+
             if caption_style == "tiktok-karaoke":
                 for w_idx, active_w in enumerate(chunk):
                     w_start = max(chunk_start, active_w["start"] - start_sec)
@@ -762,14 +772,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                             continue
                         if idx == w_idx:
                             # Pop animation (118% scale) & user-selected highlight color
-                            words_text.append(f"{{\\fscx118\\fscy118\\c{highlight_color}}}{raw_w}{{\\rAutoStyle\\fscx100\\fscy100}}")
+                            words_text.append(f"{{\\fscx118\\fscy118\\c{highlight_color}}}{raw_w}{{\\rAutoStyle\\fscx100\\fscy100{fs_tag}}}")
                         else:
                             words_text.append(raw_w)
 
                     text_line = " ".join(words_text)
                     if text_line.strip():
                         dialogue_lines.append(
-                            f"Dialogue: 0,{format_ass_time(w_start)},{format_ass_time(w_end)},AutoStyle,,0,0,0,,{text_line}"
+                            f"Dialogue: 0,{format_ass_time(w_start)},{format_ass_time(w_end)},AutoStyle,,0,0,0,,{fs_tag}{text_line}"
                         )
             else:
                 clean_chunk = []
@@ -779,7 +789,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 text_line = " ".join(clean_chunk)
                 if text_line.strip():
                     dialogue_lines.append(
-                        f"Dialogue: 0,{format_ass_time(chunk_start)},{format_ass_time(chunk_end)},AutoStyle,,0,0,0,,{text_line}"
+                        f"Dialogue: 0,{format_ass_time(chunk_start)},{format_ass_time(chunk_end)},AutoStyle,,0,0,0,,{fs_tag}{text_line}"
                     )
 
     return header + "\n".join(dialogue_lines) + "\n"
@@ -824,7 +834,7 @@ def render_flat_clip(
             cmd.extend(["-loop", "1", "-i", str(cta_badge_path)])
 
             is_vertical = (aspect_ratio == "9:16")
-            crop_prep = "[0:v]crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)'[vbase]; " if is_vertical else "[0:v]null[vbase]; "
+            crop_prep = "[0:v]crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)',scale=1080:1920,setsar=1[vbase]; " if is_vertical else "[0:v]null[vbase]; "
 
             # Calculate appearances:
             # 1. At start (around second 2.5 - 5.8)
@@ -893,7 +903,7 @@ def render_flat_clip(
             # Standard single-input pipeline
             filters = []
             if aspect_ratio == "9:16":
-                filters.append("crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)'")
+                filters.append("crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)',scale=1080:1920,setsar=1")
 
             if subtitle_filter and subtitle_filter.strip():
                 filters.append(subtitle_filter.strip())
