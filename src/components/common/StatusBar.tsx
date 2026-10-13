@@ -1,12 +1,14 @@
 import React from "react";
 import { Cpu, Activity, Database, Thermometer } from "lucide-react";
-import type { EnvironmentStatus, HardwareTelemetry } from "../../types";
+import type { EnvironmentStatus, HardwareTelemetry, LlmMemoryStatus } from "../../types";
 
 interface StatusBarProps {
   environment: EnvironmentStatus | null;
   telemetry: HardwareTelemetry | null;
   canUseCloudKey: boolean;
   canUseOpenrouter?: boolean;
+  llmMemoryStatus?: LlmMemoryStatus | null;
+  onUnloadLlm?: () => void;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -14,11 +16,53 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   telemetry,
   canUseCloudKey,
   canUseOpenrouter = false,
+  llmMemoryStatus,
+  onUnloadLlm,
 }) => {
   return (
     <footer className="status-bar">
       <div className="status-bar-left" style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
         <span className="app-status-indicator" style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem" }}>System Ready</span>
+        {llmMemoryStatus?.isLoaded && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "0.72rem",
+              fontFamily: "var(--font-mono)",
+              background: "rgba(16, 185, 129, 0.12)",
+              color: "#34d399",
+              padding: "2px 8px",
+              borderRadius: "4px",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+            }}
+            title="Modelo de IA cargado y listo en memoria para copys ultrarrápidos"
+          >
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981" }} />
+            <span>IA en VRAM: {llmMemoryStatus.loadedModel} {llmMemoryStatus.sizeMb ? `(${llmMemoryStatus.sizeMb}MB)` : ""}</span>
+            {onUnloadLlm && (
+              <button
+                type="button"
+                onClick={onUnloadLlm}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#f87171",
+                  cursor: "pointer",
+                  fontSize: "0.75rem",
+                  lineHeight: 1,
+                  padding: "0 2px",
+                  marginLeft: "2px",
+                  fontWeight: "bold",
+                }}
+                title="Descargar modelo y liberar memoria VRAM/RAM ahora"
+              >
+                ✕
+              </button>
+            )}
+          </span>
+        )}
         {telemetry && (
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", fontSize: "0.74rem", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", color: "var(--text-secondary)" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }} title="Uso de Procesador (CPU)">

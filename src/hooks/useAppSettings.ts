@@ -4,6 +4,7 @@ import type {
   EnvironmentStatus,
   HardwareTelemetry,
   LlmEngine,
+  LlmMemoryStatus,
   TranscriptionEngine,
   WhisperModel,
 } from "../types";
@@ -76,6 +77,12 @@ export function useAppSettings() {
   const [downloadingModelName, setDownloadingModelName] = useState<string | null>(null);
   const [modelDownloadStatus, setModelDownloadStatus] = useState("");
   const [modelDownloadProgress, setModelDownloadProgress] = useState(0);
+
+  const [llmMemoryStatus, setLlmMemoryStatus] = useState<LlmMemoryStatus | null>(null);
+  const [keepModelLoaded, setKeepModelLoaded] = useState<boolean>(() => {
+    return localStorage.getItem("autoshorts_keep_model_loaded") === "true";
+  });
+  const [isMemoryActionBusy, setIsMemoryActionBusy] = useState(false);
 
   const syncConfig = useCallback((updates: Record<string, any>) => {
     void invoke("save_app_config", updates);
@@ -213,6 +220,80 @@ export function useAppSettings() {
       clearInterval(intervalTelemetry);
     };
   }, []);
+
+  const fetchLlmMemoryStatus = useCallback(() => {
+    invoke<LlmMemoryStatus>("get_llm_memory_status", {
+      provider: llmEngine,
+      lmstudioBaseUrl,
+    })
+      .then((status) => {
+        if (status && typeof status === "object") {
+          setLlmMemoryStatus(status);
+          if (status.keepModelLoaded !== undefined) {
+            setKeepModelLoaded(Boolean(status.keepModelLoaded));
+          }
+        }
+      })
+      .catch(() => {});
+  }, [llmEngine, lmstudioBaseUrl]);
+
+  useEffect(() => {
+    fetchLlmMemoryStatus();
+    const intervalMem = setInterval(fetchLlmMemoryStatus, 3500);
+    return () => clearInterval(intervalMem);
+  }, [fetchLlmMemoryStatus]);
+
+  const toggleKeepModelLoaded = useCallback(
+    async (enabled: boolean) => {
+      setKeepModelLoaded(enabled);
+      localStorage.setItem("autoshorts_keep_model_loaded", String(enabled));
+      setIsMemoryActionBusy(true);
+      try {
+        const res = await invoke<LlmMemoryStatus>("set_keep_model_loaded", { enabled });
+        if (res) setLlmMemoryStatus(res);
+      } catch (err) {
+        console.error("Error toggling keep model loaded:", err);
+      } finally {
+        setIsMemoryActionBusy(false);
+      }
+    },
+    []
+  );
+
+  const preloadActiveModel = useCallback(async () => {
+    setIsMemoryActionBusy(true);
+    try {
+      const activeModel =
+        llmEngine === "lmstudio"
+          ? lmstudioModel.trim() || undefined
+          : localLlmModel.trim() || "qwen2.5:7b";
+      const res = await invoke<LlmMemoryStatus>("preload_llm_model", {
+        provider: llmEngine,
+        modelName: activeModel,
+        lmstudioBaseUrl,
+      });
+      if (res) setLlmMemoryStatus(res);
+    } catch (err) {
+      console.error("Error preloading model:", err);
+    } finally {
+      setIsMemoryActionBusy(false);
+    }
+  }, [llmEngine, localLlmModel, lmstudioModel, lmstudioBaseUrl]);
+
+  const unloadActiveModel = useCallback(async () => {
+    setIsMemoryActionBusy(true);
+    try {
+      const res = await invoke<LlmMemoryStatus>("unload_llm_model", {
+        provider: llmEngine,
+        lmstudioBaseUrl,
+      });
+      if (res) setLlmMemoryStatus(res);
+    } catch (err) {
+      console.error("Error unloading model:", err);
+    } finally {
+      setIsMemoryActionBusy(false);
+    }
+  }, [llmEngine, lmstudioBaseUrl]);
 
   // Sync state to localStorage & backend
   useEffect(() => {
@@ -388,5 +469,11 @@ export function useAppSettings() {
     canUseLmStudio,
     canTranscribe,
     canUseActiveLlm,
+    llmMemoryStatus,
+    keepModelLoaded,
+    isMemoryActionBusy,
+    toggleKeepModelLoaded,
+    preloadActiveModel,
+    unloadActiveModel,
   };
 }

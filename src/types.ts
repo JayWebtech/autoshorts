@@ -198,3 +198,14 @@ export type AutoEditAssemblyStyle =
 
 export type AutoEditAspectRatio = "original" | "9:16" | "16:9";
 
+export type LlmMemoryStatus = {
+  isLoaded: boolean;
+  loadedModel: string | null;
+  provider: "ollama" | "lmstudio" | string | null;
+  sizeMb: number | null;
+  keepModelLoaded: boolean;
+  details?: Array<{ name: string; sizeMb: number }>;
+  success?: boolean;
+  error?: string | null;
+};
+

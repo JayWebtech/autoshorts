@@ -13,6 +13,7 @@ import {
   CheckCheck,
   RotateCcw,
   Trash2,
+  Zap,
 } from "lucide-react";
 import type {
   Candidate,
@@ -22,6 +23,7 @@ import type {
   LlmEngine,
   TargetDuration,
   EnvironmentStatus,
+  LlmMemoryStatus,
 } from "../../types";
 import { formatTime } from "../../utils/format";
 
@@ -53,6 +55,12 @@ interface CandidatePanelProps {
   regenerateCandidateCopy?: (candidateId: string) => Promise<void>;
   regeneratingCopyCandidateId?: string | null;
   toggleCandidateDismissed?: (candidateId: string, dismissed: boolean) => void;
+  llmMemoryStatus?: LlmMemoryStatus | null;
+  keepModelLoaded?: boolean;
+  toggleKeepModelLoaded?: (enabled: boolean) => Promise<void>;
+  preloadActiveModel?: () => Promise<void>;
+  unloadActiveModel?: () => Promise<void>;
+  isMemoryActionBusy?: boolean;
 }
 
 export const CandidatePanel: React.FC<CandidatePanelProps> = ({
@@ -83,6 +91,12 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
   regenerateCandidateCopy,
   regeneratingCopyCandidateId,
   toggleCandidateDismissed,
+  llmMemoryStatus,
+  keepModelLoaded = false,
+  toggleKeepModelLoaded,
+  preloadActiveModel,
+  unloadActiveModel,
+  isMemoryActionBusy = false,
 }) => {
   const [filterTab, setFilterTab] = useState<"all" | "pending" | "exported" | "dismissed">("pending");
   const [copiedClipPathId, setCopiedClipPathId] = useState<string | null>(null);
@@ -334,23 +348,118 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
         </div>
 
         {/* Modo Thinking */}
-        <label
-          style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.74rem" }}
-          title="Desactívalo para análisis ultrarrápido (Recomendado para RTX 2060)"
-        >
-          <input
-            type="checkbox"
-            checked={enableThinking}
-            onChange={(e) => {
-              setEnableThinking(e.target.checked);
-              localStorage.setItem("autoshorts_enable_thinking", String(e.target.checked));
-            }}
-            style={{ cursor: "pointer", width: "13px", height: "13px", accentColor: "#fafafa" }}
-          />
-          <span style={{ color: enableThinking ? "#f59e0b" : "var(--text-secondary)", fontWeight: enableThinking ? 600 : 400 }}>
-            {enableThinking ? "Thinking CoT (Lento)" : "Modo Rápido"}
-          </span>
-        </label>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <label
+            style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.74rem" }}
+            title="Desactívalo para análisis ultrarrápido sin razonamiento extendido"
+          >
+            <input
+              type="checkbox"
+              checked={enableThinking}
+              onChange={(e) => {
+                setEnableThinking(e.target.checked);
+                localStorage.setItem("autoshorts_enable_thinking", String(e.target.checked));
+              }}
+              style={{ cursor: "pointer", width: "13px", height: "13px", accentColor: "#fafafa" }}
+            />
+            <span style={{ color: enableThinking ? "#f59e0b" : "var(--text-secondary)", fontWeight: enableThinking ? 600 : 400 }}>
+              {enableThinking ? "Thinking CoT (Lento)" : "Modo Rápido"}
+            </span>
+          </label>
+
+          {/* Modo Ráfaga & Control de VRAM para Copys */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", borderLeft: "1px solid var(--border-default)", paddingLeft: "10px" }}>
+            {toggleKeepModelLoaded && (
+              <label
+                style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.74rem" }}
+                title="Mantiene el modelo en VRAM/RAM entre copys para generarlos en 1-2 segundos sin recargar cada vez"
+              >
+                <input
+                  type="checkbox"
+                  checked={keepModelLoaded}
+                  onChange={(e) => void toggleKeepModelLoaded(e.target.checked)}
+                  style={{ cursor: "pointer", width: "13px", height: "13px", accentColor: "#10b981" }}
+                />
+                <span style={{ color: keepModelLoaded ? "#34d399" : "var(--text-secondary)", fontWeight: keepModelLoaded ? 600 : 400 }}>
+                  ⚡ Modo Ráfaga (Mantener en memoria)
+                </span>
+              </label>
+            )}
+
+            {llmMemoryStatus?.isLoaded ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "2px 7px",
+                    borderRadius: "4px",
+                    fontSize: "0.72rem",
+                    background: "rgba(16, 185, 129, 0.12)",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    color: "#34d399",
+                    fontWeight: 500,
+                    fontFamily: "var(--font-mono)",
+                  }}
+                  title={`Modelo cargado y activo en memoria: ${llmMemoryStatus.loadedModel}`}
+                >
+                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981" }} />
+                  <span>{llmMemoryStatus.loadedModel} {llmMemoryStatus.sizeMb ? `(${llmMemoryStatus.sizeMb}MB)` : ""}</span>
+                </span>
+                {unloadActiveModel && (
+                  <button
+                    type="button"
+                    onClick={() => void unloadActiveModel()}
+                    disabled={isMemoryActionBusy}
+                    title="Descargar modelo y liberar memoria VRAM/RAM de inmediato"
+                    style={{
+                      padding: "2px 8px",
+                      fontSize: "0.72rem",
+                      borderRadius: "4px",
+                      background: "rgba(239, 68, 68, 0.12)",
+                      border: "1px solid rgba(239, 68, 68, 0.3)",
+                      color: "#f87171",
+                      cursor: isMemoryActionBusy ? "not-allowed" : "pointer",
+                      fontWeight: 500,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    {isMemoryActionBusy ? <Loader2 className="spin" size={11} /> : <Trash2 size={11} />}
+                    <span>Descargar</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              preloadActiveModel && (
+                <button
+                  type="button"
+                  onClick={() => void preloadActiveModel()}
+                  disabled={isMemoryActionBusy}
+                  title="Cargar modelo en memoria ahora para que los copys salgan al instante"
+                  style={{
+                    padding: "2px 8px",
+                    fontSize: "0.72rem",
+                    borderRadius: "4px",
+                    background: "var(--bg-surface-raised)",
+                    border: "1px solid var(--border-default)",
+                    color: "var(--text-secondary)",
+                    cursor: isMemoryActionBusy ? "not-allowed" : "pointer",
+                    fontWeight: 500,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  {isMemoryActionBusy ? <Loader2 className="spin" size={11} /> : <Zap size={11} color="#f59e0b" />}
+                  <span>Cargar en VRAM</span>
+                </button>
+              )
+            )}
+          </div>
+        </div>
       </div>
 
       {busy === "moments" && (

@@ -55,6 +55,110 @@ def unload_all_lmstudio_models(base_url: Optional[str] = None):
         print(f"Nota al descargar modelos de LM Studio: {e}")
 
 
+def get_loaded_models_status(provider: Optional[str] = None, lmstudio_base_url: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Checks Ollama and/or LM Studio to detect if any model is actively resident in VRAM/RAM.
+    """
+    result = {
+        "isLoaded": False,
+        "loadedModel": None,
+        "provider": None,
+        "sizeMb": None,
+        "details": []
+    }
+
+    # 1. Check Ollama
+    if not provider or provider in ["local", "ollama"]:
+        try:
+            resp = requests.get("http://127.0.0.1:11434/api/ps", timeout=1.5)
+            if resp.ok:
+                data = resp.json()
+                models = data.get("models", [])
+                if models:
+                    m = models[0]
+                    name = m.get("name") or m.get("model") or "ollama-model"
+                    size_b = m.get("size_vram") or m.get("size") or 0
+                    result["isLoaded"] = True
+                    result["loadedModel"] = name
+                    result["provider"] = "ollama"
+                    result["sizeMb"] = round(size_b / (1024 * 1024)) if size_b else None
+                    result["details"] = [
+                        {
+                            "name": (x.get("name") or x.get("model")),
+                            "sizeMb": round((x.get("size_vram") or x.get("size") or 0) / (1024 * 1024))
+                        }
+                        for x in models
+                    ]
+                    return result
+        except Exception:
+            pass
+
+    # 2. Check LM Studio
+    if not provider or provider == "lmstudio":
+        try:
+            raw_url = (lmstudio_base_url or os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")).rstrip("/")
+            root_url = raw_url[:-3] if raw_url.endswith("/v1") else raw_url
+            resp = requests.get(f"{root_url}/api/v1/models", timeout=1.5)
+            if resp.ok:
+                data = resp.json()
+                for m in data.get("models", []):
+                    instances = m.get("loaded_instances", [])
+                    if instances:
+                        result["isLoaded"] = True
+                        result["loadedModel"] = m.get("display_name") or m.get("key") or m.get("id")
+                        result["provider"] = "lmstudio"
+                        size_b = m.get("size_bytes", 0)
+                        result["sizeMb"] = round(size_b / (1024 * 1024)) if size_b else None
+                        result["details"] = [{"name": m.get("key") or m.get("id"), "sizeMb": result["sizeMb"]}]
+                        return result
+        except Exception:
+            pass
+
+    return result
+
+
+def preload_local_model(model_name: str, provider: str = "local", lmstudio_base_url: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Explicitly loads and pins a model into VRAM/RAM so subsequent generations are instant.
+    """
+    if provider in ["local", "ollama"]:
+        try:
+            resp = requests.post(
+                "http://127.0.0.1:11434/api/generate",
+                json={"model": model_name, "prompt": "", "keep_alive": -1},
+                timeout=120
+            )
+            if resp.ok:
+                print(f"Modelo Ollama '{model_name}' pre-cargado con éxito en VRAM.")
+                return {"success": True, "model": model_name, "provider": "ollama"}
+            else:
+                return {"success": False, "error": f"Ollama HTTP {resp.status_code}: {resp.text}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    elif provider == "lmstudio":
+        try:
+            raw_url = (lmstudio_base_url or os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")).rstrip("/")
+            resp = requests.post(
+                f"{raw_url}/chat/completions",
+                json={
+                    "model": model_name or "local-model",
+                    "messages": [{"role": "user", "content": "ping"}],
+                    "max_tokens": 1
+                },
+                timeout=120
+            )
+            if resp.ok:
+                print(f"Modelo LM Studio '{model_name}' pre-cargado con éxito en memoria.")
+                return {"success": True, "model": model_name, "provider": "lmstudio"}
+            else:
+                return {"success": False, "error": f"LM Studio HTTP {resp.status_code}: {resp.text}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    return {"success": False, "error": f"El proveedor {provider} no admite carga en VRAM local."}
+
+
 def compact_segments(segments: List[Dict[str, Any]]) -> str:
     lines = []
     for s in segments:
@@ -1761,7 +1865,8 @@ def generate_social_copy_with_llm(
     provider: str = "local",
     api_key: Optional[str] = None,
     enable_thinking: bool = False,
-    extra_context: Optional[str] = None
+    extra_context: Optional[str] = None,
+    keep_loaded: bool = False
 ) -> Dict[str, Any]:
     """
     Generates high-retention viral social media copy (hooks, main post caption, CTA, hashtags)
@@ -1809,6 +1914,8 @@ IMPORTANTE: Escribe en Español natural, convincente, fresco y sin rodeos."""
                 "stream": False,
                 "options": {"temperature": 0.5, "num_ctx": 8192}
             }
+            if keep_loaded:
+                payload["keep_alive"] = -1
             if not has_thinking:
                 payload["think"] = False
                 payload["format"] = "json"
@@ -1848,10 +1955,13 @@ IMPORTANTE: Escribe en Español natural, convincente, fresco y sin rodeos."""
                 model_name=model_name
             )
     finally:
-        if provider in ["local", "ollama"]:
-            unload_all_ollama_models(model_name)
-        elif provider == "lmstudio":
-            unload_all_lmstudio_models()
+        if not keep_loaded:
+            if provider in ["local", "ollama"]:
+                unload_all_ollama_models(model_name)
+            elif provider == "lmstudio":
+                unload_all_lmstudio_models()
+        else:
+            print(f"Modo ráfaga activo: Modelo '{model_name}' conservado en memoria para copys instantáneos.")
 
     return repair_and_extract_copy_json(content)
 

@@ -30,6 +30,8 @@ from .llm import (
     detect_candidates_pipeline,
     unload_all_ollama_models,
     unload_all_lmstudio_models,
+    get_loaded_models_status,
+    preload_local_model,
     plan_summary_narrative,
     plan_autoedit_narrative,
     refine_transcript_with_llm,
@@ -584,6 +586,59 @@ class Api:
     def get_default_moments_prompt(self, _args: Any = None) -> str:
         return DEFAULT_MOMENTS_PROMPT
 
+    def get_llm_memory_status(self, args: Any = None) -> Dict[str, Any]:
+        """Checks if any local LLM model is currently resident in VRAM/RAM."""
+        provider = args.get("provider") if isinstance(args, dict) else None
+        lmstudio_url = args.get("lmstudioBaseUrl") if isinstance(args, dict) else None
+        status = get_loaded_models_status(provider=provider, lmstudio_base_url=lmstudio_url)
+        app_cfg = self.get_app_config()
+        status["keepModelLoaded"] = bool(app_cfg.get("keepModelLoaded", False))
+        return status
+
+    def preload_llm_model(self, args: Any = None) -> Dict[str, Any]:
+        """Explicitly loads a local model into memory and keeps it active."""
+        args = args if isinstance(args, dict) else {}
+        provider = args.get("provider", "local")
+        model_name = args.get("modelName")
+        lmstudio_url = args.get("lmstudioBaseUrl")
+
+        if not model_name:
+            app_cfg = self.get_app_config()
+            if provider == "lmstudio":
+                model_name = app_cfg.get("lmstudioModel")
+            else:
+                model_name = app_cfg.get("localLlmModel", "qwen2.5:7b")
+
+        res = preload_local_model(model_name=model_name, provider=provider, lmstudio_base_url=lmstudio_url)
+        status = self.get_llm_memory_status(args)
+        status["success"] = res.get("success", False)
+        status["error"] = res.get("error")
+        return status
+
+    def unload_llm_model(self, args: Any = None) -> Dict[str, Any]:
+        """Explicitly frees local LLM VRAM/RAM immediately."""
+        try:
+            unload_all_ollama_models()
+        except Exception:
+            pass
+        try:
+            unload_all_lmstudio_models()
+        except Exception:
+            pass
+        return self.get_llm_memory_status(args)
+
+    def set_keep_model_loaded(self, args: Any = None) -> Dict[str, Any]:
+        """Toggles the keepModelLoaded setting in config. If set to False, immediately unloads."""
+        enabled = bool(args.get("enabled", False)) if isinstance(args, dict) else bool(args)
+        self.save_app_config({"keepModelLoaded": enabled})
+        if not enabled:
+            try:
+                unload_all_ollama_models()
+                unload_all_lmstudio_models()
+            except Exception:
+                pass
+        return self.get_llm_memory_status(args)
+
     def generate_project_copy(self, args: Any) -> Dict[str, Any]:
         if not isinstance(args, dict):
             raise ValueError("Invalid arguments")
@@ -593,6 +648,7 @@ class Api:
         api_key = args.get("apiKey")
         enable_thinking = bool(args.get("enableThinking", False))
         extra_context = args.get("extraContext")
+        keep_loaded = bool(args.get("keepLoaded", False)) if "keepLoaded" in args else bool(self.get_app_config().get("keepModelLoaded", False))
 
         detail = self.db.get_project_detail(project_id)
         transcript_record = detail.get("transcript")
@@ -606,14 +662,15 @@ class Api:
 
         full_text = " ".join([s.get("text", "").strip() for s in segments if s.get("text")])
 
-        print(f"Generando copy para redes con IA ({provider}:{model_name})...")
+        print(f"Generando copy para redes con IA ({provider}:{model_name}, keep_loaded={keep_loaded})...")
         copy_data = generate_social_copy_with_llm(
             transcript_text=full_text,
             model_name=model_name or "qwen2.5:7b",
             provider=provider,
             api_key=api_key,
             enable_thinking=enable_thinking,
-            extra_context=extra_context
+            extra_context=extra_context,
+            keep_loaded=keep_loaded
         )
         return copy_data
 
@@ -632,6 +689,7 @@ class Api:
         model_name = args.get("modelName")
         api_key = args.get("apiKey")
         enable_thinking = bool(args.get("enableThinking", False))
+        keep_loaded = bool(args.get("keepLoaded", False)) if "keepLoaded" in args else bool(self.get_app_config().get("keepModelLoaded", False))
 
         if not raw_text and media_path:
             if not os.path.exists(media_path):
@@ -679,7 +737,8 @@ class Api:
             provider=provider,
             api_key=api_key,
             enable_thinking=enable_thinking,
-            extra_context=extra_context
+            extra_context=extra_context,
+            keep_loaded=keep_loaded
         )
         return copy_data
 
@@ -693,6 +752,7 @@ class Api:
         model_name = args.get("modelName") if isinstance(args, dict) else None
         api_key = args.get("apiKey") if isinstance(args, dict) else None
         enable_thinking = bool(args.get("enableThinking", False)) if isinstance(args, dict) else False
+        keep_loaded = bool(args.get("keepLoaded", False)) if isinstance(args, dict) and "keepLoaded" in args else bool(self.get_app_config().get("keepModelLoaded", False))
 
         candidate, project = self.db.get_candidate_with_project(candidate_id)
         transcript_record = self.db.latest_transcript(project["id"])
@@ -740,7 +800,8 @@ class Api:
             provider=provider,
             api_key=api_key,
             enable_thinking=enable_thinking,
-            extra_context=f"Título actual del clip (mantener este mismo concepto sin cambiarlo): {candidate['hook']}"
+            extra_context=f"Título actual del clip (mantener este mismo concepto sin cambiarlo): {candidate['hook']}",
+            keep_loaded=keep_loaded
         )
 
         full_copy = copy_data.get("full_copy") or copy_data.get("caption") or ""

@@ -221,6 +221,9 @@ export function App() {
                 selectedCaptionsCount={mediaPipeline.selectedCaptionsCount}
                 activeView={autoEditState.projectViewTab}
                 onChangeView={autoEditState.setProjectViewTab}
+                llmMemoryStatus={settings.llmMemoryStatus}
+                onUnloadActiveModel={settings.unloadActiveModel}
+                isMemoryActionBusy={settings.isMemoryActionBusy}
               />
 
               {autoEditState.projectViewTab === "autoedit" ? (
@@ -297,6 +300,12 @@ export function App() {
                     setAspectRatio={mediaPipeline.setClipAspectRatio}
                     regenerateCandidateCopy={mediaPipeline.regenerateCandidateCopy}
                     regeneratingCopyCandidateId={mediaPipeline.regeneratingCopyCandidateId}
+                    llmMemoryStatus={settings.llmMemoryStatus}
+                    keepModelLoaded={settings.keepModelLoaded}
+                    toggleKeepModelLoaded={settings.toggleKeepModelLoaded}
+                    preloadActiveModel={settings.preloadActiveModel}
+                    unloadActiveModel={settings.unloadActiveModel}
+                    isMemoryActionBusy={settings.isMemoryActionBusy}
                   />
                 </div>
               )}
@@ -328,6 +337,8 @@ export function App() {
         telemetry={settings.telemetry}
         canUseCloudKey={settings.canUseCloudKey}
         canUseOpenrouter={settings.canUseOpenrouter}
+        llmMemoryStatus={settings.llmMemoryStatus}
+        onUnloadLlm={settings.unloadActiveModel}
       />
 
       <ModalContainer
