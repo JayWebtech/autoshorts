@@ -1436,6 +1436,29 @@
 }
 
 /* ==========================================================================
-   AutoEdit Dedicated Workspace & Segmented View Switcher
+   Motionmaxxing Decelerated Landing Animation ("Nothing grows from zero")
    ========================================================================== */
+@keyframes motionmaxxingBadgeEntry {
+  0% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+  14% {
+    transform: scale(1.0);
+    opacity: 1;
+  }
+  86% {
+    transform: scale(1.0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+}
+
+.motionmaxxing-badge {
+  animation: motionmaxxingBadgeEntry 3s infinite cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 

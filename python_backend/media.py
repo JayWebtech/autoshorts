@@ -535,15 +535,102 @@ def hex_to_ass_color(hex_str: Optional[str], default: str = "&H00FFFFFF&") -> st
     return default
 
 
+HERO_TRIGGER_WORDS = {
+    "brutal", "locura", "epico", "épico", "increible", "increíble", "insano", "mató", "mato",
+    "muerto", "ganamos", "boom", "headshot", "clutch", "dios", "nooo", "wow", "wtf", "omg",
+    "hack", "pro", "gg", "rush", "record", "récord", "mira", "toma", "ojo", "cuidado",
+    "final", "victoria", "derrota", "destruccion", "destrucción", "fuego", "bestia", "mítico",
+    "mitico", "legendario", "vamos", "vamosss", "salvaje", "imposible"
+}
+
+
+def is_hero_word(raw_w: str) -> bool:
+    clean = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", raw_w).lower()
+    return clean in HERO_TRIGGER_WORDS
+
+
+def chunk_words_remotion(
+    words: List[Dict[str, Any]],
+    max_words: int,
+    max_chars: int,
+    silence_break_sec: float = 0.35,
+    prevent_orphans: bool = True
+) -> List[List[Dict[str, Any]]]:
+    """
+    Implements Remotion's TikTok-style caption chunking:
+    - breakOnSilenceAfterMilliseconds (forces break when gap between words >= silence_break_sec)
+    - ensureMaxCharactersPerLine & max_words budget
+    - preventOrphanWord: prevents awkward solitary words at sentence boundaries
+    """
+    if not words:
+        return []
+
+    chunks: List[List[Dict[str, Any]]] = []
+    current_chunk: List[Dict[str, Any]] = []
+    current_char_count = 0
+
+    for w in words:
+        raw = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", "")).strip()
+        if not raw:
+            raw = w.get("text", "").strip()
+        if not raw:
+            continue
+        w_len = len(raw)
+
+        # 1. Break on silence pause (Remotion breakOnSilenceAfterMilliseconds)
+        is_silence_break = False
+        if current_chunk:
+            prev_end = current_chunk[-1].get("end", 0.0)
+            curr_start = w.get("start", 0.0)
+            if (curr_start - prev_end) >= silence_break_sec:
+                is_silence_break = True
+
+        # 2. Character & word budget check (Remotion ensureMaxCharactersPerLine)
+        is_budget_exceeded = False
+        if current_chunk:
+            new_char_count = current_char_count + 1 + w_len
+            if len(current_chunk) >= max_words or new_char_count > max_chars:
+                is_budget_exceeded = True
+
+        if (is_silence_break or is_budget_exceeded) and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = [w]
+            current_char_count = w_len
+        else:
+            current_chunk.append(w)
+            current_char_count += (1 if current_char_count > 0 else 0) + w_len
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    # 3. Remotion preventOrphanWord pass: merge awkward 1-word hanging tails if space allows
+    if prevent_orphans and len(chunks) > 1:
+        optimized: List[List[Dict[str, Any]]] = []
+        for ch in chunks:
+            if len(ch) == 1 and optimized:
+                prev_ch = optimized[-1]
+                prev_len = sum(len(w.get("text", "")) for w in prev_ch) + len(prev_ch) - 1
+                ch_len = len(ch[0].get("text", ""))
+                gap = ch[0].get("start", 0.0) - prev_ch[-1].get("end", 0.0)
+                if gap < silence_break_sec and (prev_len + 1 + ch_len) <= (max_chars + 4):
+                    prev_ch.append(ch[0])
+                    continue
+            optimized.append(ch)
+        chunks = optimized
+
+    return chunks
+
+
 def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = True) -> str:
     """
-    Renders a stunning, pixel-perfect rounded pill badge with:
+    Renders a stunning, ultra-crisp streamer pill badge with:
+    - 2X supersampling with Lanczos downscaling for perfectly smooth curves and text
     - True color emojis (using Segoe UI Emoji)
-    - Bold, modern typography (Segoe UI Bold)
-    - Translucent dark glass pill with glowing red/pink border
+    - Bold, modern typography (Segoe UI Bold / Arial Bold)
+    - Motionmaxxing-inspired dark glass pill with glowing neon borders
+    - Streamer platform badge highlights
     """
     from PIL import Image, ImageDraw, ImageFont
-    import re
 
     text = text.strip()
     emoji_part = ""
@@ -558,11 +645,14 @@ def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = Tr
     scale = 1.35 if is_vertical else 1.10
     font_size = int(36 * scale)
 
-    # Resolve fonts with safe fallbacks
+    # 2X supersampling factor for razor-sharp rendering
+    ss = 2
+    ss_font_size = font_size * ss
+
     emoji_font = None
     if os.path.exists("C:/Windows/Fonts/seguiemj.ttf"):
         try:
-            emoji_font = ImageFont.truetype("C:/Windows/Fonts/seguiemj.ttf", int(font_size * 1.15))
+            emoji_font = ImageFont.truetype("C:/Windows/Fonts/seguiemj.ttf", int(ss_font_size * 1.12))
         except Exception:
             emoji_font = None
 
@@ -570,7 +660,7 @@ def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = Tr
     for fp in ["C:/Windows/Fonts/segoeuib.ttf", "C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/arial.ttf"]:
         if os.path.exists(fp):
             try:
-                text_font = ImageFont.truetype(fp, font_size)
+                text_font = ImageFont.truetype(fp, ss_font_size)
                 break
             except Exception:
                 continue
@@ -586,44 +676,65 @@ def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = Tr
     if emoji_part:
         try:
             bbox_e = draw_d.textbbox((0, 0), emoji_part, font=emoji_font, embedded_color=True)
-            emoji_w = bbox_e[2] - bbox_e[0] + int(14 * scale)
+            emoji_w = bbox_e[2] - bbox_e[0] + int(14 * scale * ss)
         except Exception:
             bbox_e = draw_d.textbbox((0, 0), emoji_part, font=text_font)
-            emoji_w = bbox_e[2] - bbox_e[0] + int(14 * scale)
+            emoji_w = bbox_e[2] - bbox_e[0] + int(14 * scale * ss)
 
     bbox_t = draw_d.textbbox((0, 0), rest_text, font=text_font)
     text_w = bbox_t[2] - bbox_t[0]
-    text_h = max(bbox_t[3] - bbox_t[1], int(font_size * 1.15))
+    text_h = max(bbox_t[3] - bbox_t[1], int(ss_font_size * 1.15))
 
-    pad_x = int(28 * scale)
-    pad_y = int(14 * scale)
+    pad_x = int(28 * scale * ss)
+    pad_y = int(14 * scale * ss)
     total_w = emoji_w + text_w + pad_x * 2
     total_h = text_h + pad_y * 2
 
-    img = Image.new("RGBA", (total_w, total_h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
+    # Draw at 2X resolution
+    img_ss = Image.new("RGBA", (total_w, total_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img_ss)
 
     radius = total_h // 2
-    # Translucent dark glass pill with subtle glowing border
+
+    # Streamer neon accent border color:
+    # If twitch-like: Purple. If heart/like: Rose. If fire: Orange.
+    border_color = (244, 63, 94, 230)  # Rose neon default
+    lower_text = text.lower()
+    if "twitch" in lower_text:
+        border_color = (145, 70, 255, 240)
+    elif "🔥" in text or "fuego" in lower_text:
+        border_color = (251, 146, 60, 240)
+    elif "🔔" in text or "youtube" in lower_text:
+        border_color = (239, 68, 68, 240)
+
+    # Dark translucent glass pill with crisp glowing border
     draw.rounded_rectangle(
-        [(1, 1), (total_w - 2, total_h - 2)],
+        [(2, 2), (total_w - 3, total_h - 3)],
         radius=radius,
-        fill=(22, 22, 26, 230),
-        outline=(244, 63, 94, 210),
-        width=max(2, int(2.5 * scale))
+        fill=(16, 16, 22, 235),
+        outline=border_color,
+        width=max(3, int(2.5 * scale * ss))
     )
 
     cur_x = pad_x
     if emoji_part:
         try:
-            draw.text((cur_x, pad_y - int(2 * scale)), emoji_part, font=emoji_font, embedded_color=True)
+            draw.text((cur_x, pad_y - int(3 * scale * ss)), emoji_part, font=emoji_font, embedded_color=True)
         except Exception:
-            draw.text((cur_x, pad_y - int(2 * scale)), emoji_part, font=text_font, fill=(255, 255, 255, 255))
+            draw.text((cur_x, pad_y - int(3 * scale * ss)), emoji_part, font=text_font, fill=(255, 255, 255, 255))
         cur_x += emoji_w
 
     draw.text((cur_x, pad_y), rest_text, font=text_font, fill=(255, 255, 255, 255))
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    img.save(output_path, "PNG")
+
+    # Downscale smoothly to 1X with Lanczos for flawless anti-aliasing
+    final_w = max(1, total_w // ss)
+    final_h = max(1, total_h // ss)
+    img_final = img_ss.resize((final_w, final_h), Image.Resampling.LANCZOS)
+
+    out_dir = os.path.dirname(output_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    img_final.save(output_path, "PNG")
     return output_path
 
 
@@ -645,8 +756,6 @@ def generate_ass_subtitles(
     is_vertical = (aspect_ratio == "9:16")
     res_x = 1080 if is_vertical else 1920
     res_y = 1920 if is_vertical else 1080
-    # Clean font size that stays comfortably within screen boundaries
-    font_size = 50 if is_vertical else 44
 
     # Alignment and vertical margin
     # ASS alignments: 2 = Bottom Center, 5 = Middle Center, 8 = Top Center
@@ -660,39 +769,89 @@ def generate_ass_subtitles(
         alignment = 2
         margin_v = 180 if is_vertical else 90
 
-    # Colors in ASS: &HAABBGGRR& (ABGR hex format)
-    primary_color = hex_to_ass_color(primary_color_hex, "&H00FFFFFF&") if primary_color_hex else "&H00FFFFFF&"
-    highlight_color = hex_to_ass_color(highlight_color_hex, "&H0015CCFA&") if highlight_color_hex else "&H0015CCFA&"  # Yellow pop
+    # Style defaults
+    font_name = "Arial Black"
+    font_size = 50 if is_vertical else 44
+    bold = -1
+    italic = 0
+    spacing = 1
     border_style = 1  # 1 = outline + shadow, 3 = opaque box
     outline_size = 4 if is_vertical else 3
-    shadow_size = 2 if is_vertical else 2
+    shadow_size = 2
+    outline_colour = "&H00000000&"
     back_colour = "&H80000000&"
 
+    # Default colors (ABGR hex format)
+    primary_color = hex_to_ass_color(primary_color_hex, "&H00FFFFFF&") if primary_color_hex else "&H00FFFFFF&"
+    highlight_color = hex_to_ass_color(highlight_color_hex, "&H0015CCFA&") if highlight_color_hex else "&H0015CCFA&"  # Yellow pop
+    hero_color = "&H003C92FB&"  # Fire orange for climax words
+
+    # Preset configurations (HyperFrames + Remotion)
     if caption_style == "tiktok-karaoke":
+        font_name = "Arial Black"
+        outline_size = 5 if is_vertical else 4
+        shadow_size = 2
+    elif caption_style == "loud-viral":
+        # HyperFrames Loud: Ultra-bold condensed, massive 3D stroke, neon yellow/lime highlight
+        font_name = "Impact"
+        font_size = 54 if is_vertical else 48
+        spacing = 2
+        outline_size = 6 if is_vertical else 5
+        shadow_size = 3
         if not highlight_color_hex:
-            highlight_color = "&H0015CCFA&"
+            highlight_color = "&H0015CCFA&"  # Neon yellow
+        hero_color = "&H003CD4FB&"  # Bright flame
+    elif caption_style == "arcade-retro":
+        # HyperFrames Retro Gaming HUD: Tech cyan with hot pink / magenta glow
+        font_name = "Trebuchet MS"
+        font_size = 48 if is_vertical else 42
+        outline_colour = "&H009948EC&"  # Hot pink outline
+        outline_size = 4 if is_vertical else 3
+        shadow_size = 0
         if not primary_color_hex:
             primary_color = "&H00FFFFFF&"
+        if not highlight_color_hex:
+            highlight_color = "&H00D4B606&"  # Neon cyan active
+    elif caption_style == "cyber-terminal":
+        # HyperFrames Terminal Hacker: Monospace phosphor matrix green with cyan active
+        font_name = "Consolas"
+        font_size = 46 if is_vertical else 40
+        primary_color = "&H0081B910&"  # Phosphor green
+        outline_colour = "&H00102008&"
+        outline_size = 2
+        shadow_size = 1
+        if not highlight_color_hex:
+            highlight_color = "&H00FAEE38&"  # Electric cyan active
+    elif caption_style == "clean-editorial":
+        # HyperFrames Clean Editorial: Modern sans-serif, clean white, soft multilayer shadow
+        font_name = "Segoe UI"
+        font_size = 48 if is_vertical else 42
+        primary_color = "&H00FFFFFF&"
+        outline_colour = "&H001E1E1E&"
+        outline_size = 1
+        shadow_size = 3
+        back_colour = "&H90000000&"
+        if not highlight_color_hex:
+            highlight_color = "&H0047E0FD&"  # Warm gold accent
     elif caption_style == "modern-box":
-        if not primary_color_hex:
-            primary_color = "&H00FFFFFF&"
+        font_name = "Arial"
         border_style = 3
         outline_size = 2
         shadow_size = 0
         back_colour = "&H99000000&"
     elif caption_style == "classic-outline":
+        font_name = "Arial Black"
         if not primary_color_hex:
             primary_color = "&H0015CCFA&"
         outline_size = 5 if is_vertical else 4
         shadow_size = 2
     elif caption_style == "minimal-shadow":
-        if not primary_color_hex:
-            primary_color = "&H00FFFFFF&"
+        font_name = "Segoe UI"
         outline_size = 1
         shadow_size = 2
 
-    # WrapStyle: 2 forces libass to NEVER wrap onto a second line
-    # MarginL: 60, MarginR: 60 guarantees generous safety margins from screen edges
+    # WrapStyle: 2 forces libass to NEVER wrap onto an uncontrolled second line
+    # MarginL: 70, MarginR: 70 guarantees safety margins from 9:16 borders
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {res_x}
@@ -702,7 +861,7 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: AutoStyle,Arial Black,{font_size},{primary_color},&H000000FF,&H00000000,{back_colour},-1,0,0,0,100,100,1,0,{border_style},{outline_size},{shadow_size},{alignment},60,60,{margin_v},1
+Style: AutoStyle,{font_name},{font_size},{primary_color},&H000000FF,{outline_colour},{back_colour},{bold},{italic},0,0,100,100,{spacing},0,{border_style},{outline_size},{shadow_size},{alignment},70,70,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -711,35 +870,23 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     dialogue_lines = []
 
     if caption_style != "none":
-        # Smart chunking based on word & character count to guarantee exactly 1 single line within margins!
+        # Remotion smart chunking with silence detection and orphan prevention
         if single_line:
-            max_words = 2 if is_vertical else 3
-            max_chars = 14 if is_vertical else 20
+            max_words = 3 if is_vertical else 4
+            max_chars = 18 if is_vertical else 26
         else:
-            max_words = 4 if is_vertical else 5
-            max_chars = 26 if is_vertical else 38
+            max_words = 5 if is_vertical else 7
+            max_chars = 32 if is_vertical else 46
 
-        chunks = []
-        current_chunk = []
-        current_char_count = 0
+        chunks = chunk_words_remotion(
+            words=clip_words,
+            max_words=max_words,
+            max_chars=max_chars,
+            silence_break_sec=0.35,
+            prevent_orphans=True
+        )
 
-        for w in clip_words:
-            raw = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", "")).strip()
-            if not raw:
-                raw = w.get("text", "").strip()
-            if not raw:
-                continue
-            w_len = len(raw)
-            if current_chunk and (len(current_chunk) >= max_words or (current_char_count + 1 + w_len) > max_chars):
-                chunks.append(current_chunk)
-                current_chunk = [w]
-                current_char_count = w_len
-            else:
-                current_chunk.append(w)
-                current_char_count += (1 if current_char_count > 0 else 0) + w_len
-
-        if current_chunk:
-            chunks.append(current_chunk)
+        supports_karaoke = caption_style in ("tiktok-karaoke", "loud-viral", "arcade-retro", "cyber-terminal", "clean-editorial")
 
         for chunk in chunks:
             chunk_start = max(0.0, chunk[0]["start"] - start_sec)
@@ -747,16 +894,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if chunk_end <= chunk_start:
                 continue
 
-            # Calculate total raw characters to dynamically downscale font if any word is exceptionally long
+            # Dynamically downscale font if line exceeds safe character budget
             plain_len = sum(len(w.get("text", "").strip()) for w in chunk) + max(0, len(chunk) - 1)
-            max_safe_len = 13 if is_vertical else 18
+            max_safe_len = 16 if is_vertical else 22
             if plain_len > max_safe_len:
-                line_fs = max(34 if is_vertical else 30, int(font_size - (plain_len - max_safe_len) * 2))
+                line_fs = max(32 if is_vertical else 28, int(font_size - (plain_len - max_safe_len) * 1.8))
                 fs_tag = f"{{\\fs{line_fs}}}"
             else:
                 fs_tag = ""
 
-            if caption_style == "tiktok-karaoke":
+            if supports_karaoke:
                 for w_idx, active_w in enumerate(chunk):
                     w_start = max(chunk_start, active_w["start"] - start_sec)
                     w_end = min(chunk_end, active_w["end"] - start_sec)
@@ -765,18 +912,35 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
                     words_text = []
                     for idx, w in enumerate(chunk):
-                        raw_w = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", "")).upper()
+                        raw_w = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", ""))
                         if not raw_w:
-                            raw_w = w.get("text", "").strip().upper()
+                            raw_w = w.get("text", "").strip()
                         if not raw_w:
                             continue
-                        if idx == w_idx:
-                            # Pop animation (118% scale) & user-selected highlight color
-                            words_text.append(f"{{\\fscx118\\fscy118\\c{highlight_color}}}{raw_w}{{\\rAutoStyle\\fscx100\\fscy100{fs_tag}}}")
-                        else:
-                            words_text.append(raw_w)
 
-                    text_line = " ".join(words_text)
+                        # Text case formatting
+                        display_w = raw_w.upper() if caption_style in ("tiktok-karaoke", "loud-viral", "arcade-retro") else raw_w
+
+                        if idx == w_idx:
+                            # Active word pop
+                            if is_hero_word(raw_w):
+                                # Hero Word: extra pop (125%) with hero fire/accent color
+                                words_text.append(f"{{\\fscx125\\fscy125\\c{hero_color}}}{display_w}{{\\rAutoStyle\\fscx100\\fscy100{fs_tag}}}")
+                            elif caption_style == "cyber-terminal":
+                                # Cyber terminal bracket prompt
+                                words_text.append(f"{{\\c{highlight_color}}}[{display_w}]{{\\rAutoStyle{fs_tag}}}")
+                            else:
+                                pop_scale = 122 if caption_style == "loud-viral" else (108 if caption_style == "clean-editorial" else 118)
+                                words_text.append(f"{{\\fscx{pop_scale}\\fscy{pop_scale}\\c{highlight_color}}}{display_w}{{\\rAutoStyle\\fscx100\\fscy100{fs_tag}}}")
+                        else:
+                            # Inactive word
+                            if is_hero_word(raw_w) and caption_style == "loud-viral":
+                                words_text.append(f"{{\\c{hero_color}}}{display_w}{{\\rAutoStyle{fs_tag}}}")
+                            else:
+                                words_text.append(display_w)
+
+                    prefix = "> " if caption_style == "cyber-terminal" else ""
+                    text_line = prefix + " ".join(words_text)
                     if text_line.strip():
                         dialogue_lines.append(
                             f"Dialogue: 0,{format_ass_time(w_start)},{format_ass_time(w_end)},AutoStyle,,0,0,0,,{fs_tag}{text_line}"
@@ -784,8 +948,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             else:
                 clean_chunk = []
                 for w in chunk:
-                    c = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", "")).upper()
-                    clean_chunk.append(c if c else w.get("text", "").strip().upper())
+                    c = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", ""))
+                    txt = c if c else w.get("text", "").strip()
+                    clean_chunk.append(txt.upper() if caption_style != "minimal-shadow" else txt)
                 text_line = " ".join(clean_chunk)
                 if text_line.strip():
                     dialogue_lines.append(
@@ -836,22 +1001,28 @@ def render_flat_clip(
             is_vertical = (aspect_ratio == "9:16")
             crop_prep = "[0:v]crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)',scale=1080:1920,setsar=1[vbase]; " if is_vertical else "[0:v]null[vbase]; "
 
-            # Calculate appearances:
-            # 1. At start (around second 2.5 - 5.8)
-            # 2. Near the end (last ~4 seconds)
-            if dur_sec >= 8.0:
-                t1_start = 2.5
-                t1_end = min(t1_start + 3.5, dur_sec - 4.5)
-                t2_start = max(t1_end + 1.0, dur_sec - 4.2)
-                t2_end = dur_sec - 0.5
-            elif dur_sec >= 5.0:
+            # Motionmaxxing calibrated retention timing:
+            # 1. Appears at 3.0s (after opening hook captivates audience)
+            # 2. Lasts exactly 2.0s, leaving the climax unobstructed
+            # 3. For very long clips (>= 20s), an optional short outro CTA
+            if dur_sec >= 20.0:
+                t1_start = 3.0
+                t1_end = 5.0
+                t2_start = max(t1_end + 3.0, dur_sec - 3.0)
+                t2_end = dur_sec - 0.8
+            elif dur_sec >= 6.5:
+                t1_start = 3.0
+                t1_end = 5.0
+                t2_start = None
+                t2_end = None
+            elif dur_sec >= 4.0:
                 t1_start = 1.2
-                t1_end = 3.5
-                t2_start = max(3.8, dur_sec - 2.5)
-                t2_end = dur_sec - 0.3
+                t1_end = 3.2
+                t2_start = None
+                t2_end = None
             else:
                 t1_start = 0.5
-                t1_end = max(1.0, dur_sec - 0.3)
+                t1_end = max(1.2, dur_sec - 0.2)
                 t2_start = None
                 t2_end = None
 
@@ -866,18 +1037,26 @@ def render_flat_clip(
                 normal_b = 140 if is_vertical else 70
                 y_expr = f"H-h-{margin_b}" if has_sub_collision else f"H-h-{normal_b}"
 
+            # Motionmaxxing dynamic scaling animation:
+            # "Nothing grows from zero": Oversized entry (1.35x) decelerating smoothly (softLand) to 1.0x over 0.35s
+            scale_anim_1 = f"scale=eval=frame:w='iw*(1.0+0.35*pow(max(0,1.0-(t-{t1_start:.2f})/0.35),2))':h=-1"
+            fade_anim_1 = f"fade=in:st={t1_start:.2f}:d=0.15:alpha=1,fade=out:st={t1_end-0.3:.2f}:d=0.3:alpha=1"
+
             if t2_start is not None and t2_end is not None:
+                scale_anim_2 = f"scale=eval=frame:w='iw*(1.0+0.35*pow(max(0,1.0-(t-{t2_start:.2f})/0.35),2))':h=-1"
+                fade_anim_2 = f"fade=in:st={t2_start:.2f}:d=0.15:alpha=1,fade=out:st={t2_end-0.3:.2f}:d=0.3:alpha=1"
+
                 fc = (
-                    f"[1:v]format=rgba,split=2[b1][b2]; "
-                    f"[b1]fade=in:st={t1_start:.2f}:d=0.3:alpha=1,fade=out:st={t1_end-0.3:.2f}:d=0.3:alpha=1[b1f]; "
-                    f"[b2]fade=in:st={t2_start:.2f}:d=0.3:alpha=1,fade=out:st={t2_end-0.3:.2f}:d=0.3:alpha=1[b2f]; "
+                    f"[1:v]format=rgba,split=2[b1raw][b2raw]; "
+                    f"[b1raw]{scale_anim_1},{fade_anim_1}[b1f]; "
+                    f"[b2raw]{scale_anim_2},{fade_anim_2}[b2f]; "
                     f"{crop_prep}"
                     f"[vbase][b1f]overlay=(W-w)/2:{y_expr}:shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vmid]; "
                     f"[vmid][b2f]overlay=(W-w)/2:{y_expr}:shortest=1:enable='between(t,{t2_start:.2f},{t2_end:.2f})'[vpost_cta]"
                 )
             else:
                 fc = (
-                    f"[1:v]format=rgba,fade=in:st={t1_start:.2f}:d=0.3:alpha=1,fade=out:st={t1_end-0.3:.2f}:d=0.3:alpha=1[b1f]; "
+                    f"[1:v]format=rgba,{scale_anim_1},{fade_anim_1}[b1f]; "
                     f"{crop_prep}"
                     f"[vbase][b1f]overlay=(W-w)/2:{y_expr}:shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vpost_cta]"
                 )

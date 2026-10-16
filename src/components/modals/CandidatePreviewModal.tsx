@@ -177,6 +177,165 @@ export function CandidatePreviewModal({
 
   const absoluteCurrentTime = isExported ? currentPlayTime : trimStart + currentPlayTime;
 
+  const renderCtaBadgePreview = () => {
+    const isTwitch = ctaText.toLowerCase().includes("twitch");
+    const isFire = ctaText.includes("🔥") || ctaText.toLowerCase().includes("fuego");
+    const isYoutube = ctaText.includes("🔔") || ctaText.toLowerCase().includes("youtube");
+
+    let borderColor = "rgba(244, 63, 94, 0.85)";
+    let shadowColor = "rgba(244, 63, 94, 0.35)";
+
+    if (isTwitch) {
+      borderColor = "rgba(145, 70, 255, 0.85)";
+      shadowColor = "rgba(145, 70, 255, 0.4)";
+    } else if (isFire) {
+      borderColor = "rgba(251, 146, 60, 0.85)";
+      shadowColor = "rgba(251, 146, 60, 0.4)";
+    } else if (isYoutube) {
+      borderColor = "rgba(239, 68, 68, 0.85)";
+      shadowColor = "rgba(239, 68, 68, 0.4)";
+    }
+
+    return (
+      <div
+        className="motionmaxxing-badge"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          background: "rgba(16, 16, 22, 0.92)",
+          border: `1.5px solid ${borderColor}`,
+          boxShadow: `0 4px 14px ${shadowColor}, 0 2px 6px rgba(0,0,0,0.8)`,
+          padding: "5px 14px",
+          borderRadius: "9999px",
+          color: "#ffffff",
+          fontSize: "0.78rem",
+          fontWeight: 700,
+          letterSpacing: "0.02em",
+          zIndex: 2,
+        }}
+      >
+        <span style={{ display: "inline-block" }}>{ctaText}</span>
+      </div>
+    );
+  };
+
+  const renderCaptionPreview = () => {
+    switch (captionStyle) {
+      case "loud-viral":
+        return (
+          <div style={{ textAlign: "center", fontFamily: "Impact, 'Arial Black', sans-serif", fontSize: "1.08rem", textTransform: "uppercase", letterSpacing: "0.04em", userSelect: "none" }}>
+            <span style={{ color: "#ffffff", textShadow: "-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 4px 10px rgba(0,0,0,0.9)", marginRight: "6px" }}>
+              ESTA
+            </span>
+            <span
+              style={{
+                display: "inline-block",
+                color: captionHighlight || "#facc15",
+                transform: "scale(1.22)",
+                transformOrigin: "center bottom",
+                textShadow: "-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 5px 12px rgba(0,0,0,1)",
+                fontWeight: 900,
+                marginRight: "6px",
+              }}
+            >
+              JUGADA
+            </span>
+            <span style={{ color: "#fb923c", fontWeight: 900, textShadow: "-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 4px 10px rgba(0,0,0,0.9)" }}>
+              ÉPICA!
+            </span>
+          </div>
+        );
+      case "arcade-retro":
+        return (
+          <div style={{ textAlign: "center", fontFamily: "'Trebuchet MS', 'Arial Black', sans-serif", fontSize: "1.02rem", textTransform: "uppercase", letterSpacing: "0.03em", userSelect: "none" }}>
+            <span style={{ color: "#ffffff", textShadow: "-2px -2px 0 #ec4899, 2px -2px 0 #ec4899, -2px 2px 0 #ec4899, 2px 2px 0 #ec4899", marginRight: "6px" }}>
+              ESTA
+            </span>
+            <span
+              style={{
+                display: "inline-block",
+                color: "#06b6d4",
+                transform: "scale(1.18)",
+                transformOrigin: "center bottom",
+                textShadow: "-2px -2px 0 #ec4899, 2px -2px 0 #ec4899, -2px 2px 0 #ec4899, 2px 2px 0 #ec4899, 0 0 10px #06b6d4",
+                fontWeight: 900,
+                marginRight: "6px",
+              }}
+            >
+              JUGADA
+            </span>
+            <span style={{ color: "#ffffff", textShadow: "-2px -2px 0 #ec4899, 2px -2px 0 #ec4899, -2px 2px 0 #ec4899, 2px 2px 0 #ec4899" }}>
+              ÉPICA!
+            </span>
+          </div>
+        );
+      case "cyber-terminal":
+        return (
+          <div style={{ textAlign: "center", fontFamily: "Consolas, 'Courier New', monospace", fontSize: "0.92rem", letterSpacing: "0.02em", color: "#10b981", background: "rgba(10, 20, 15, 0.85)", padding: "4px 12px", borderRadius: "4px", border: "1px solid #10b981", boxShadow: "0 0 10px rgba(16, 185, 129, 0.3)" }}>
+            &gt; ESTA <span style={{ color: "#38bdf8", fontWeight: 700 }}>[JUGADA]</span> ÉPICA!
+          </div>
+        );
+      case "clean-editorial":
+        return (
+          <div style={{ textAlign: "center", fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif", fontSize: "0.96rem", fontWeight: 600, letterSpacing: "0.01em", userSelect: "none" }}>
+            <span style={{ color: "#ffffff", textShadow: "0 2px 6px rgba(0,0,0,0.8)", marginRight: "5px" }}>
+              Esta
+            </span>
+            <span style={{ color: captionHighlight || "#fde047", textShadow: "0 2px 8px rgba(0,0,0,0.9)", fontWeight: 700, marginRight: "5px" }}>
+              jugada
+            </span>
+            <span style={{ color: "#ffffff", textShadow: "0 2px 6px rgba(0,0,0,0.8)" }}>
+              épica!
+            </span>
+          </div>
+        );
+      case "modern-box":
+        return (
+          <div style={{ background: "rgba(0, 0, 0, 0.82)", padding: "4px 12px", borderRadius: "6px", color: captionColor, fontFamily: "Arial, sans-serif", fontWeight: 700, fontSize: "0.88rem", letterSpacing: "0.02em", textTransform: "uppercase", border: "1px solid rgba(255, 255, 255, 0.15)" }}>
+            ESTA <span style={{ color: captionHighlight }}>JUGADA</span> ÉPICA!
+          </div>
+        );
+      case "classic-outline":
+        return (
+          <div style={{ color: captionHighlight, fontFamily: "'Arial Black', Impact, sans-serif", fontWeight: 900, fontSize: "1.02rem", textTransform: "uppercase", letterSpacing: "0.03em", textShadow: "-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 3px 6px #000" }}>
+            ESTA JUGADA ÉPICA!
+          </div>
+        );
+      case "minimal-shadow":
+        return (
+          <div style={{ color: captionColor, fontFamily: "system-ui, -apple-system, sans-serif", fontWeight: 600, fontSize: "0.92rem", textShadow: "0 2px 6px rgba(0, 0, 0, 0.9)", letterSpacing: "0.02em" }}>
+            Esta jugada épica!
+          </div>
+        );
+      case "tiktok-karaoke":
+      default:
+        return (
+          <div style={{ textAlign: "center", fontFamily: "'Arial Black', Impact, sans-serif", fontSize: "1.02rem", textTransform: "uppercase", letterSpacing: "0.03em", userSelect: "none" }}>
+            <span style={{ color: captionColor, textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.8)", marginRight: "6px" }}>
+              ESTA
+            </span>
+            <span
+              style={{
+                display: "inline-block",
+                color: captionHighlight,
+                transform: "scale(1.16)",
+                transformOrigin: "center bottom",
+                textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 4px 8px rgba(0,0,0,0.9)",
+                fontWeight: 900,
+                marginRight: "6px",
+              }}
+            >
+              JUGADA
+            </span>
+            <span style={{ color: captionColor, textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.8)" }}>
+              ÉPICA!
+            </span>
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="style-modal-overlay" onClick={onClose}>
       <div className="style-modal" style={{ maxWidth: "720px", maxHeight: "92vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
@@ -512,7 +671,11 @@ export function CandidatePreviewModal({
                         cursor: "pointer",
                       }}
                     >
-                      <option value="tiktok-karaoke">✨ TikTok Karaoke (Palabra Resaltada)</option>
+                      <option value="loud-viral">🔥 Loud Viral (HyperFrames Impact 3D)</option>
+                      <option value="arcade-retro">🎮 Arcade Retro (Gaming HUD Neón)</option>
+                      <option value="cyber-terminal">💻 Cyber Terminal (Matrix Monospace)</option>
+                      <option value="clean-editorial">✨ Clean Editorial (Elegante & Suave)</option>
+                      <option value="tiktok-karaoke">🟡 TikTok Karaoke (Palabra Resaltada)</option>
                       <option value="modern-box">⬛ Caja Moderna (Fondo Oscuro)</option>
                       <option value="classic-outline">🟨 Clásico Contorno (Amarillo y Negro)</option>
                       <option value="minimal-shadow">⬜ Minimalista (Blanco con Sombra)</option>
@@ -939,208 +1102,32 @@ export function CandidatePreviewModal({
                 </div>
 
                 {/* Insignia CTA Animada en Posición ARRIBA */}
-                {ctaEnabled && ctaPosition === "top" && (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      background: "rgba(24, 24, 27, 0.88)",
-                      border: "1px solid rgba(244, 63, 94, 0.45)",
-                      boxShadow: "0 4px 14px rgba(244, 63, 94, 0.25), 0 2px 6px rgba(0,0,0,0.6)",
-                      padding: "4px 12px",
-                      borderRadius: "9999px",
-                      color: "#ffffff",
-                      fontSize: "0.78rem",
-                      fontWeight: 700,
-                      letterSpacing: "0.02em",
-                      animation: "pulse 2s infinite ease-in-out",
-                      zIndex: 2,
-                    }}
-                  >
-                    <span style={{ display: "inline-block" }}>{ctaText}</span>
-                  </div>
-                )}
+                {ctaEnabled && ctaPosition === "top" && renderCtaBadgePreview()}
 
                 {/* Subtítulo si está ARRIBA */}
                 {burnSubtitles && captionPosition === "top" && (
                   <div style={{ marginTop: ctaEnabled && ctaPosition === "top" ? "4px" : "12px", zIndex: 1 }}>
-                    {captionStyle === "tiktok-karaoke" && (
-                      <div style={{ textAlign: "center", fontFamily: "'Arial Black', Impact, sans-serif", fontSize: "1.02rem", textTransform: "uppercase", letterSpacing: "0.03em", userSelect: "none" }}>
-                        <span style={{ color: captionColor, textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.8)", marginRight: "6px" }}>
-                          ESTA
-                        </span>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            color: captionHighlight,
-                            transform: "scale(1.16)",
-                            transformOrigin: "center bottom",
-                            textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 4px 8px rgba(0,0,0,0.9)",
-                            fontWeight: 900,
-                            marginRight: "6px",
-                          }}
-                        >
-                          JUGADA
-                        </span>
-                        <span style={{ color: captionColor, textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.8)" }}>
-                          ÉPICA!
-                        </span>
-                      </div>
-                    )}
-                    {captionStyle === "modern-box" && (
-                      <div style={{ background: "rgba(0, 0, 0, 0.82)", padding: "4px 12px", borderRadius: "6px", color: captionColor, fontFamily: "Arial, sans-serif", fontWeight: 700, fontSize: "0.88rem", letterSpacing: "0.02em", textTransform: "uppercase", border: "1px solid rgba(255, 255, 255, 0.15)" }}>
-                        ESTA <span style={{ color: captionHighlight }}>JUGADA</span> ÉPICA!
-                      </div>
-                    )}
-                    {captionStyle === "classic-outline" && (
-                      <div style={{ color: captionHighlight, fontFamily: "'Arial Black', Impact, sans-serif", fontWeight: 900, fontSize: "1.02rem", textTransform: "uppercase", letterSpacing: "0.03em", textShadow: "-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 3px 6px #000" }}>
-                        ESTA JUGADA ÉPICA!
-                      </div>
-                    )}
-                    {captionStyle === "minimal-shadow" && (
-                      <div style={{ color: captionColor, fontFamily: "system-ui, -apple-system, sans-serif", fontWeight: 600, fontSize: "0.92rem", textShadow: "0 2px 6px rgba(0, 0, 0, 0.9)", letterSpacing: "0.02em" }}>
-                        Esta jugada épica!
-                      </div>
-                    )}
+                    {renderCaptionPreview()}
                   </div>
                 )}
 
                 {/* Centro (Subtítulo y/o CTA) */}
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", margin: "auto 0", zIndex: 1 }}>
-                  {ctaEnabled && ctaPosition === "center" && (
-                    <div
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        background: "rgba(24, 24, 27, 0.88)",
-                        border: "1px solid rgba(244, 63, 94, 0.45)",
-                        boxShadow: "0 4px 14px rgba(244, 63, 94, 0.25), 0 2px 6px rgba(0,0,0,0.6)",
-                        padding: "4px 12px",
-                        borderRadius: "9999px",
-                        color: "#ffffff",
-                        fontSize: "0.78rem",
-                        fontWeight: 700,
-                        letterSpacing: "0.02em",
-                        animation: "pulse 2s infinite ease-in-out",
-                      }}
-                    >
-                      <span>{ctaText}</span>
-                    </div>
-                  )}
-
+                  {ctaEnabled && ctaPosition === "center" && renderCtaBadgePreview()}
                   {burnSubtitles && captionPosition === "center" && (
-                    <div>
-                      {captionStyle === "tiktok-karaoke" && (
-                        <div style={{ textAlign: "center", fontFamily: "'Arial Black', Impact, sans-serif", fontSize: "1.02rem", textTransform: "uppercase", letterSpacing: "0.03em", userSelect: "none" }}>
-                          <span style={{ color: captionColor, textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.8)", marginRight: "6px" }}>
-                            ESTA
-                          </span>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              color: captionHighlight,
-                              transform: "scale(1.16)",
-                              transformOrigin: "center bottom",
-                              textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 4px 8px rgba(0,0,0,0.9)",
-                              fontWeight: 900,
-                              marginRight: "6px",
-                            }}
-                          >
-                            JUGADA
-                          </span>
-                          <span style={{ color: captionColor, textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.8)" }}>
-                            ÉPICA!
-                          </span>
-                        </div>
-                      )}
-                      {captionStyle === "modern-box" && (
-                        <div style={{ background: "rgba(0, 0, 0, 0.82)", padding: "4px 12px", borderRadius: "6px", color: captionColor, fontFamily: "Arial, sans-serif", fontWeight: 700, fontSize: "0.88rem", letterSpacing: "0.02em", textTransform: "uppercase", border: "1px solid rgba(255, 255, 255, 0.15)" }}>
-                          ESTA <span style={{ color: captionHighlight }}>JUGADA</span> ÉPICA!
-                        </div>
-                      )}
-                      {captionStyle === "classic-outline" && (
-                        <div style={{ color: captionHighlight, fontFamily: "'Arial Black', Impact, sans-serif", fontWeight: 900, fontSize: "1.02rem", textTransform: "uppercase", letterSpacing: "0.03em", textShadow: "-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 3px 6px #000" }}>
-                          ESTA JUGADA ÉPICA!
-                        </div>
-                      )}
-                      {captionStyle === "minimal-shadow" && (
-                        <div style={{ color: captionColor, fontFamily: "system-ui, -apple-system, sans-serif", fontWeight: 600, fontSize: "0.92rem", textShadow: "0 2px 6px rgba(0, 0, 0, 0.9)", letterSpacing: "0.02em" }}>
-                          Esta jugada épica!
-                        </div>
-                      )}
-                    </div>
+                    <div>{renderCaptionPreview()}</div>
                   )}
                 </div>
 
                 {/* Subtítulo si está ABAJO */}
                 {burnSubtitles && captionPosition === "bottom" && (
                   <div style={{ marginBottom: ctaEnabled && ctaPosition === "bottom" ? "4px" : "4px", zIndex: 1 }}>
-                    {captionStyle === "tiktok-karaoke" && (
-                      <div style={{ textAlign: "center", fontFamily: "'Arial Black', Impact, sans-serif", fontSize: "1.02rem", textTransform: "uppercase", letterSpacing: "0.03em", userSelect: "none" }}>
-                        <span style={{ color: captionColor, textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.8)", marginRight: "6px" }}>
-                          ESTA
-                        </span>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            color: captionHighlight,
-                            transform: "scale(1.16)",
-                            transformOrigin: "center bottom",
-                            textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 4px 8px rgba(0,0,0,0.9)",
-                            fontWeight: 900,
-                            marginRight: "6px",
-                          }}
-                        >
-                          JUGADA
-                        </span>
-                        <span style={{ color: captionColor, textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.8)" }}>
-                          ÉPICA!
-                        </span>
-                      </div>
-                    )}
-                    {captionStyle === "modern-box" && (
-                      <div style={{ background: "rgba(0, 0, 0, 0.82)", padding: "4px 12px", borderRadius: "6px", color: captionColor, fontFamily: "Arial, sans-serif", fontWeight: 700, fontSize: "0.88rem", letterSpacing: "0.02em", textTransform: "uppercase", border: "1px solid rgba(255, 255, 255, 0.15)" }}>
-                        ESTA <span style={{ color: captionHighlight }}>JUGADA</span> ÉPICA!
-                      </div>
-                    )}
-                    {captionStyle === "classic-outline" && (
-                      <div style={{ color: captionHighlight, fontFamily: "'Arial Black', Impact, sans-serif", fontWeight: 900, fontSize: "1.02rem", textTransform: "uppercase", letterSpacing: "0.03em", textShadow: "-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 3px 6px #000" }}>
-                        ESTA JUGADA ÉPICA!
-                      </div>
-                    )}
-                    {captionStyle === "minimal-shadow" && (
-                      <div style={{ color: captionColor, fontFamily: "system-ui, -apple-system, sans-serif", fontWeight: 600, fontSize: "0.92rem", textShadow: "0 2px 6px rgba(0, 0, 0, 0.9)", letterSpacing: "0.02em" }}>
-                        Esta jugada épica!
-                      </div>
-                    )}
+                    {renderCaptionPreview()}
                   </div>
                 )}
 
                 {/* Insignia CTA Animada en Posición ABAJO */}
-                {ctaEnabled && ctaPosition === "bottom" && (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      background: "rgba(24, 24, 27, 0.88)",
-                      border: "1px solid rgba(244, 63, 94, 0.45)",
-                      boxShadow: "0 4px 14px rgba(244, 63, 94, 0.25), 0 2px 6px rgba(0,0,0,0.6)",
-                      padding: "4px 12px",
-                      borderRadius: "9999px",
-                      color: "#ffffff",
-                      fontSize: "0.78rem",
-                      fontWeight: 700,
-                      letterSpacing: "0.02em",
-                      animation: "pulse 2s infinite ease-in-out",
-                      zIndex: 2,
-                    }}
-                  >
-                    <span>{ctaText}</span>
-                  </div>
-                )}
+                {ctaEnabled && ctaPosition === "bottom" && renderCtaBadgePreview()}
               </div>
             </div>
           )}
