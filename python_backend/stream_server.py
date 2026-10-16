@@ -28,14 +28,21 @@ class VideoStreamHandler(BaseHTTPRequestHandler):
             content_type, _ = mimetypes.guess_type(file_path)
             content_type = content_type or "video/mp4"
 
+            try:
+                self.request.settimeout(5.0)
+            except Exception:
+                pass
+
             range_header = self.headers.get("Range", None)
             if range_header:
                 match = re.search(r"bytes=(\d+)-(\d*)", range_header)
                 if match:
                     start = int(match.group(1))
-                    end = int(match.group(2)) if match.group(2) else file_size - 1
-                    end = min(end, file_size - 1)
-                    length = end - start + 1
+                    requested_end = int(match.group(2)) if match.group(2) else file_size - 1
+                    # Cap single range chunk to 4MB max so seeking/aborting never leaves server threads stuck
+                    max_range_chunk = 4 * 1024 * 1024
+                    end = min(requested_end, start + max_range_chunk - 1, file_size - 1)
+                    length = max(0, end - start + 1)
 
                     self.send_response(206)
                     self.send_header("Content-Type", content_type)
@@ -43,7 +50,7 @@ class VideoStreamHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Length", str(length))
                     self.send_header("Accept-Ranges", "bytes")
                     self.send_header("Access-Control-Allow-Origin", "*")
-                    self.send_header("Connection", "keep-alive")
+                    self.send_header("Connection", "close")
                     self.end_headers()
 
                     with open(file_path, "rb") as f:
@@ -56,7 +63,7 @@ class VideoStreamHandler(BaseHTTPRequestHandler):
                                 break
                             try:
                                 self.wfile.write(data)
-                            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+                            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError, TimeoutError):
                                 break
                             bytes_to_send -= len(data)
                     return

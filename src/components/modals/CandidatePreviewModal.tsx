@@ -157,10 +157,6 @@ export function CandidatePreviewModal({
     const time = videoRef.current.currentTime;
     if (isExported) {
       setCurrentPlayTime(time);
-      if (videoRef.current.duration && time >= videoRef.current.duration - 0.15) {
-        videoRef.current.currentTime = 0;
-        videoRef.current.play().catch(() => {});
-      }
     } else {
       const rel = Math.max(0, Math.min(clipDuration, time - trimStart));
       setCurrentPlayTime(rel);
@@ -227,12 +223,12 @@ export function CandidatePreviewModal({
           alignItems: "center",
           gap: "5px",
           background: "rgba(16, 16, 22, 0.92)",
-          border: `1.2px solid ${borderColor}`,
-          boxShadow: `0 3px 10px ${shadowColor}, 0 2px 4px rgba(0,0,0,0.8)`,
-          padding: "3px 11px",
+          border: `1.4px solid ${borderColor}`,
+          boxShadow: `0 3px 12px ${shadowColor}, 0 2px 5px rgba(0,0,0,0.8)`,
+          padding: "4px 13px",
           borderRadius: "9999px",
           color: "#ffffff",
-          fontSize: "0.72rem",
+          fontSize: "0.76rem",
           fontWeight: 700,
           letterSpacing: "0.02em",
           zIndex: 2,
@@ -416,12 +412,19 @@ export function CandidatePreviewModal({
                 exportedPath || detail.project.sourcePath
               )}`}
               autoPlay
+              loop={isExported}
               playsInline
               preload="auto"
               onLoadedMetadata={() => {
                 if (videoRef.current) {
                   videoRef.current.currentTime = isExported ? 0 : trimStart;
                   videoRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+                }
+              }}
+              onEnded={() => {
+                if (videoRef.current) {
+                  videoRef.current.currentTime = isExported ? 0 : trimStart;
+                  videoRef.current.play().catch(() => {});
                 }
               }}
               onTimeUpdate={handleTimeUpdate}

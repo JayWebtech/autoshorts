@@ -642,8 +642,8 @@ def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = Tr
         emoji_part = m.group(1)
         rest_text = m.group(2)
 
-    scale = 0.90 if is_vertical else 0.80
-    font_size = int(28 * scale)
+    scale = 1.05 if is_vertical else 0.95
+    font_size = int(32 * scale)
 
     # 2X supersampling factor for razor-sharp rendering
     ss = 2
@@ -676,17 +676,17 @@ def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = Tr
     if emoji_part:
         try:
             bbox_e = draw_d.textbbox((0, 0), emoji_part, font=emoji_font, embedded_color=True)
-            emoji_w = bbox_e[2] - bbox_e[0] + int(10 * scale * ss)
+            emoji_w = bbox_e[2] - bbox_e[0] + int(12 * scale * ss)
         except Exception:
             bbox_e = draw_d.textbbox((0, 0), emoji_part, font=text_font)
-            emoji_w = bbox_e[2] - bbox_e[0] + int(10 * scale * ss)
+            emoji_w = bbox_e[2] - bbox_e[0] + int(12 * scale * ss)
 
     bbox_t = draw_d.textbbox((0, 0), rest_text, font=text_font)
     text_w = bbox_t[2] - bbox_t[0]
     text_h = max(bbox_t[3] - bbox_t[1], int(ss_font_size * 1.15))
 
-    pad_x = int(18 * scale * ss)
-    pad_y = int(9 * scale * ss)
+    pad_x = int(22 * scale * ss)
+    pad_y = int(11 * scale * ss)
     total_w = emoji_w + text_w + pad_x * 2
     total_h = text_h + pad_y * 2
 
@@ -713,7 +713,7 @@ def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = Tr
         radius=radius,
         fill=(16, 16, 22, 235),
         outline=border_color,
-        width=max(2, int(1.8 * scale * ss))
+        width=max(2, int(2.0 * scale * ss))
     )
 
     cur_x = pad_x
@@ -771,12 +771,12 @@ def generate_ass_subtitles(
 
     # Style defaults
     font_name = "Arial Black"
-    font_size = 54 if is_vertical else 48
+    font_size = 62 if is_vertical else 50
     bold = -1
     italic = 0
     spacing = 1
     border_style = 1  # 1 = outline + shadow, 3 = opaque box
-    outline_size = 5 if is_vertical else 4
+    outline_size = 6 if is_vertical else 5
     shadow_size = 2
     outline_colour = "&H00000000&"
     back_colour = "&H80000000&"
@@ -789,15 +789,15 @@ def generate_ass_subtitles(
     # Preset configurations (HyperFrames + Remotion)
     if caption_style == "tiktok-karaoke":
         font_name = "Arial Black"
-        font_size = 54 if is_vertical else 48
-        outline_size = 5 if is_vertical else 4
+        font_size = 62 if is_vertical else 50
+        outline_size = 6 if is_vertical else 5
         shadow_size = 2
     elif caption_style == "loud-viral":
         # HyperFrames Loud: Ultra-bold condensed, massive 3D stroke, neon yellow/lime highlight
         font_name = "Impact"
-        font_size = 60 if is_vertical else 52
+        font_size = 68 if is_vertical else 56
         spacing = 2
-        outline_size = 6 if is_vertical else 5
+        outline_size = 7 if is_vertical else 6
         shadow_size = 3
         if not highlight_color_hex:
             highlight_color = "&H0015CCFA&"  # Neon yellow
@@ -805,7 +805,7 @@ def generate_ass_subtitles(
     elif caption_style == "arcade-retro":
         # HyperFrames Retro Gaming HUD: Tech cyan with hot pink / magenta glow
         font_name = "Trebuchet MS"
-        font_size = 54 if is_vertical else 46
+        font_size = 62 if is_vertical else 50
         outline_colour = "&H009948EC&"  # Hot pink outline
         outline_size = 5 if is_vertical else 4
         shadow_size = 0
@@ -816,17 +816,17 @@ def generate_ass_subtitles(
     elif caption_style == "cyber-terminal":
         # HyperFrames Terminal Hacker: Monospace phosphor matrix green with cyan active
         font_name = "Consolas"
-        font_size = 54 if is_vertical else 46
+        font_size = 62 if is_vertical else 50
         primary_color = "&H0081B910&"  # Phosphor green
         outline_colour = "&H00102008&"
-        outline_size = 3
+        outline_size = 4
         shadow_size = 1
         if not highlight_color_hex:
             highlight_color = "&H00FAEE38&"  # Electric cyan active
     elif caption_style == "clean-editorial":
         # HyperFrames Clean Editorial: Modern sans-serif, clean white, soft multilayer shadow
         font_name = "Segoe UI"
-        font_size = 52 if is_vertical else 46
+        font_size = 58 if is_vertical else 48
         primary_color = "&H00FFFFFF&"
         outline_colour = "&H001E1E1E&"
         outline_size = 2
@@ -836,23 +836,23 @@ def generate_ass_subtitles(
             highlight_color = "&H0047E0FD&"  # Warm gold accent
     elif caption_style == "modern-box":
         font_name = "Arial"
-        font_size = 50 if is_vertical else 44
+        font_size = 56 if is_vertical else 46
         border_style = 3
         outline_size = 2
         shadow_size = 0
         back_colour = "&H99000000&"
     elif caption_style == "classic-outline":
         font_name = "Arial Black"
-        font_size = 54 if is_vertical else 48
+        font_size = 62 if is_vertical else 50
         if not primary_color_hex:
             primary_color = "&H0015CCFA&"
-        outline_size = 5 if is_vertical else 4
+        outline_size = 6 if is_vertical else 5
         shadow_size = 2
     elif caption_style == "minimal-shadow":
         font_name = "Segoe UI"
-        font_size = 50 if is_vertical else 44
-        outline_size = 1
-        shadow_size = 2
+        font_size = 56 if is_vertical else 46
+        outline_size = 2
+        shadow_size = 3
 
     # WrapStyle: 2 forces libass to NEVER wrap onto an uncontrolled second line
     # MarginL: 70, MarginR: 70 guarantees safety margins from 9:16 borders
@@ -901,7 +901,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             plain_len = sum(len(w.get("text", "").strip()) for w in chunk) + max(0, len(chunk) - 1)
             max_safe_len = 22 if is_vertical else 28
             if plain_len > max_safe_len:
-                line_fs = max(44 if is_vertical else 38, int(font_size - (plain_len - max_safe_len) * 1.4))
+                line_fs = max(50 if is_vertical else 42, int(font_size - (plain_len - max_safe_len) * 1.2))
                 fs_tag = f"{{\\fs{line_fs}}}"
             else:
                 fs_tag = ""
