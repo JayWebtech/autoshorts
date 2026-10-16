@@ -139,8 +139,10 @@ export function CandidatePreviewModal({
     localStorage.setItem("autoshorts_cta_animation", ctaAnimation);
   }, [ctaAnimation]);
 
-  const clipDuration = Math.max(0.1, trimEnd - trimStart);
-  const isExported = Boolean(clipByCandidate.get(candidate.id)?.outputPath);
+  const exportedClip = clipByCandidate.get(candidate.id);
+  const exportedPath = exportedClip?.status === "done" && exportedClip.outputPath ? exportedClip.outputPath : null;
+  const isExported = Boolean(exportedPath);
+  const clipDuration = Math.max(0.1, isExported ? (candidate.endSec - candidate.startSec) : (trimEnd - trimStart));
 
   useEffect(() => {
     if (!videoRef.current || isExported) return;
@@ -155,6 +157,10 @@ export function CandidatePreviewModal({
     const time = videoRef.current.currentTime;
     if (isExported) {
       setCurrentPlayTime(time);
+      if (videoRef.current.duration && time >= videoRef.current.duration - 0.15) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(() => {});
+      }
     } else {
       const rel = Math.max(0, Math.min(clipDuration, time - trimStart));
       setCurrentPlayTime(rel);
@@ -219,14 +225,14 @@ export function CandidatePreviewModal({
         style={{
           display: "inline-flex",
           alignItems: "center",
-          gap: "6px",
+          gap: "5px",
           background: "rgba(16, 16, 22, 0.92)",
-          border: `1.5px solid ${borderColor}`,
-          boxShadow: `0 4px 14px ${shadowColor}, 0 2px 6px rgba(0,0,0,0.8)`,
-          padding: "5px 14px",
+          border: `1.2px solid ${borderColor}`,
+          boxShadow: `0 3px 10px ${shadowColor}, 0 2px 4px rgba(0,0,0,0.8)`,
+          padding: "3px 11px",
           borderRadius: "9999px",
           color: "#ffffff",
-          fontSize: "0.78rem",
+          fontSize: "0.72rem",
           fontWeight: 700,
           letterSpacing: "0.02em",
           zIndex: 2,
@@ -378,19 +384,44 @@ export function CandidatePreviewModal({
             "{cleanHook(candidate.hook)}"
           </h4>
 
+          {isExported && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0.45rem 0.85rem",
+                background: "rgba(16, 185, 129, 0.12)",
+                border: "1px solid rgba(16, 185, 129, 0.3)",
+                borderRadius: "6px",
+                marginBottom: "0.6rem",
+                fontSize: "0.76rem",
+                color: "#34d399",
+                fontWeight: 600,
+              }}
+            >
+              <span>✨ Mostrando Clip Exportado (con subtítulos y CTA incrustados)</span>
+              <span style={{ fontSize: "0.68rem", opacity: 0.85, color: "#a7f3d0", fontFamily: "var(--font-mono)" }}>
+                {exportedPath ? exportedPath.split(/[\\/]/).pop() : ""}
+              </span>
+            </div>
+          )}
+
           {/* Reproductor de Video Optimizado sin desmontaje destructivo */}
           <div style={{ background: "#000", borderRadius: "8px 8px 0 0", overflow: "hidden", maxHeight: "360px", display: "flex", justifyContent: "center" }}>
             <video
               ref={videoRef}
-              key={candidate.id}
+              key={`${candidate.id}_${isExported ? 'exported_' + exportedPath : 'source'}`}
               src={`http://127.0.0.1:1422/stream?file=${encodeURIComponent(
-                clipByCandidate.get(candidate.id)?.outputPath || detail.project.sourcePath
+                exportedPath || detail.project.sourcePath
               )}`}
               autoPlay
+              playsInline
               preload="auto"
               onLoadedMetadata={() => {
                 if (videoRef.current) {
                   videoRef.current.currentTime = isExported ? 0 : trimStart;
+                  videoRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
                 }
               }}
               onTimeUpdate={handleTimeUpdate}
