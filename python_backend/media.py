@@ -970,7 +970,8 @@ def render_flat_clip(
     subtitle_filter: Optional[str] = None,
     cta_badge_path: Optional[str] = None,
     cta_position: str = "top",
-    caption_position: str = "bottom"
+    caption_position: str = "bottom",
+    cta_animation: str = "bounce-land"
 ) -> Path:
     if not command_exists("ffmpeg"):
         raise RuntimeError("ffmpeg is not installed or not available on PATH")
@@ -982,6 +983,10 @@ def render_flat_clip(
 
     probe = probe_media(source_path)
     has_video = probe.get("hasVideo", False)
+    vid_w = probe.get("width", 0)
+    vid_h = probe.get("height", 0)
+    # Automatically treat video as vertical if explicitly selected OR if source file is portrait/vertical
+    is_vertical = (aspect_ratio == "9:16") or (vid_h > vid_w > 0)
 
     cmd = [
         "ffmpeg",
@@ -998,13 +1003,11 @@ def render_flat_clip(
             # Add PNG pill badge as second looped input
             cmd.extend(["-loop", "1", "-i", str(cta_badge_path)])
 
-            is_vertical = (aspect_ratio == "9:16")
-            crop_prep = "[0:v]crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)',scale=1080:1920,setsar=1[vbase]; " if is_vertical else "[0:v]null[vbase]; "
+            # Only crop if user requested 9:16 and video is NOT already vertical
+            needs_crop = (aspect_ratio == "9:16") and (vid_w >= vid_h > 0)
+            crop_prep = "[0:v]crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)',scale=1080:1920,setsar=1[vbase]; " if needs_crop else "[0:v]null[vbase]; "
 
-            # Motionmaxxing calibrated retention timing:
-            # 1. Appears at 3.0s (after opening hook captivates audience)
-            # 2. Lasts exactly 2.0s, leaving the climax unobstructed
-            # 3. For very long clips (>= 20s), an optional short outro CTA
+            # Calibrated retention timing:
             if dur_sec >= 20.0:
                 t1_start = 3.0
                 t1_end = 5.0
@@ -1029,36 +1032,58 @@ def render_flat_clip(
             # Calculate Y offset avoiding collision with subtitles if they share the same position
             has_sub_collision = bool(subtitle_filter and (cta_position == caption_position))
             if cta_position == "top":
-                y_expr = "280" if (has_sub_collision and is_vertical) else ("160" if has_sub_collision else ("130" if is_vertical else "65"))
+                base_y = "280" if (has_sub_collision and is_vertical) else ("160" if has_sub_collision else ("130" if is_vertical else "65"))
             elif cta_position == "center":
-                y_expr = "(H-h)/2+90" if has_sub_collision else "(H-h)/2"
+                base_y = "(H-h)/2+90" if has_sub_collision else "(H-h)/2"
             else:  # bottom
                 margin_b = 300 if is_vertical else 160
                 normal_b = 140 if is_vertical else 70
-                y_expr = f"H-h-{margin_b}" if has_sub_collision else f"H-h-{normal_b}"
+                base_y = f"H-h-{margin_b}" if has_sub_collision else f"H-h-{normal_b}"
 
-            # Motionmaxxing dynamic scaling animation:
-            # "Nothing grows from zero": Oversized entry (1.35x) decelerating smoothly (softLand) to 1.0x over 0.35s
-            scale_anim_1 = f"scale=eval=frame:w='iw*(1.0+0.35*pow(max(0,1.0-(t-{t1_start:.2f})/0.35),2))':h=-1"
-            fade_anim_1 = f"fade=in:st={t1_start:.2f}:d=0.15:alpha=1,fade=out:st={t1_end-0.3:.2f}:d=0.3:alpha=1"
+            # Helper to generate animation filter with mathematical boundary clamps
+            def build_cta_anim_chain(t_st: float, t_en: float):
+                fade = f"fade=in:st={t_st:.2f}:d=0.20:alpha=1,fade=out:st={t_en-0.3:.2f}:d=0.3:alpha=1"
+                if cta_animation == "bounce-land":
+                    # Motionmaxxing: 1.35x -> 1.0x soft landing
+                    w_e = f"2*trunc((iw*if(between(t,{t_st:.2f},{t_st+0.35:.2f}),1.0+0.35*pow(1-(t-{t_st:.2f})/0.35,2),1.0))/2)"
+                    h_e = f"2*trunc((ih*if(between(t,{t_st:.2f},{t_st+0.35:.2f}),1.0+0.35*pow(1-(t-{t_st:.2f})/0.35,2),1.0))/2)"
+                    scale_part = f"scale=eval=frame:w='{w_e}':h='{h_e}'"
+                    y_part = base_y
+                elif cta_animation == "pulse-glow":
+                    # Breathing pulse: 1.0x -> 1.08x heartbeat
+                    w_e = f"2*trunc((iw*(1.0+0.08*abs(sin(2*PI*(t-{t_st:.2f})/1.2))))/2)"
+                    h_e = f"2*trunc((ih*(1.0+0.08*abs(sin(2*PI*(t-{t_st:.2f})/1.2))))/2)"
+                    scale_part = f"scale=eval=frame:w='{w_e}':h='{h_e}'"
+                    y_part = base_y
+                elif cta_animation == "slide-up":
+                    # Smooth vertical slide entry
+                    scale_part = "null"
+                    slide_delta = 60 if is_vertical else 40
+                    y_part = f"if(between(t,{t_st:.2f},{t_st+0.4:.2f}), {base_y} + {slide_delta}*pow(1-(t-{t_st:.2f})/0.4, 2), {base_y})"
+                else:  # fade-smooth
+                    scale_part = "null"
+                    y_part = base_y
+
+                filter_chain = f"{scale_part},{fade}"
+                return filter_chain, y_part
+
+            chain1, y1 = build_cta_anim_chain(t1_start, t1_end)
 
             if t2_start is not None and t2_end is not None:
-                scale_anim_2 = f"scale=eval=frame:w='iw*(1.0+0.35*pow(max(0,1.0-(t-{t2_start:.2f})/0.35),2))':h=-1"
-                fade_anim_2 = f"fade=in:st={t2_start:.2f}:d=0.15:alpha=1,fade=out:st={t2_end-0.3:.2f}:d=0.3:alpha=1"
-
+                chain2, y2 = build_cta_anim_chain(t2_start, t2_end)
                 fc = (
                     f"[1:v]format=rgba,split=2[b1raw][b2raw]; "
-                    f"[b1raw]{scale_anim_1},{fade_anim_1}[b1f]; "
-                    f"[b2raw]{scale_anim_2},{fade_anim_2}[b2f]; "
+                    f"[b1raw]{chain1}[b1f]; "
+                    f"[b2raw]{chain2}[b2f]; "
                     f"{crop_prep}"
-                    f"[vbase][b1f]overlay=(W-w)/2:{y_expr}:shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vmid]; "
-                    f"[vmid][b2f]overlay=(W-w)/2:{y_expr}:shortest=1:enable='between(t,{t2_start:.2f},{t2_end:.2f})'[vpost_cta]"
+                    f"[vbase][b1f]overlay=x='(W-w)/2':y='{y1}':shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vmid]; "
+                    f"[vmid][b2f]overlay=x='(W-w)/2':y='{y2}':shortest=1:enable='between(t,{t2_start:.2f},{t2_end:.2f})'[vpost_cta]"
                 )
             else:
                 fc = (
-                    f"[1:v]format=rgba,{scale_anim_1},{fade_anim_1}[b1f]; "
+                    f"[1:v]format=rgba,{chain1}[b1f]; "
                     f"{crop_prep}"
-                    f"[vbase][b1f]overlay=(W-w)/2:{y_expr}:shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vpost_cta]"
+                    f"[vbase][b1f]overlay=x='(W-w)/2':y='{y1}':shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vpost_cta]"
                 )
 
             if subtitle_filter and subtitle_filter.strip():

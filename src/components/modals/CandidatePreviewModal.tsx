@@ -95,6 +95,10 @@ export function CandidatePreviewModal({
     return (localStorage.getItem("autoshorts_cta_position") as "top" | "center" | "bottom") || "top";
   });
 
+  const [ctaAnimation, setCtaAnimation] = useState<string>(() => {
+    return localStorage.getItem("autoshorts_cta_animation") || "bounce-land";
+  });
+
   useEffect(() => {
     localStorage.setItem("autoshorts_burn_subtitles", String(burnSubtitles));
   }, [burnSubtitles]);
@@ -130,6 +134,10 @@ export function CandidatePreviewModal({
   useEffect(() => {
     localStorage.setItem("autoshorts_cta_position", ctaPosition);
   }, [ctaPosition]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_cta_animation", ctaAnimation);
+  }, [ctaAnimation]);
 
   const clipDuration = Math.max(0.1, trimEnd - trimStart);
   const isExported = Boolean(clipByCandidate.get(candidate.id)?.outputPath);
@@ -196,9 +204,18 @@ export function CandidatePreviewModal({
       shadowColor = "rgba(239, 68, 68, 0.4)";
     }
 
+    let animClass = "motionmaxxing-badge";
+    if (ctaAnimation === "slide-up") {
+      animClass = "cta-anim-slide-up";
+    } else if (ctaAnimation === "pulse-glow") {
+      animClass = "cta-anim-pulse-glow";
+    } else if (ctaAnimation === "fade-smooth") {
+      animClass = "cta-anim-fade-smooth";
+    }
+
     return (
       <div
-        className="motionmaxxing-badge"
+        className={animClass}
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -945,7 +962,7 @@ export function CandidatePreviewModal({
             </p>
 
             {ctaEnabled && (
-              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "0.75rem", paddingTop: "0.3rem", borderTop: "1px dashed var(--border-default)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", paddingTop: "0.4rem", borderTop: "1px dashed var(--border-default)" }}>
                 {/* Texto del CTA */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
@@ -990,81 +1007,110 @@ export function CandidatePreviewModal({
                   />
                 </div>
 
-                {/* Posición del CTA en Pantalla */}
-                <div>
-                  <label style={{ display: "block", fontSize: "0.73rem", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
-                    Posición en pantalla:
-                  </label>
-                  <div style={{ display: "flex", gap: "0.3rem" }}>
-                    <button
-                      type="button"
-                      onClick={() => setCtaPosition("top")}
-                      title="Arriba"
+                {/* Estilo de Animación y Posición */}
+                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "0.75rem" }}>
+                  {/* Animación del CTA */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.73rem", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
+                      Estilo de animación del CTA:
+                    </label>
+                    <select
+                      value={ctaAnimation}
+                      onChange={(e) => setCtaAnimation(e.target.value)}
                       style={{
-                        flex: 1,
-                        padding: "0.38rem 0.2rem",
-                        borderRadius: "5px",
-                        border: ctaPosition === "top" ? "1px solid #f43f5e" : "1px solid var(--border-default)",
-                        background: ctaPosition === "top" ? "#e11d48" : "var(--bg-surface-raised)",
+                        width: "100%",
+                        padding: "0.38rem 0.5rem",
+                        borderRadius: "6px",
+                        background: "var(--bg-surface-raised)",
+                        border: "1px solid var(--border-default)",
                         color: "#fafafa",
-                        fontSize: "0.72rem",
-                        fontWeight: ctaPosition === "top" ? 700 : 400,
+                        fontSize: "0.74rem",
                         cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "4px",
                       }}
                     >
-                      <AlignVerticalJustifyStart size={12} />
-                      Arriba
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCtaPosition("center")}
-                      title="Medio"
-                      style={{
-                        flex: 1,
-                        padding: "0.38rem 0.2rem",
-                        borderRadius: "5px",
-                        border: ctaPosition === "center" ? "1px solid #f43f5e" : "1px solid var(--border-default)",
-                        background: ctaPosition === "center" ? "#e11d48" : "var(--bg-surface-raised)",
-                        color: "#fafafa",
-                        fontSize: "0.72rem",
-                        fontWeight: ctaPosition === "center" ? 700 : 400,
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <AlignVerticalJustifyCenter size={12} />
-                      Medio
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCtaPosition("bottom")}
-                      title="Abajo"
-                      style={{
-                        flex: 1,
-                        padding: "0.38rem 0.2rem",
-                        borderRadius: "5px",
-                        border: ctaPosition === "bottom" ? "1px solid #f43f5e" : "1px solid var(--border-default)",
-                        background: ctaPosition === "bottom" ? "#e11d48" : "var(--bg-surface-raised)",
-                        color: "#fafafa",
-                        fontSize: "0.72rem",
-                        fontWeight: ctaPosition === "bottom" ? 700 : 400,
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <AlignVerticalJustifyEnd size={12} />
-                      Abajo
-                    </button>
+                      <option value="bounce-land">💥 Impacto & Rebote (Bounce Land)</option>
+                      <option value="slide-up">⬆️ Deslizamiento Suave (Slide Up)</option>
+                      <option value="pulse-glow">💓 Latido Neón Continuo (Pulse Glow)</option>
+                      <option value="fade-smooth">✨ Fundido Elegante (Fade Smooth)</option>
+                    </select>
+                  </div>
+
+                  {/* Posición del CTA en Pantalla */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.73rem", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
+                      Posición en pantalla:
+                    </label>
+                    <div style={{ display: "flex", gap: "0.3rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => setCtaPosition("top")}
+                        title="Arriba"
+                        style={{
+                          flex: 1,
+                          padding: "0.38rem 0.2rem",
+                          borderRadius: "5px",
+                          border: ctaPosition === "top" ? "1px solid #f43f5e" : "1px solid var(--border-default)",
+                          background: ctaPosition === "top" ? "#e11d48" : "var(--bg-surface-raised)",
+                          color: "#fafafa",
+                          fontSize: "0.72rem",
+                          fontWeight: ctaPosition === "top" ? 700 : 400,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <AlignVerticalJustifyStart size={12} />
+                        Arriba
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCtaPosition("center")}
+                        title="Medio"
+                        style={{
+                          flex: 1,
+                          padding: "0.38rem 0.2rem",
+                          borderRadius: "5px",
+                          border: ctaPosition === "center" ? "1px solid #f43f5e" : "1px solid var(--border-default)",
+                          background: ctaPosition === "center" ? "#e11d48" : "var(--bg-surface-raised)",
+                          color: "#fafafa",
+                          fontSize: "0.72rem",
+                          fontWeight: ctaPosition === "center" ? 700 : 400,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <AlignVerticalJustifyCenter size={12} />
+                        Medio
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCtaPosition("bottom")}
+                        title="Abajo"
+                        style={{
+                          flex: 1,
+                          padding: "0.38rem 0.2rem",
+                          borderRadius: "5px",
+                          border: ctaPosition === "bottom" ? "1px solid #f43f5e" : "1px solid var(--border-default)",
+                          background: ctaPosition === "bottom" ? "#e11d48" : "var(--bg-surface-raised)",
+                          color: "#fafafa",
+                          fontSize: "0.72rem",
+                          fontWeight: ctaPosition === "bottom" ? 700 : 400,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <AlignVerticalJustifyEnd size={12} />
+                        Abajo
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1080,7 +1126,7 @@ export function CandidatePreviewModal({
                   Simulación de pantalla (Subtítulos & CTA):
                 </span>
                 <span style={{ fontSize: "0.68rem", opacity: 0.8, fontFamily: "var(--font-mono)" }}>
-                  {burnSubtitles ? `Subs: ${captionPosition} (${captionLines === "1" ? "1 línea" : "2 líneas"})` : "Sin subs"} | {ctaEnabled ? `CTA: ${ctaPosition} (inicio & final)` : "Sin CTA"}
+                  {burnSubtitles ? `Subs: ${captionPosition} (${captionLines === "1" ? "1 línea" : "2 líneas"})` : "Sin subs"} | {ctaEnabled ? `CTA: ${ctaPosition} (${ctaAnimation})` : "Sin CTA"}
                 </span>
               </div>
 
@@ -1152,6 +1198,7 @@ export function CandidatePreviewModal({
                   ctaEnabled,
                   ctaText,
                   ctaPosition,
+                  ctaAnimation,
                   aspectRatio: (localStorage.getItem("autoshorts_clip_aspect_ratio") as "original" | "9:16") || "original",
                   startSec: trimStart,
                   endSec: trimEnd,

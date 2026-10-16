@@ -21,6 +21,7 @@ export interface CutClipOptions {
   ctaEnabled?: boolean;
   ctaText?: string;
   ctaPosition?: "top" | "center" | "bottom";
+  ctaAnimation?: string;
   aspectRatio?: "original" | "9:16";
   startSec?: number;
   endSec?: number;
@@ -561,6 +562,8 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           options?.ctaText || localStorage.getItem("autoshorts_cta_text") || "❤️ ¡Sígueme y dale like!";
         const ctaPosition =
           options?.ctaPosition || (localStorage.getItem("autoshorts_cta_position") as "top" | "center" | "bottom") || "top";
+        const ctaAnimation =
+          options?.ctaAnimation || localStorage.getItem("autoshorts_cta_animation") || "bounce-land";
         const aspectRatio = options?.aspectRatio || clipAspectRatio;
 
         await invoke<string>("render_flat_clip_for_candidate", {
@@ -576,6 +579,7 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           ctaEnabled,
           ctaText,
           ctaPosition,
+          ctaAnimation,
           ...(options?.startSec !== undefined ? { startSec: options.startSec } : {}),
           ...(options?.endSec !== undefined ? { endSec: options.endSec } : {}),
         });
@@ -599,6 +603,10 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
       const burnSubtitles = savedBurn !== null ? savedBurn === "true" : true;
       const captionStyle = localStorage.getItem("autoshorts_caption_style") || "tiktok-karaoke";
       const captionPosition = (localStorage.getItem("autoshorts_caption_position") as "bottom" | "center" | "top") || "bottom";
+      const ctaEnabled = localStorage.getItem("autoshorts_cta_enabled") === "true";
+      const ctaText = localStorage.getItem("autoshorts_cta_text") || "❤️ ¡Sígueme y dale like!";
+      const ctaPosition = (localStorage.getItem("autoshorts_cta_position") as "top" | "center" | "bottom") || "top";
+      const ctaAnimation = localStorage.getItem("autoshorts_cta_animation") || "bounce-land";
 
       for (const candidate of selectedCandidates) {
         setRenderingCandidateId(candidate.id);
@@ -609,6 +617,10 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           burnSubtitles,
           captionStyle,
           captionPosition,
+          ctaEnabled,
+          ctaText,
+          ctaPosition,
+          ctaAnimation,
         });
       }
     } catch (err) {

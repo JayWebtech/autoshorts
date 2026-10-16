@@ -1461,4 +1461,78 @@
   animation: motionmaxxingBadgeEntry 3s infinite cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Slide Up Animation */
+@keyframes ctaSlideUpEntry {
+  0% {
+    transform: translateY(35px);
+    opacity: 0;
+  }
+  16% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  86% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+}
+.cta-anim-slide-up {
+  animation: ctaSlideUpEntry 3s infinite cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Pulse / Heartbeat Glow Animation */
+@keyframes ctaPulseGlow {
+  0% {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+  12% {
+    transform: scale(1.0);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(1.08);
+  }
+  48% {
+    transform: scale(1.0);
+  }
+  66% {
+    transform: scale(1.08);
+  }
+  84% {
+    transform: scale(1.0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+}
+.cta-anim-pulse-glow {
+  animation: ctaPulseGlow 3s infinite ease-in-out;
+}
+
+/* Classic Smooth Fade */
+@keyframes ctaFadeSmooth {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.cta-anim-fade-smooth {
+  animation: ctaFadeSmooth 3s infinite ease-in-out;
+}
+
 

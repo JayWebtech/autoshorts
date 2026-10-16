@@ -981,6 +981,11 @@ class Api:
             if isinstance(args, dict)
             else "top"
         )
+        cta_animation = (
+            args.get("ctaAnimation", "bounce-land")
+            if isinstance(args, dict)
+            else "bounce-land"
+        )
         caption_lines = (
             args.get("captionLines", "1")
             if isinstance(args, dict)
@@ -994,6 +999,13 @@ class Api:
             proj_dir = self.get_project_dir(project)
             out_dir = proj_dir / "clips"
         os.makedirs(out_dir, exist_ok=True)
+
+        # Detect if source video is portrait/vertical to ensure subs and CTA are framed for vertical even if aspect_ratio is 'original'
+        source_probe = probe_media(project["sourcePath"])
+        src_w = source_probe.get("width", 0)
+        src_h = source_probe.get("height", 0)
+        is_vert_video = (aspect_ratio == "9:16") or (src_h > src_w > 0)
+        ass_aspect_ratio = "9:16" if is_vert_video else "16:9"
 
         # Sanitize hook for filename: strip all emojis, quotes, and invalid symbols
         raw_hook = candidate.get("hook", "").strip()
@@ -1016,7 +1028,7 @@ class Api:
                 generate_cta_badge_image(
                     text=cta_text,
                     output_path=str(badge_file),
-                    is_vertical=(aspect_ratio == "9:16")
+                    is_vertical=is_vert_video
                 )
                 if badge_file.exists():
                     cta_badge_path = badge_file
@@ -1047,7 +1059,7 @@ class Api:
                         end_sec=end_sec,
                         caption_style=caption_style,
                         position=caption_position,
-                        aspect_ratio=aspect_ratio,
+                        aspect_ratio=ass_aspect_ratio,
                         primary_color_hex=caption_color,
                         highlight_color_hex=caption_highlight,
                         single_line=single_line
@@ -1074,7 +1086,8 @@ class Api:
             subtitle_filter=subtitle_filter,
             cta_badge_path=cta_badge_path,
             cta_position=cta_position,
-            caption_position=caption_position
+            caption_position=caption_position,
+            cta_animation=cta_animation
         )
 
         self.db.update_clip_for_candidate(
