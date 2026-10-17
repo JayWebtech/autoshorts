@@ -56,6 +56,7 @@ export function CandidatePreviewModal({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentPlayTime, setCurrentPlayTime] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState<"trim" | "subs" | "cta">("trim");
 
   const [burnSubtitles, setBurnSubtitles] = useState<boolean>(() => {
     const saved = localStorage.getItem("autoshorts_burn_subtitles");
@@ -357,11 +358,38 @@ export function CandidatePreviewModal({
 
   return (
     <div className="style-modal-overlay" onClick={onClose}>
-      <div className="style-modal" style={{ maxWidth: "720px", maxHeight: "92vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
-        <div className="style-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.1rem 1.5rem", borderBottom: "1px solid var(--border-default)" }}>
+      <div className="clip-studio-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Header con Hook y Metadatos */}
+        <div className="clip-studio-header">
           <div>
-            <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--text-primary)" }}>Previsualizar Clip #{candidate.rank}</h3>
-            <p style={{ margin: "4px 0 0", fontSize: "0.82rem", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span
+                style={{
+                  background: "#0284c7",
+                  color: "#fff",
+                  fontSize: "0.72rem",
+                  fontWeight: 800,
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.03em",
+                }}
+              >
+                Clip #{candidate.rank}
+              </span>
+              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                "{cleanHook(candidate.hook)}"
+              </h3>
+            </div>
+            <p
+              style={{
+                margin: "4px 0 0",
+                fontSize: "0.78rem",
+                color: "var(--text-secondary)",
+                fontFamily: "var(--font-mono)",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
               {formatTime(trimStart)} - {formatTime(trimEnd)} ({clipDuration.toFixed(1)}s de duración)
             </p>
           </div>
@@ -371,851 +399,1019 @@ export function CandidatePreviewModal({
             onClick={onClose}
             title="Cerrar modal"
           >
-            <X size={15} />
+            <X size={16} />
           </button>
         </div>
 
-        <div style={{ padding: "1.2rem 1.5rem", overflowY: "auto", flex: 1 }}>
-          <h4 style={{ color: "#fafafa", marginBottom: "0.75rem", fontSize: "1.02rem", fontWeight: 600 }}>
-            "{cleanHook(candidate.hook)}"
-          </h4>
+        {/* Cuerpo Principal Dividido en 2 Columnas de Estudio */}
+        <div className="clip-studio-body">
+          {/* COLUMNA IZQUIERDA: LIENZO EN VIVO (SMARTPHONE 9:16) & CONTROLES VLC */}
+          <div className="clip-studio-preview-col">
+            {isExported && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.4rem 0.75rem",
+                  background: "rgba(16, 185, 129, 0.12)",
+                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                  borderRadius: "6px",
+                  fontSize: "0.72rem",
+                  color: "#34d399",
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}
+              >
+                <span>✨ Mostrando Clip Exportado (Incrustado)</span>
+                <span style={{ fontSize: "0.66rem", opacity: 0.85, color: "#a7f3d0", fontFamily: "var(--font-mono)" }}>
+                  {exportedPath ? exportedPath.split(/[\\/]/).pop() : ""}
+                </span>
+              </div>
+            )}
 
-          {isExported && (
+            {/* Pantalla Smartphone 9:16 con Reproductor y Overlays en Vivo */}
+            <div className="clip-phone-stage" onClick={togglePlayPause} style={{ cursor: "pointer" }}>
+              <video
+                ref={videoRef}
+                key={`${candidate.id}_${isExported ? 'exported_' + exportedPath : 'source'}`}
+                src={`http://127.0.0.1:1422/stream?file=${encodeURIComponent(
+                  exportedPath || detail.project.sourcePath
+                )}`}
+                autoPlay
+                loop={isExported}
+                playsInline
+                preload="auto"
+                onLoadedMetadata={() => {
+                  if (videoRef.current) {
+                    videoRef.current.currentTime = isExported ? 0 : trimStart;
+                    videoRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+                  }
+                }}
+                onEnded={() => {
+                  if (videoRef.current) {
+                    videoRef.current.currentTime = isExported ? 0 : trimStart;
+                    videoRef.current.play().catch(() => {});
+                  }
+                }}
+                onTimeUpdate={handleTimeUpdate}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              />
+
+              {/* Botón Central de Play cuando está pausado */}
+              {!isPlaying && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    background: "rgba(0, 0, 0, 0.65)",
+                    backdropFilter: "blur(4px)",
+                    color: "#ffffff",
+                    borderRadius: "50%",
+                    width: "56px",
+                    height: "56px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    pointerEvents: "none",
+                    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.6)",
+                    border: "1px solid rgba(255, 255, 255, 0.2)",
+                  }}
+                >
+                  <Play size={26} style={{ marginLeft: "4px" }} />
+                </div>
+              )}
+
+              {/* Lienzo Dinámico sobre el Video: Subtítulos y CTA en Tiempo Real (solo en fuente original) */}
+              {!isExported && (burnSubtitles || ctaEnabled) && (
+                <div className="clip-phone-overlay-container">
+                  {/* ZONA SUPERIOR */}
+                  <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+                    {ctaEnabled && ctaPosition === "top" && renderCtaBadgePreview()}
+                    {burnSubtitles && captionPosition === "top" && (
+                      <div style={{ marginTop: ctaEnabled && ctaPosition === "top" ? "4px" : "8px" }}>
+                        {renderCaptionPreview()}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ZONA CENTRAL */}
+                  <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+                    {ctaEnabled && ctaPosition === "center" && renderCtaBadgePreview()}
+                    {burnSubtitles && captionPosition === "center" && (
+                      <div>{renderCaptionPreview()}</div>
+                    )}
+                  </div>
+
+                  {/* ZONA INFERIOR */}
+                  <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                    {burnSubtitles && captionPosition === "bottom" && (
+                      <div style={{ marginBottom: ctaEnabled && ctaPosition === "bottom" ? "4px" : "0" }}>
+                        {renderCaptionPreview()}
+                      </div>
+                    )}
+                    {ctaEnabled && ctaPosition === "bottom" && renderCtaBadgePreview()}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Barra de Transporte VLC Compacta */}
             <div
               style={{
+                background: "#12141c",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "8px",
+                padding: "0.55rem 0.75rem",
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "0.45rem 0.85rem",
-                background: "rgba(16, 185, 129, 0.12)",
-                border: "1px solid rgba(16, 185, 129, 0.3)",
-                borderRadius: "6px",
-                marginBottom: "0.6rem",
-                fontSize: "0.76rem",
-                color: "#34d399",
-                fontWeight: 600,
+                flexDirection: "column",
+                gap: "5px",
+                flexShrink: 0,
               }}
             >
-              <span>✨ Mostrando Clip Exportado (con subtítulos y CTA incrustados)</span>
-              <span style={{ fontSize: "0.68rem", opacity: 0.85, color: "#a7f3d0", fontFamily: "var(--font-mono)" }}>
-                {exportedPath ? exportedPath.split(/[\\/]/).pop() : ""}
-              </span>
-            </div>
-          )}
-
-          {/* Reproductor de Video Optimizado sin desmontaje destructivo */}
-          <div style={{ background: "#000", borderRadius: "8px 8px 0 0", overflow: "hidden", maxHeight: "360px", display: "flex", justifyContent: "center" }}>
-            <video
-              ref={videoRef}
-              key={`${candidate.id}_${isExported ? 'exported_' + exportedPath : 'source'}`}
-              src={`http://127.0.0.1:1422/stream?file=${encodeURIComponent(
-                exportedPath || detail.project.sourcePath
-              )}`}
-              autoPlay
-              loop={isExported}
-              playsInline
-              preload="auto"
-              onLoadedMetadata={() => {
-                if (videoRef.current) {
-                  videoRef.current.currentTime = isExported ? 0 : trimStart;
-                  videoRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-                }
-              }}
-              onEnded={() => {
-                if (videoRef.current) {
-                  videoRef.current.currentTime = isExported ? 0 : trimStart;
-                  videoRef.current.play().catch(() => {});
-                }
-              }}
-              onTimeUpdate={handleTimeUpdate}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onClick={togglePlayPause}
-              style={{ maxHeight: "360px", maxWidth: "100%", cursor: "pointer" }}
-            />
-          </div>
-
-          {/* Barra de Tiempo en Vivo Tipo VLC */}
-          <div
-            style={{
-              background: "#18181b",
-              borderLeft: "1px solid var(--border-default)",
-              borderRight: "1px solid var(--border-default)",
-              borderBottom: "1px solid var(--border-default)",
-              borderRadius: "0 0 8px 8px",
-              padding: "0.55rem 0.85rem",
-              display: "flex",
-              flexDirection: "column",
-              gap: "4px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              {/* Botón Play / Pause */}
-              <button
-                type="button"
-                onClick={togglePlayPause}
-                style={{
-                  background: "var(--bg-surface-raised)",
-                  border: "1px solid var(--border-default)",
-                  color: "#fafafa",
-                  cursor: "pointer",
-                  padding: "5px 7px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: "5px",
-                }}
-                title={isPlaying ? "Pausar video" : "Reproducir video"}
-              >
-                {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-              </button>
-
-              {/* Tiempo en Vivo (VLC Izquierda: ej 00:18) */}
-              <span
-                style={{
-                  fontSize: "0.86rem",
-                  fontWeight: 700,
-                  color: "#38bdf8",
-                  fontFamily: "var(--font-mono, monospace)",
-                  fontVariantNumeric: "tabular-nums",
-                  minWidth: "46px",
-                }}
-                title="Tiempo actual reproducido dentro del clip"
-              >
-                {formatTime(currentPlayTime)}
-              </span>
-
-              {/* Barra Deslizadora estilo VLC (Azul con cursor) */}
-              <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center" }}>
-                <input
-                  type="range"
-                  min={0}
-                  max={clipDuration}
-                  step={0.1}
-                  value={Math.min(currentPlayTime, clipDuration)}
-                  onChange={handleSeek}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <button
+                  type="button"
+                  onClick={togglePlayPause}
                   style={{
-                    width: "100%",
-                    height: "7px",
-                    borderRadius: "4px",
-                    accentColor: "#0284c7",
+                    background: "rgba(255, 255, 255, 0.08)",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    color: "#fafafa",
                     cursor: "pointer",
-                    outline: "none",
+                    padding: "4px 8px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "5px",
                   }}
-                  title="Arrastra para avanzar o retroceder en el clip"
-                />
-              </div>
+                  title={isPlaying ? "Pausar" : "Reproducir"}
+                >
+                  {isPlaying ? <Pause size={13} /> : <Play size={13} />}
+                </button>
 
-              {/* Duración Total del Clip (VLC Derecha: ej 01:19) */}
-              <span
-                style={{
-                  fontSize: "0.86rem",
-                  fontWeight: 600,
-                  color: "var(--text-secondary)",
-                  fontFamily: "var(--font-mono, monospace)",
-                  fontVariantNumeric: "tabular-nums",
-                  minWidth: "46px",
-                  textAlign: "right",
-                }}
-                title="Duración total del recorte"
-              >
-                {formatTime(clipDuration)}
-              </span>
-            </div>
-
-            {/* Lectura en tiempo real para guiar los botones de recorte */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", color: "var(--text-muted)", paddingLeft: "34px", flexWrap: "wrap", gap: "6px" }}>
-              <span>
-                Tiempo clip: <strong style={{ color: "#38bdf8", fontFamily: "var(--font-mono)" }}>{currentPlayTime.toFixed(1)}s</strong> / {clipDuration.toFixed(1)}s
-              </span>
-              <span>
-                Posición en video original: <strong style={{ color: "#fafafa", fontFamily: "var(--font-mono)" }}>{formatTime(absoluteCurrentTime)} ({absoluteCurrentTime.toFixed(1)}s)</strong>
-              </span>
-            </div>
-          </div>
-
-          {/* Ajuste Fino de Recorte (Trim Controls) */}
-          <div style={{ marginTop: "1rem", padding: "0.85rem", borderRadius: "8px", background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <Clock size={14} color="var(--text-secondary)" />
-                <span style={{ fontWeight: 600, fontSize: "0.8rem", letterSpacing: "0.02em", color: "var(--text-secondary)" }}>
-                  AJUSTE FINO DE RECORTE (TRIM)
+                <span
+                  style={{
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    color: "#38bdf8",
+                    fontFamily: "var(--font-mono, monospace)",
+                    fontVariantNumeric: "tabular-nums",
+                    minWidth: "42px",
+                  }}
+                  title="Tiempo actual del clip"
+                >
+                  {formatTime(currentPlayTime)}
                 </span>
-              </div>
-              <span style={{ fontSize: "0.76rem", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
-                Duración: <strong style={{ color: "#fafafa" }}>{clipDuration.toFixed(1)}s</strong>
-              </span>
-            </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
-              {/* Inicio */}
-              <div style={{ background: "var(--bg-surface-raised)", padding: "0.6rem 0.75rem", borderRadius: "6px", border: "1px solid var(--border-default)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.45rem" }}>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Inicio: <strong style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono, monospace)", fontVariantNumeric: "tabular-nums" }}>{formatTime(trimStart)}</strong></span>
-                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontFamily: "var(--font-mono, monospace)", fontVariantNumeric: "tabular-nums" }}>{trimStart.toFixed(1)}s</span>
-                </div>
-                <div style={{ display: "flex", gap: "0.3rem" }}>
-                  <button
-                    type="button"
-                    className="btn-cancel"
-                    style={{ flex: 1, padding: 0, height: "26px", minHeight: "26px", fontSize: "0.72rem", fontFamily: "var(--font-mono, monospace)" }}
-                    onClick={() => setTrimStart((curr) => Math.max(0, Number((curr - 5).toFixed(1))))}
-                    title="Retroceder inicio 5 segundos"
-                  >
-                    -5s
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-cancel"
-                    style={{ flex: 1, padding: 0, height: "26px", minHeight: "26px", fontSize: "0.72rem", fontFamily: "var(--font-mono, monospace)" }}
-                    onClick={() => setTrimStart((curr) => Math.max(0, Number((curr - 1).toFixed(1))))}
-                    title="Retroceder inicio 1 segundo"
-                  >
-                    -1s
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-cancel"
-                    style={{ flex: 1, padding: 0, height: "26px", minHeight: "26px", fontSize: "0.72rem", fontFamily: "var(--font-mono, monospace)" }}
-                    onClick={() => setTrimStart((curr) => Math.min(trimEnd - 1, Number((curr + 1).toFixed(1))))}
-                    title="Avanzar inicio 1 segundo"
-                  >
-                    +1s
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-cancel"
-                    style={{ flex: 1, padding: 0, height: "26px", minHeight: "26px", fontSize: "0.72rem", fontFamily: "var(--font-mono, monospace)" }}
-                    onClick={() => setTrimStart((curr) => Math.min(trimEnd - 1, Number((curr + 5).toFixed(1))))}
-                    title="Avanzar inicio 5 segundos"
-                  >
-                    +5s
-                  </button>
-                </div>
-              </div>
-
-              {/* Fin */}
-              <div style={{ background: "var(--bg-surface-raised)", padding: "0.6rem 0.75rem", borderRadius: "6px", border: "1px solid var(--border-default)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.45rem" }}>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Fin: <strong style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono, monospace)", fontVariantNumeric: "tabular-nums" }}>{formatTime(trimEnd)}</strong></span>
-                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontFamily: "var(--font-mono, monospace)", fontVariantNumeric: "tabular-nums" }}>{trimEnd.toFixed(1)}s</span>
-                </div>
-                <div style={{ display: "flex", gap: "0.3rem" }}>
-                  <button
-                    type="button"
-                    className="btn-cancel"
-                    style={{ flex: 1, padding: 0, height: "26px", minHeight: "26px", fontSize: "0.72rem", fontFamily: "var(--font-mono, monospace)" }}
-                    onClick={() => setTrimEnd((curr) => Math.max(trimStart + 1, Number((curr - 5).toFixed(1))))}
-                    title="Acortar fin 5 segundos"
-                  >
-                    -5s
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-cancel"
-                    style={{ flex: 1, padding: 0, height: "26px", minHeight: "26px", fontSize: "0.72rem", fontFamily: "var(--font-mono, monospace)" }}
-                    onClick={() => setTrimEnd((curr) => Math.max(trimStart + 1, Number((curr - 1).toFixed(1))))}
-                    title="Acortar fin 1 segundo"
-                  >
-                    -1s
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-cancel"
-                    style={{ flex: 1, padding: 0, height: "26px", minHeight: "26px", fontSize: "0.72rem", fontFamily: "var(--font-mono, monospace)" }}
-                    onClick={() => setTrimEnd((curr) => Number((curr + 1).toFixed(1)))}
-                    title="Extender fin 1 segundo"
-                  >
-                    +1s
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-cancel"
-                    style={{ flex: 1, padding: 0, height: "26px", minHeight: "26px", fontSize: "0.72rem", fontFamily: "var(--font-mono, monospace)" }}
-                    onClick={() => setTrimEnd((curr) => Number((curr + 5).toFixed(1)))}
-                    title="Extender fin 5 segundos"
-                  >
-                    +5s
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.5rem" }}>
-              {(trimStart !== candidate.startSec || trimEnd !== candidate.endSec) && (
-                <span style={{ fontSize: "0.74rem", opacity: 0.7, marginRight: "auto" }}>
-                  Ajustado (Original: {formatTime(candidate.startSec)} - {formatTime(candidate.endSec)})
-                </span>
-              )}
-              <button
-                type="button"
-                className="btn-cancel"
-                style={{ minHeight: "30px", fontSize: "0.76rem", padding: "0 10px" }}
-                onClick={() => {
-                  setTrimStart(candidate.startSec);
-                  setTrimEnd(candidate.endSec);
-                }}
-                disabled={trimStart === candidate.startSec && trimEnd === candidate.endSec}
-              >
-                Restablecer
-              </button>
-              <button
-                type="button"
-                className="btn-confirm"
-                style={{ minHeight: "30px", fontSize: "0.76rem", padding: "0 14px" }}
-                onClick={onSaveTrim}
-                disabled={isSavingTrim || trimStart >= trimEnd}
-              >
-                {isSavingTrim ? "Guardando..." : "Guardar Ajuste"}
-              </button>
-            </div>
-          </div>
-
-          {/* Opciones de Subtítulos y Posicionamiento para Exportación con Vista Previa en Vivo */}
-          <div style={{ marginTop: "1rem", padding: "0.85rem", borderRadius: "8px", background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <Type size={14} color="var(--text-secondary)" />
-                <span style={{ fontWeight: 600, fontSize: "0.8rem", letterSpacing: "0.02em", color: "var(--text-secondary)" }}>
-                  SUBTÍTULOS PARA EL CLIP
-                </span>
-              </div>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.76rem" }}>
-                <input
-                  type="checkbox"
-                  checked={burnSubtitles}
-                  onChange={(e) => setBurnSubtitles(e.target.checked)}
-                  style={{ accentColor: "#fafafa", cursor: "pointer" }}
-                />
-                <span style={{ color: burnSubtitles ? "#fafafa" : "var(--text-secondary)", fontWeight: burnSubtitles ? 600 : 400 }}>
-                  Incrustar en el video
-                </span>
-              </label>
-            </div>
-
-            <p style={{ margin: "0 0 0.75rem", fontSize: "0.74rem", color: "var(--text-muted)" }}>
-              {burnSubtitles
-                ? "Los subtítulos se renderizarán sobre el video en la posición que elijas. También se guardará el archivo .srt editable por separado."
-                : "El video se exportará limpio (sin subtítulos incrustados) y se creará un archivo .srt sincronizado por separado."}
-            </p>
-
-            {burnSubtitles && (
-              <>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", paddingTop: "0.25rem", borderTop: "1px dashed var(--border-default)" }}>
-                  {/* Estilo de Subtítulo */}
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.74rem", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-                      Estilo de animación:
-                    </label>
-                    <select
-                      value={captionStyle}
-                      onChange={(e) => setCaptionStyle(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.38rem 0.5rem",
-                        borderRadius: "6px",
-                        background: "var(--bg-surface-raised)",
-                        border: "1px solid var(--border-default)",
-                        color: "#fafafa",
-                        fontSize: "0.76rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <option value="loud-viral">🔥 Loud Viral (HyperFrames Impact 3D)</option>
-                      <option value="arcade-retro">🎮 Arcade Retro (Gaming HUD Neón)</option>
-                      <option value="cyber-terminal">💻 Cyber Terminal (Matrix Monospace)</option>
-                      <option value="clean-editorial">✨ Clean Editorial (Elegante & Suave)</option>
-                      <option value="tiktok-karaoke">🟡 TikTok Karaoke (Palabra Resaltada)</option>
-                      <option value="modern-box">⬛ Caja Moderna (Fondo Oscuro)</option>
-                      <option value="classic-outline">🟨 Clásico Contorno (Amarillo y Negro)</option>
-                      <option value="minimal-shadow">⬜ Minimalista (Blanco con Sombra)</option>
-                    </select>
-                  </div>
-
-                  {/* Posición en Pantalla (Evitar estorbar cámaras / HUD) */}
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.74rem", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-                      Posición de subtítulo:
-                    </label>
-                    <div style={{ display: "flex", gap: "0.3rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setCaptionPosition("bottom")}
-                        title="Abajo (Estándar para reels/shorts)"
-                        style={{
-                          flex: 1,
-                          padding: "0.38rem 0.2rem",
-                          borderRadius: "5px",
-                          border: captionPosition === "bottom" ? "1px solid #38bdf8" : "1px solid var(--border-default)",
-                          background: captionPosition === "bottom" ? "#0284c7" : "var(--bg-surface-raised)",
-                          color: "#fafafa",
-                          fontSize: "0.72rem",
-                          fontWeight: captionPosition === "bottom" ? 700 : 400,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <AlignVerticalJustifyEnd size={12} />
-                        Abajo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCaptionPosition("center")}
-                        title="Centro (No tapa la interfaz del juego ni subtítulos inferiores)"
-                        style={{
-                          flex: 1,
-                          padding: "0.38rem 0.2rem",
-                          borderRadius: "5px",
-                          border: captionPosition === "center" ? "1px solid #38bdf8" : "1px solid var(--border-default)",
-                          background: captionPosition === "center" ? "#0284c7" : "var(--bg-surface-raised)",
-                          color: "#fafafa",
-                          fontSize: "0.72rem",
-                          fontWeight: captionPosition === "center" ? 700 : 400,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <AlignVerticalJustifyCenter size={12} />
-                        Centro
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCaptionPosition("top")}
-                        title="Arriba (No estorba la cámara del streamer ni HUD inferior)"
-                        style={{
-                          flex: 1,
-                          padding: "0.38rem 0.2rem",
-                          borderRadius: "5px",
-                          border: captionPosition === "top" ? "1px solid #38bdf8" : "1px solid var(--border-default)",
-                          background: captionPosition === "top" ? "#0284c7" : "var(--bg-surface-raised)",
-                          color: "#fafafa",
-                          fontSize: "0.72rem",
-                          fontWeight: captionPosition === "top" ? 700 : 400,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <AlignVerticalJustifyStart size={12} />
-                        Arriba
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Paleta de Colores de Subtítulos */}
-                <div style={{ marginTop: "0.6rem", paddingTop: "0.5rem", borderTop: "1px dashed var(--border-default)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                  {/* Color Principal */}
-                  <div>
-                    <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "0.73rem", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
-                      <Palette size={12} color="#38bdf8" />
-                      Color de texto:
-                    </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <div style={{ display: "flex", gap: "4px" }}>
-                        {[
-                          { color: "#ffffff", name: "Blanco" },
-                          { color: "#fef08a", name: "Crema" },
-                          { color: "#e0f2fe", name: "Celeste" },
-                          { color: "#fce7f3", name: "Rosa" },
-                          { color: "#d4d4d8", name: "Plata" },
-                        ].map((swatch) => (
-                          <button
-                            key={swatch.color}
-                            type="button"
-                            onClick={() => setCaptionColor(swatch.color)}
-                            title={swatch.name}
-                            style={{
-                              width: "20px",
-                              height: "20px",
-                              borderRadius: "4px",
-                              background: swatch.color,
-                              border: captionColor.toLowerCase() === swatch.color.toLowerCase() ? "2px solid #38bdf8" : "1px solid rgba(255,255,255,0.2)",
-                              cursor: "pointer",
-                              padding: 0,
-                            }}
-                          />
-                        ))}
-                      </div>
-                      <input
-                        type="color"
-                        value={captionColor}
-                        onChange={(e) => setCaptionColor(e.target.value)}
-                        title="Personalizar color de texto"
-                        style={{
-                          width: "26px",
-                          height: "24px",
-                          padding: "0 1px",
-                          borderRadius: "4px",
-                          border: "1px solid var(--border-default)",
-                          background: "var(--bg-surface-raised)",
-                          cursor: "pointer",
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Color de Resaltado / Karaoke */}
-                  <div>
-                    <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "0.73rem", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
-                      <Sparkles size={12} color="#facc15" />
-                      Color de resaltado (Karaoke):
-                    </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <div style={{ display: "flex", gap: "4px" }}>
-                        {[
-                          { color: "#facc15", name: "Amarillo" },
-                          { color: "#38bdf8", name: "Cyan" },
-                          { color: "#4ade80", name: "Verde Neón" },
-                          { color: "#f43f5e", name: "Rojo Fresa" },
-                          { color: "#fb923c", name: "Naranja" },
-                          { color: "#c084fc", name: "Púrpura" },
-                        ].map((swatch) => (
-                          <button
-                            key={swatch.color}
-                            type="button"
-                            onClick={() => setCaptionHighlight(swatch.color)}
-                            title={swatch.name}
-                            style={{
-                              width: "20px",
-                              height: "20px",
-                              borderRadius: "4px",
-                              background: swatch.color,
-                              border: captionHighlight.toLowerCase() === swatch.color.toLowerCase() ? "2px solid #38bdf8" : "1px solid rgba(255,255,255,0.2)",
-                              cursor: "pointer",
-                              padding: 0,
-                            }}
-                          />
-                        ))}
-                      </div>
-                      <input
-                        type="color"
-                        value={captionHighlight}
-                        onChange={(e) => setCaptionHighlight(e.target.value)}
-                        title="Personalizar color de resaltado"
-                        style={{
-                          width: "26px",
-                          height: "24px",
-                          padding: "0 1px",
-                          borderRadius: "4px",
-                          border: "1px solid var(--border-default)",
-                          background: "var(--bg-surface-raised)",
-                          cursor: "pointer",
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Formato de Líneas (1 Sola Línea vs 2 Líneas) */}
-                <div style={{ marginTop: "0.6rem", paddingTop: "0.5rem", borderTop: "1px dashed var(--border-default)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 500 }}>
-                      Distribución de líneas:
-                    </label>
-                    <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>
-                      {captionLines === "1" ? "⚡ Obligar a 1 sola línea (rápido y directo)" : "Dividir en 2 líneas si es largo"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", gap: "0.3rem" }}>
-                    <button
-                      type="button"
-                      onClick={() => setCaptionLines("1")}
-                      title="Obligar a 1 sola línea fija (estilo TikTok/Shorts)"
-                      style={{
-                        padding: "0.3rem 0.6rem",
-                        borderRadius: "5px",
-                        border: captionLines === "1" ? "1px solid #38bdf8" : "1px solid var(--border-default)",
-                        background: captionLines === "1" ? "#0284c7" : "var(--bg-surface-raised)",
-                        color: "#fafafa",
-                        fontSize: "0.72rem",
-                        fontWeight: captionLines === "1" ? 700 : 400,
-                        cursor: "pointer",
-                      }}
-                    >
-                      1 Sola Línea
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCaptionLines("2")}
-                      title="Permitir hasta 2 líneas de texto"
-                      style={{
-                        padding: "0.3rem 0.6rem",
-                        borderRadius: "5px",
-                        border: captionLines === "2" ? "1px solid #38bdf8" : "1px solid var(--border-default)",
-                        background: captionLines === "2" ? "#0284c7" : "var(--bg-surface-raised)",
-                        color: "#fafafa",
-                        fontSize: "0.72rem",
-                        fontWeight: captionLines === "2" ? 700 : 400,
-                        cursor: "pointer",
-                      }}
-                    >
-                      2 Líneas
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* SECCIÓN CTA ANIMADO ("Sígueme y dale like / Apóyame") */}
-          <div style={{ marginTop: "0.75rem", padding: "0.85rem", borderRadius: "8px", background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.45rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <Heart size={14} color="#f43f5e" />
-                <span style={{ fontWeight: 600, fontSize: "0.8rem", letterSpacing: "0.02em", color: "var(--text-secondary)" }}>
-                  LLAMADO A LA ACCIÓN (CTA ANIMADO)
-                </span>
-              </div>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.76rem" }}>
-                <input
-                  type="checkbox"
-                  checked={ctaEnabled}
-                  onChange={(e) => setCtaEnabled(e.target.checked)}
-                  style={{ accentColor: "#f43f5e", cursor: "pointer" }}
-                />
-                <span style={{ color: ctaEnabled ? "#fafafa" : "var(--text-secondary)", fontWeight: ctaEnabled ? 600 : 400 }}>
-                  Incrustar en el video
-                </span>
-              </label>
-            </div>
-
-            <p style={{ margin: "0 0 0.6rem", fontSize: "0.73rem", color: "var(--text-muted)" }}>
-              {ctaEnabled
-                ? "Incrusta una insignia animada emergente (bounce & fade) para incentivar likes y seguidores en redes sociales."
-                : "No se agregará insignia de llamado a la acción al clip."}
-            </p>
-
-            {ctaEnabled && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", paddingTop: "0.4rem", borderTop: "1px dashed var(--border-default)" }}>
-                {/* Texto del CTA */}
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
-                    <label style={{ fontSize: "0.73rem", color: "var(--text-secondary)" }}>
-                      Texto del llamado:
-                    </label>
-                    <select
-                      onChange={(e) => {
-                        if (e.target.value) setCtaText(e.target.value);
-                      }}
-                      defaultValue=""
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        color: "#38bdf8",
-                        fontSize: "0.68rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <option value="" disabled>Elegir sugerencia...</option>
-                      <option value="❤️ ¡Sígueme y dale like!">❤️ ¡Sígueme y dale like!</option>
-                      <option value="🔥 ¡Apóyame con tu follow!">🔥 ¡Apóyame con tu follow!</option>
-                      <option value="🔔 ¡Suscríbete para más clips!">🔔 ¡Suscríbete para más clips!</option>
-                      <option value="💬 ¡Comenta qué opinas!">💬 ¡Comenta qué opinas!</option>
-                      <option value="⭐ ¡Guarda este video!">⭐ ¡Guarda este video!</option>
-                    </select>
-                  </div>
+                <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
                   <input
-                    type="text"
-                    value={ctaText}
-                    onChange={(e) => setCtaText(e.target.value)}
-                    placeholder="Ej. ❤️ ¡Sígueme y dale like!"
+                    type="range"
+                    min={0}
+                    max={clipDuration}
+                    step={0.1}
+                    value={Math.min(currentPlayTime, clipDuration)}
+                    onChange={handleSeek}
                     style={{
                       width: "100%",
-                      padding: "0.38rem 0.6rem",
-                      borderRadius: "6px",
-                      background: "var(--bg-surface-raised)",
-                      border: "1px solid var(--border-default)",
-                      color: "#fafafa",
-                      fontSize: "0.76rem",
+                      height: "6px",
+                      borderRadius: "3px",
+                      accentColor: "#0284c7",
+                      cursor: "pointer",
+                      outline: "none",
                     }}
                   />
                 </div>
 
-                {/* Estilo de Animación y Posición */}
-                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "0.75rem" }}>
-                  {/* Animación del CTA */}
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.73rem", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
-                      Estilo de animación del CTA:
-                    </label>
-                    <select
-                      value={ctaAnimation}
-                      onChange={(e) => setCtaAnimation(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.38rem 0.5rem",
-                        borderRadius: "6px",
-                        background: "var(--bg-surface-raised)",
-                        border: "1px solid var(--border-default)",
-                        color: "#fafafa",
-                        fontSize: "0.74rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <option value="bounce-land">💥 Impacto & Rebote (Bounce Land)</option>
-                      <option value="slide-up">⬆️ Deslizamiento Suave (Slide Up)</option>
-                      <option value="pulse-glow">💓 Latido Neón Continuo (Pulse Glow)</option>
-                      <option value="fade-smooth">✨ Fundido Elegante (Fade Smooth)</option>
-                    </select>
-                  </div>
-
-                  {/* Posición del CTA en Pantalla */}
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.73rem", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
-                      Posición en pantalla:
-                    </label>
-                    <div style={{ display: "flex", gap: "0.3rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setCtaPosition("top")}
-                        title="Arriba"
-                        style={{
-                          flex: 1,
-                          padding: "0.38rem 0.2rem",
-                          borderRadius: "5px",
-                          border: ctaPosition === "top" ? "1px solid #f43f5e" : "1px solid var(--border-default)",
-                          background: ctaPosition === "top" ? "#e11d48" : "var(--bg-surface-raised)",
-                          color: "#fafafa",
-                          fontSize: "0.72rem",
-                          fontWeight: ctaPosition === "top" ? 700 : 400,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <AlignVerticalJustifyStart size={12} />
-                        Arriba
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCtaPosition("center")}
-                        title="Medio"
-                        style={{
-                          flex: 1,
-                          padding: "0.38rem 0.2rem",
-                          borderRadius: "5px",
-                          border: ctaPosition === "center" ? "1px solid #f43f5e" : "1px solid var(--border-default)",
-                          background: ctaPosition === "center" ? "#e11d48" : "var(--bg-surface-raised)",
-                          color: "#fafafa",
-                          fontSize: "0.72rem",
-                          fontWeight: ctaPosition === "center" ? 700 : 400,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <AlignVerticalJustifyCenter size={12} />
-                        Medio
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCtaPosition("bottom")}
-                        title="Abajo"
-                        style={{
-                          flex: 1,
-                          padding: "0.38rem 0.2rem",
-                          borderRadius: "5px",
-                          border: ctaPosition === "bottom" ? "1px solid #f43f5e" : "1px solid var(--border-default)",
-                          background: ctaPosition === "bottom" ? "#e11d48" : "var(--bg-surface-raised)",
-                          color: "#fafafa",
-                          fontSize: "0.72rem",
-                          fontWeight: ctaPosition === "bottom" ? 700 : 400,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <AlignVerticalJustifyEnd size={12} />
-                        Abajo
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* VISTA PREVIA EN VIVO COMPARTIDA (SUBTÍTULOS + CTA) */}
-          {(burnSubtitles || ctaEnabled) && (
-            <div style={{ marginTop: "0.75rem", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border-default)", background: "#09090b" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.35rem 0.75rem", background: "var(--bg-surface-raised)", borderBottom: "1px solid var(--border-default)", fontSize: "0.72rem", color: "var(--text-secondary)" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: 600 }}>
-                  <Eye size={12} color="#38bdf8" />
-                  Simulación de pantalla (Subtítulos & CTA):
-                </span>
-                <span style={{ fontSize: "0.68rem", opacity: 0.8, fontFamily: "var(--font-mono)" }}>
-                  {burnSubtitles ? `Subs: ${captionPosition} (${captionLines === "1" ? "1 línea" : "2 líneas"})` : "Sin subs"} | {ctaEnabled ? `CTA: ${ctaPosition} (${ctaAnimation})` : "Sin CTA"}
+                <span
+                  style={{
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    color: "var(--text-secondary)",
+                    fontFamily: "var(--font-mono, monospace)",
+                    fontVariantNumeric: "tabular-nums",
+                    minWidth: "42px",
+                    textAlign: "right",
+                  }}
+                  title="Duración del clip"
+                >
+                  {formatTime(clipDuration)}
                 </span>
               </div>
 
               <div
                 style={{
-                  position: "relative",
-                  height: "140px",
-                  background: "radial-gradient(ellipse at center, #18181b 0%, #09090b 100%)",
                   display: "flex",
-                  flexDirection: "column",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  padding: "10px 14px",
-                  overflow: "hidden",
+                  fontSize: "0.7rem",
+                  color: "var(--text-muted)",
+                  paddingLeft: "4px",
                 }}
               >
-                <div style={{ position: "absolute", top: "6px", left: "10px", fontSize: "0.62rem", color: "rgba(255,255,255,0.25)", fontFamily: "var(--font-mono)" }}>
-                  [SIMULACIÓN EN PANTALLA]
-                </div>
-
-                {/* Insignia CTA Animada en Posición ARRIBA */}
-                {ctaEnabled && ctaPosition === "top" && renderCtaBadgePreview()}
-
-                {/* Subtítulo si está ARRIBA */}
-                {burnSubtitles && captionPosition === "top" && (
-                  <div style={{ marginTop: ctaEnabled && ctaPosition === "top" ? "4px" : "12px", zIndex: 1 }}>
-                    {renderCaptionPreview()}
-                  </div>
-                )}
-
-                {/* Centro (Subtítulo y/o CTA) */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", margin: "auto 0", zIndex: 1 }}>
-                  {ctaEnabled && ctaPosition === "center" && renderCtaBadgePreview()}
-                  {burnSubtitles && captionPosition === "center" && (
-                    <div>{renderCaptionPreview()}</div>
-                  )}
-                </div>
-
-                {/* Subtítulo si está ABAJO */}
-                {burnSubtitles && captionPosition === "bottom" && (
-                  <div style={{ marginBottom: ctaEnabled && ctaPosition === "bottom" ? "4px" : "4px", zIndex: 1 }}>
-                    {renderCaptionPreview()}
-                  </div>
-                )}
-
-                {/* Insignia CTA Animada en Posición ABAJO */}
-                {ctaEnabled && ctaPosition === "bottom" && renderCtaBadgePreview()}
+                <span>
+                  Clip: <strong style={{ color: "#38bdf8", fontFamily: "var(--font-mono)" }}>{currentPlayTime.toFixed(1)}s</strong> / {clipDuration.toFixed(1)}s
+                </span>
+                <span>
+                  Original: <strong style={{ color: "#fafafa", fontFamily: "var(--font-mono)" }}>{formatTime(absoluteCurrentTime)}</strong>
+                </span>
               </div>
             </div>
-          )}
+          </div>
 
-          <div style={{ marginTop: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
-            <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", flex: 1 }}>
+          {/* COLUMNA DERECHA: HERRAMIENTAS ORGANIZADAS EN PESTAÑAS */}
+          <div className="clip-studio-tools-col">
+            {/* Barra de Pestañas Superior */}
+            <div className="studio-tabs-bar">
+              <button
+                type="button"
+                className={`studio-tab-btn ${activeTab === "trim" ? "active" : ""}`}
+                onClick={() => setActiveTab("trim")}
+              >
+                <Clock size={14} />
+                <span>1. Recorte (Trim)</span>
+              </button>
+              <button
+                type="button"
+                className={`studio-tab-btn ${activeTab === "subs" ? "active" : ""}`}
+                onClick={() => setActiveTab("subs")}
+              >
+                <Type size={14} />
+                <span>2. Subtítulos</span>
+              </button>
+              <button
+                type="button"
+                className={`studio-tab-btn ${activeTab === "cta" ? "active" : ""}`}
+                onClick={() => setActiveTab("cta")}
+              >
+                <Heart size={14} />
+                <span>3. CTA Animado</span>
+              </button>
+            </div>
+
+            {/* PESTAÑA 1: RECORTE Y TIEMPOS */}
+            {activeTab === "trim" && (
+              <div className="studio-tab-pane">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                      Ajuste Fino de Tiempos
+                    </h4>
+                    <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                      Extiende o acorta el clip con precisión quirúrgica de décimas de segundo.
+                    </p>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.78rem",
+                      color: "var(--text-secondary)",
+                      fontFamily: "var(--font-mono)",
+                      background: "rgba(255, 255, 255, 0.05)",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                    }}
+                  >
+                    Duración: <strong style={{ color: "#38bdf8" }}>{clipDuration.toFixed(1)}s</strong>
+                  </span>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+                  {/* Inicio */}
+                  <div
+                    style={{
+                      background: "rgba(255, 255, 255, 0.03)",
+                      padding: "0.75rem",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                      <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600 }}>Punto de Inicio</span>
+                      <span style={{ fontSize: "0.76rem", color: "#38bdf8", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                        {formatTime(trimStart)} ({trimStart.toFixed(1)}s)
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.3rem" }}>
+                      <button
+                        type="button"
+                        className="btn-cancel"
+                        style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
+                        onClick={() => setTrimStart((curr) => Math.max(0, Number((curr - 5).toFixed(1))))}
+                        title="Retroceder inicio 5s"
+                      >
+                        -5s
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-cancel"
+                        style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
+                        onClick={() => setTrimStart((curr) => Math.max(0, Number((curr - 1).toFixed(1))))}
+                        title="Retroceder inicio 1s"
+                      >
+                        -1s
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-cancel"
+                        style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
+                        onClick={() => setTrimStart((curr) => Math.min(trimEnd - 1, Number((curr + 1).toFixed(1))))}
+                        title="Avanzar inicio 1s"
+                      >
+                        +1s
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-cancel"
+                        style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
+                        onClick={() => setTrimStart((curr) => Math.min(trimEnd - 1, Number((curr + 5).toFixed(1))))}
+                        title="Avanzar inicio 5s"
+                      >
+                        +5s
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Fin */}
+                  <div
+                    style={{
+                      background: "rgba(255, 255, 255, 0.03)",
+                      padding: "0.75rem",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                      <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600 }}>Punto de Fin</span>
+                      <span style={{ fontSize: "0.76rem", color: "#38bdf8", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                        {formatTime(trimEnd)} ({trimEnd.toFixed(1)}s)
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.3rem" }}>
+                      <button
+                        type="button"
+                        className="btn-cancel"
+                        style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
+                        onClick={() => setTrimEnd((curr) => Math.max(trimStart + 1, Number((curr - 5).toFixed(1))))}
+                        title="Acortar fin 5s"
+                      >
+                        -5s
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-cancel"
+                        style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
+                        onClick={() => setTrimEnd((curr) => Math.max(trimStart + 1, Number((curr - 1).toFixed(1))))}
+                        title="Acortar fin 1s"
+                      >
+                        -1s
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-cancel"
+                        style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
+                        onClick={() => setTrimEnd((curr) => Number((curr + 1).toFixed(1)))}
+                        title="Extender fin 1s"
+                      >
+                        +1s
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-cancel"
+                        style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
+                        onClick={() => setTrimEnd((curr) => Number((curr + 5).toFixed(1)))}
+                        title="Extender fin 5s"
+                      >
+                        +5s
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.5rem" }}>
+                  {trimStart !== candidate.startSec || trimEnd !== candidate.endSec ? (
+                    <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                      Original IA: {formatTime(candidate.startSec)} - {formatTime(candidate.endSec)}
+                    </span>
+                  ) : (
+                    <div />
+                  )}
+
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      className="btn-cancel"
+                      style={{ minHeight: "32px", fontSize: "0.76rem", padding: "0 12px" }}
+                      onClick={() => {
+                        setTrimStart(candidate.startSec);
+                        setTrimEnd(candidate.endSec);
+                      }}
+                      disabled={trimStart === candidate.startSec && trimEnd === candidate.endSec}
+                    >
+                      Restablecer Original
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-confirm"
+                      style={{ minHeight: "32px", fontSize: "0.76rem", padding: "0 16px" }}
+                      onClick={onSaveTrim}
+                      disabled={isSavingTrim || trimStart >= trimEnd}
+                    >
+                      {isSavingTrim ? "Guardando..." : "Guardar Ajuste"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PESTAÑA 2: SUBTÍTULOS DINÁMICOS */}
+            {activeTab === "subs" && (
+              <div className="studio-tab-pane">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                      Subtítulos Dinámicos (Motionmaxxing)
+                    </h4>
+                    <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                      Renderizado en vivo con tipografías hiper-legibles y resaltado por palabra.
+                    </p>
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.78rem" }}>
+                    <input
+                      type="checkbox"
+                      checked={burnSubtitles}
+                      onChange={(e) => setBurnSubtitles(e.target.checked)}
+                      style={{ accentColor: "#0284c7", cursor: "pointer" }}
+                    />
+                    <span style={{ color: burnSubtitles ? "#38bdf8" : "var(--text-secondary)", fontWeight: 700 }}>
+                      Incrustar Subtítulos
+                    </span>
+                  </label>
+                </div>
+
+                {burnSubtitles ? (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: "0.85rem", paddingTop: "0.25rem" }}>
+                      {/* Estilo */}
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.4rem", fontWeight: 600 }}>
+                          Estilo de animación:
+                        </label>
+                        <select
+                          value={captionStyle}
+                          onChange={(e) => setCaptionStyle(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "0.45rem 0.6rem",
+                            borderRadius: "6px",
+                            background: "rgba(255, 255, 255, 0.05)",
+                            border: "1px solid rgba(255, 255, 255, 0.12)",
+                            color: "#fafafa",
+                            fontSize: "0.78rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <option value="loud-viral">🔥 Loud Viral (HyperFrames Impact 3D)</option>
+                          <option value="arcade-retro">🎮 Arcade Retro (Gaming HUD Neón)</option>
+                          <option value="cyber-terminal">💻 Cyber Terminal (Matrix Monospace)</option>
+                          <option value="clean-editorial">✨ Clean Editorial (Elegante & Suave)</option>
+                          <option value="tiktok-karaoke">🟡 TikTok Karaoke (Palabra Resaltada)</option>
+                          <option value="modern-box">⬛ Caja Moderna (Fondo Oscuro)</option>
+                          <option value="classic-outline">🟨 Clásico Contorno (Amarillo y Negro)</option>
+                          <option value="minimal-shadow">⬜ Minimalista (Blanco con Sombra)</option>
+                        </select>
+                      </div>
+
+                      {/* Posición */}
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.4rem", fontWeight: 600 }}>
+                          Posición en pantalla:
+                        </label>
+                        <div style={{ display: "flex", gap: "0.3rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => setCaptionPosition("top")}
+                            title="Arriba"
+                            style={{
+                              flex: 1,
+                              padding: "0.42rem 0.2rem",
+                              borderRadius: "5px",
+                              border: captionPosition === "top" ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                              background: captionPosition === "top" ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
+                              color: "#fafafa",
+                              fontSize: "0.72rem",
+                              fontWeight: captionPosition === "top" ? 700 : 400,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "3px",
+                            }}
+                          >
+                            <AlignVerticalJustifyStart size={12} />
+                            Arriba
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCaptionPosition("center")}
+                            title="Centro"
+                            style={{
+                              flex: 1,
+                              padding: "0.42rem 0.2rem",
+                              borderRadius: "5px",
+                              border: captionPosition === "center" ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                              background: captionPosition === "center" ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
+                              color: "#fafafa",
+                              fontSize: "0.72rem",
+                              fontWeight: captionPosition === "center" ? 700 : 400,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "3px",
+                            }}
+                          >
+                            <AlignVerticalJustifyCenter size={12} />
+                            Centro
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCaptionPosition("bottom")}
+                            title="Abajo"
+                            style={{
+                              flex: 1,
+                              padding: "0.42rem 0.2rem",
+                              borderRadius: "5px",
+                              border: captionPosition === "bottom" ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                              background: captionPosition === "bottom" ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
+                              color: "#fafafa",
+                              fontSize: "0.72rem",
+                              fontWeight: captionPosition === "bottom" ? 700 : 400,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "3px",
+                            }}
+                          >
+                            <AlignVerticalJustifyEnd size={12} />
+                            Abajo
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Paletas de Colores */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "0.85rem",
+                        background: "rgba(255, 255, 255, 0.02)",
+                        padding: "0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(255, 255, 255, 0.06)",
+                      }}
+                    >
+                      <div>
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontSize: "0.75rem",
+                            color: "var(--text-secondary)",
+                            marginBottom: "0.4rem",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <Palette size={12} color="#38bdf8" />
+                          Color de texto:
+                        </label>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <div style={{ display: "flex", gap: "4px" }}>
+                            {[
+                              { color: "#ffffff", name: "Blanco" },
+                              { color: "#fef08a", name: "Crema" },
+                              { color: "#e0f2fe", name: "Celeste" },
+                              { color: "#fce7f3", name: "Rosa" },
+                              { color: "#d4d4d8", name: "Plata" },
+                            ].map((swatch) => (
+                              <button
+                                key={swatch.color}
+                                type="button"
+                                onClick={() => setCaptionColor(swatch.color)}
+                                title={swatch.name}
+                                style={{
+                                  width: "22px",
+                                  height: "22px",
+                                  borderRadius: "4px",
+                                  background: swatch.color,
+                                  border: captionColor.toLowerCase() === swatch.color.toLowerCase() ? "2px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.2)",
+                                  cursor: "pointer",
+                                  padding: 0,
+                                }}
+                              />
+                            ))}
+                          </div>
+                          <input
+                            type="color"
+                            value={captionColor}
+                            onChange={(e) => setCaptionColor(e.target.value)}
+                            title="Personalizar color de texto"
+                            style={{
+                              width: "28px",
+                              height: "24px",
+                              padding: "0 1px",
+                              borderRadius: "4px",
+                              border: "1px solid rgba(255, 255, 255, 0.2)",
+                              background: "transparent",
+                              cursor: "pointer",
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontSize: "0.75rem",
+                            color: "var(--text-secondary)",
+                            marginBottom: "0.4rem",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <Sparkles size={12} color="#facc15" />
+                          Resaltado (Karaoke):
+                        </label>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <div style={{ display: "flex", gap: "4px" }}>
+                            {[
+                              { color: "#facc15", name: "Amarillo" },
+                              { color: "#38bdf8", name: "Cyan" },
+                              { color: "#4ade80", name: "Verde Neón" },
+                              { color: "#f43f5e", name: "Rojo Fresa" },
+                              { color: "#fb923c", name: "Naranja" },
+                              { color: "#c084fc", name: "Púrpura" },
+                            ].map((swatch) => (
+                              <button
+                                key={swatch.color}
+                                type="button"
+                                onClick={() => setCaptionHighlight(swatch.color)}
+                                title={swatch.name}
+                                style={{
+                                  width: "22px",
+                                  height: "22px",
+                                  borderRadius: "4px",
+                                  background: swatch.color,
+                                  border: captionHighlight.toLowerCase() === swatch.color.toLowerCase() ? "2px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.2)",
+                                  cursor: "pointer",
+                                  padding: 0,
+                                }}
+                              />
+                            ))}
+                          </div>
+                          <input
+                            type="color"
+                            value={captionHighlight}
+                            onChange={(e) => setCaptionHighlight(e.target.value)}
+                            title="Personalizar color de resaltado"
+                            style={{
+                              width: "28px",
+                              height: "24px",
+                              padding: "0 1px",
+                              borderRadius: "4px",
+                              border: "1px solid rgba(255, 255, 255, 0.2)",
+                              background: "transparent",
+                              cursor: "pointer",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Distribución de Líneas */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        background: "rgba(255, 255, 255, 0.02)",
+                        padding: "0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(255, 255, 255, 0.06)",
+                      }}
+                    >
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.76rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+                          Distribución de líneas:
+                        </label>
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                          {captionLines === "1" ? "⚡ 1 sola línea fija (estilo TikTok / Shorts)" : "Dividir en hasta 2 líneas"}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: "0.3rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => setCaptionLines("1")}
+                          style={{
+                            padding: "0.35rem 0.75rem",
+                            borderRadius: "5px",
+                            border: captionLines === "1" ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                            background: captionLines === "1" ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
+                            color: "#fafafa",
+                            fontSize: "0.74rem",
+                            fontWeight: captionLines === "1" ? 700 : 400,
+                            cursor: "pointer",
+                          }}
+                        >
+                          1 Sola Línea
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCaptionLines("2")}
+                          style={{
+                            padding: "0.35rem 0.75rem",
+                            borderRadius: "5px",
+                            border: captionLines === "2" ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                            background: captionLines === "2" ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
+                            color: "#fafafa",
+                            fontSize: "0.74rem",
+                            fontWeight: captionLines === "2" ? 700 : 400,
+                            cursor: "pointer",
+                          }}
+                        >
+                          2 Líneas
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div
+                    style={{
+                      padding: "1.5rem",
+                      textAlign: "center",
+                      background: "rgba(255, 255, 255, 0.02)",
+                      borderRadius: "8px",
+                      border: "1px dashed rgba(255, 255, 255, 0.1)",
+                      color: "var(--text-muted)",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    Los subtítulos incrustados están desactivados. El video se exportará limpio y se creará un archivo .srt sincronizado por separado.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* PESTAÑA 3: CTA ANIMADO */}
+            {activeTab === "cta" && (
+              <div className="studio-tab-pane">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                      Llamado a la Acción (CTA Animado)
+                    </h4>
+                    <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                      Insignia flotante dinámica para maximizar likes, comentarios y suscripciones.
+                    </p>
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.78rem" }}>
+                    <input
+                      type="checkbox"
+                      checked={ctaEnabled}
+                      onChange={(e) => setCtaEnabled(e.target.checked)}
+                      style={{ accentColor: "#f43f5e", cursor: "pointer" }}
+                    />
+                    <span style={{ color: ctaEnabled ? "#f43f5e" : "var(--text-secondary)", fontWeight: 700 }}>
+                      Incrustar Insignia
+                    </span>
+                  </label>
+                </div>
+
+                {ctaEnabled ? (
+                  <>
+                    <div
+                      style={{
+                        background: "rgba(255, 255, 255, 0.02)",
+                        padding: "0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(255, 255, 255, 0.06)",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                        <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+                          Texto del llamado:
+                        </label>
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) setCtaText(e.target.value);
+                          }}
+                          defaultValue=""
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "#38bdf8",
+                            fontSize: "0.72rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <option value="" disabled>Elegir sugerencia rápida...</option>
+                          <option value="❤️ ¡Sígueme y dale like!">❤️ ¡Sígueme y dale like!</option>
+                          <option value="🔥 ¡Apóyame con tu follow!">🔥 ¡Apóyame con tu follow!</option>
+                          <option value="🔔 ¡Suscríbete para más clips!">🔔 ¡Suscríbete para más clips!</option>
+                          <option value="💬 ¡Comenta qué opinas!">💬 ¡Comenta qué opinas!</option>
+                          <option value="⭐ ¡Guarda este video!">⭐ ¡Guarda este video!</option>
+                        </select>
+                      </div>
+                      <input
+                        type="text"
+                        value={ctaText}
+                        onChange={(e) => setCtaText(e.target.value)}
+                        placeholder="Ej. ❤️ ¡Sígueme y dale like!"
+                        style={{
+                          width: "100%",
+                          padding: "0.45rem 0.65rem",
+                          borderRadius: "6px",
+                          background: "rgba(255, 255, 255, 0.05)",
+                          border: "1px solid rgba(255, 255, 255, 0.12)",
+                          color: "#fafafa",
+                          fontSize: "0.78rem",
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: "0.85rem" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.4rem", fontWeight: 600 }}>
+                          Estilo de animación:
+                        </label>
+                        <select
+                          value={ctaAnimation}
+                          onChange={(e) => setCtaAnimation(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "0.45rem 0.6rem",
+                            borderRadius: "6px",
+                            background: "rgba(255, 255, 255, 0.05)",
+                            border: "1px solid rgba(255, 255, 255, 0.12)",
+                            color: "#fafafa",
+                            fontSize: "0.76rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <option value="bounce-land">💥 Impacto & Rebote (Bounce Land)</option>
+                          <option value="slide-up">⬆️ Deslizamiento Suave (Slide Up)</option>
+                          <option value="pulse-glow">💓 Latido Neón Continuo (Pulse Glow)</option>
+                          <option value="fade-smooth">✨ Fundido Elegante (Fade Smooth)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.4rem", fontWeight: 600 }}>
+                          Posición en pantalla:
+                        </label>
+                        <div style={{ display: "flex", gap: "0.3rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => setCtaPosition("top")}
+                            title="Arriba"
+                            style={{
+                              flex: 1,
+                              padding: "0.42rem 0.2rem",
+                              borderRadius: "5px",
+                              border: ctaPosition === "top" ? "1px solid #f43f5e" : "1px solid rgba(255, 255, 255, 0.1)",
+                              background: ctaPosition === "top" ? "#e11d48" : "rgba(255, 255, 255, 0.04)",
+                              color: "#fafafa",
+                              fontSize: "0.72rem",
+                              fontWeight: ctaPosition === "top" ? 700 : 400,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "3px",
+                            }}
+                          >
+                            <AlignVerticalJustifyStart size={12} />
+                            Arriba
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCtaPosition("center")}
+                            title="Centro"
+                            style={{
+                              flex: 1,
+                              padding: "0.42rem 0.2rem",
+                              borderRadius: "5px",
+                              border: ctaPosition === "center" ? "1px solid #f43f5e" : "1px solid rgba(255, 255, 255, 0.1)",
+                              background: ctaPosition === "center" ? "#e11d48" : "rgba(255, 255, 255, 0.04)",
+                              color: "#fafafa",
+                              fontSize: "0.72rem",
+                              fontWeight: ctaPosition === "center" ? 700 : 400,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "3px",
+                            }}
+                          >
+                            <AlignVerticalJustifyCenter size={12} />
+                            Medio
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCtaPosition("bottom")}
+                            title="Abajo"
+                            style={{
+                              flex: 1,
+                              padding: "0.42rem 0.2rem",
+                              borderRadius: "5px",
+                              border: ctaPosition === "bottom" ? "1px solid #f43f5e" : "1px solid rgba(255, 255, 255, 0.1)",
+                              background: ctaPosition === "bottom" ? "#e11d48" : "rgba(255, 255, 255, 0.04)",
+                              color: "#fafafa",
+                              fontSize: "0.72rem",
+                              fontWeight: ctaPosition === "bottom" ? 700 : 400,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "3px",
+                            }}
+                          >
+                            <AlignVerticalJustifyEnd size={12} />
+                            Abajo
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div
+                    style={{
+                      padding: "1.5rem",
+                      textAlign: "center",
+                      background: "rgba(255, 255, 255, 0.02)",
+                      borderRadius: "8px",
+                      border: "1px dashed rgba(255, 255, 255, 0.1)",
+                      color: "var(--text-muted)",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    El CTA animado está desactivado para este clip.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 3. FOOTER DEL ESTUDIO */}
+        <div className="clip-studio-footer">
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
+            <span
+              style={{
+                background: "rgba(2, 132, 199, 0.15)",
+                color: "#38bdf8",
+                border: "1px solid rgba(2, 132, 199, 0.3)",
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                padding: "3px 8px",
+                borderRadius: "9999px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ● Score IA: {Math.round(candidate.score * 10)}/100
+            </span>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.76rem",
+                color: "var(--text-secondary)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+              title={candidate.rationale}
+            >
               {candidate.rationale}
             </p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
+            <button
+              type="button"
+              className="btn-cancel"
+              onClick={onClose}
+              style={{ minHeight: "36px", padding: "0 16px", fontSize: "0.82rem" }}
+            >
+              Descartar
+            </button>
             <button
               type="button"
               className="btn-confirm"
@@ -1239,9 +1435,23 @@ export function CandidatePreviewModal({
                 });
               }}
               disabled={busy !== "idle"}
-              style={{ whiteSpace: "nowrap", padding: "0.5rem 1rem", fontSize: "0.85rem" }}
+              style={{
+                minHeight: "36px",
+                padding: "0 18px",
+                fontSize: "0.82rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "7px",
+                background: "#0284c7",
+                color: "#ffffff",
+                border: "1px solid #0284c7",
+                fontWeight: 700,
+                borderRadius: "6px",
+                boxShadow: "0 2px 10px rgba(2, 132, 199, 0.4)",
+                cursor: "pointer",
+              }}
             >
-              <Scissors size={14} />
+              <Scissors size={15} />
               <span>Cortar y Exportar Clip</span>
             </button>
           </div>
