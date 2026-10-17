@@ -365,26 +365,28 @@ export function CandidatePreviewModal({
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span
                 style={{
-                  background: "#0284c7",
-                  color: "#fff",
+                  background: "var(--bg-surface)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border-default)",
                   fontSize: "0.72rem",
-                  fontWeight: 800,
+                  fontWeight: 700,
                   padding: "2px 8px",
                   borderRadius: "4px",
                   textTransform: "uppercase",
                   letterSpacing: "0.03em",
+                  fontFamily: "var(--font-mono)",
                 }}
               >
                 Clip #{candidate.rank}
               </span>
-              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--text-primary)" }}>
+              <h3 style={{ margin: 0, fontSize: "1.02rem", fontWeight: 700, color: "var(--text-primary)" }}>
                 "{cleanHook(candidate.hook)}"
               </h3>
             </div>
             <p
               style={{
                 margin: "4px 0 0",
-                fontSize: "0.78rem",
+                fontSize: "0.76rem",
                 color: "var(--text-secondary)",
                 fontFamily: "var(--font-mono)",
                 fontVariantNumeric: "tabular-nums",
@@ -414,17 +416,17 @@ export function CandidatePreviewModal({
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "0.4rem 0.75rem",
-                  background: "rgba(16, 185, 129, 0.12)",
-                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                  background: "var(--color-success-bg)",
+                  border: "1px solid var(--color-success-border)",
                   borderRadius: "6px",
                   fontSize: "0.72rem",
-                  color: "#34d399",
+                  color: "var(--color-success-text)",
                   fontWeight: 600,
                   flexShrink: 0,
                 }}
               >
                 <span>✨ Mostrando Clip Exportado (Incrustado)</span>
-                <span style={{ fontSize: "0.66rem", opacity: 0.85, color: "#a7f3d0", fontFamily: "var(--font-mono)" }}>
+                <span style={{ fontSize: "0.66rem", opacity: 0.85, fontFamily: "var(--font-mono)" }}>
                   {exportedPath ? exportedPath.split(/[\\/]/).pop() : ""}
                 </span>
               </div>
@@ -468,21 +470,21 @@ export function CandidatePreviewModal({
                     top: "50%",
                     left: "50%",
                     transform: "translate(-50%, -50%)",
-                    background: "rgba(0, 0, 0, 0.65)",
+                    background: "rgba(0, 0, 0, 0.75)",
                     backdropFilter: "blur(4px)",
                     color: "#ffffff",
                     borderRadius: "50%",
-                    width: "56px",
-                    height: "56px",
+                    width: "54px",
+                    height: "54px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     pointerEvents: "none",
                     boxShadow: "0 4px 20px rgba(0, 0, 0, 0.6)",
-                    border: "1px solid rgba(255, 255, 255, 0.2)",
+                    border: "1px solid var(--border-default)",
                   }}
                 >
-                  <Play size={26} style={{ marginLeft: "4px" }} />
+                  <Play size={24} style={{ marginLeft: "3px" }} />
                 </div>
               )}
 
@@ -523,8 +525,8 @@ export function CandidatePreviewModal({
             {/* Barra de Transporte VLC Compacta */}
             <div
               style={{
-                background: "#12141c",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                background: "var(--bg-surface-raised)",
+                border: "1px solid var(--border-default)",
                 borderRadius: "8px",
                 padding: "0.55rem 0.75rem",
                 display: "flex",
@@ -538,9 +540,9 @@ export function CandidatePreviewModal({
                   type="button"
                   onClick={togglePlayPause}
                   style={{
-                    background: "rgba(255, 255, 255, 0.08)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    color: "#fafafa",
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border-default)",
+                    color: "var(--text-primary)",
                     cursor: "pointer",
                     padding: "4px 8px",
                     display: "inline-flex",
@@ -557,7 +559,7 @@ export function CandidatePreviewModal({
                   style={{
                     fontSize: "0.82rem",
                     fontWeight: 700,
-                    color: "#38bdf8",
+                    color: "var(--text-primary)",
                     fontFamily: "var(--font-mono, monospace)",
                     fontVariantNumeric: "tabular-nums",
                     minWidth: "42px",
@@ -577,9 +579,9 @@ export function CandidatePreviewModal({
                     onChange={handleSeek}
                     style={{
                       width: "100%",
-                      height: "6px",
+                      height: "5px",
                       borderRadius: "3px",
-                      accentColor: "#0284c7",
+                      accentColor: "#fafafa",
                       cursor: "pointer",
                       outline: "none",
                     }}
@@ -613,10 +615,10 @@ export function CandidatePreviewModal({
                 }}
               >
                 <span>
-                  Clip: <strong style={{ color: "#38bdf8", fontFamily: "var(--font-mono)" }}>{currentPlayTime.toFixed(1)}s</strong> / {clipDuration.toFixed(1)}s
+                  Clip: <strong style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{currentPlayTime.toFixed(1)}s</strong> / {clipDuration.toFixed(1)}s
                 </span>
                 <span>
-                  Original: <strong style={{ color: "#fafafa", fontFamily: "var(--font-mono)" }}>{formatTime(absoluteCurrentTime)}</strong>
+                  Original: <strong style={{ color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>{formatTime(absoluteCurrentTime)}</strong>
                 </span>
               </div>
             </div>
@@ -666,16 +668,16 @@ export function CandidatePreviewModal({
                   </div>
                   <span
                     style={{
-                      fontSize: "0.78rem",
+                      fontSize: "0.76rem",
                       color: "var(--text-secondary)",
                       fontFamily: "var(--font-mono)",
-                      background: "rgba(255, 255, 255, 0.05)",
-                      padding: "4px 8px",
+                      background: "var(--bg-surface)",
+                      padding: "3px 8px",
                       borderRadius: "4px",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      border: "1px solid var(--border-default)",
                     }}
                   >
-                    Duración: <strong style={{ color: "#38bdf8" }}>{clipDuration.toFixed(1)}s</strong>
+                    Duración: <strong style={{ color: "var(--text-primary)" }}>{clipDuration.toFixed(1)}s</strong>
                   </span>
                 </div>
 
@@ -683,15 +685,15 @@ export function CandidatePreviewModal({
                   {/* Inicio */}
                   <div
                     style={{
-                      background: "rgba(255, 255, 255, 0.03)",
+                      background: "var(--bg-surface)",
                       padding: "0.75rem",
                       borderRadius: "8px",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      border: "1px solid var(--border-default)",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                       <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600 }}>Punto de Inicio</span>
-                      <span style={{ fontSize: "0.76rem", color: "#38bdf8", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                      <span style={{ fontSize: "0.76rem", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
                         {formatTime(trimStart)} ({trimStart.toFixed(1)}s)
                       </span>
                     </div>
@@ -738,15 +740,15 @@ export function CandidatePreviewModal({
                   {/* Fin */}
                   <div
                     style={{
-                      background: "rgba(255, 255, 255, 0.03)",
+                      background: "var(--bg-surface)",
                       padding: "0.75rem",
                       borderRadius: "8px",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      border: "1px solid var(--border-default)",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                       <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600 }}>Punto de Fin</span>
-                      <span style={{ fontSize: "0.76rem", color: "#38bdf8", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                      <span style={{ fontSize: "0.76rem", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
                         {formatTime(trimEnd)} ({trimEnd.toFixed(1)}s)
                       </span>
                     </div>
@@ -844,9 +846,9 @@ export function CandidatePreviewModal({
                       type="checkbox"
                       checked={burnSubtitles}
                       onChange={(e) => setBurnSubtitles(e.target.checked)}
-                      style={{ accentColor: "#0284c7", cursor: "pointer" }}
+                      style={{ accentColor: "#fafafa", cursor: "pointer" }}
                     />
-                    <span style={{ color: burnSubtitles ? "#38bdf8" : "var(--text-secondary)", fontWeight: 700 }}>
+                    <span style={{ color: burnSubtitles ? "var(--text-primary)" : "var(--text-secondary)", fontWeight: burnSubtitles ? 700 : 500 }}>
                       Incrustar Subtítulos
                     </span>
                   </label>
@@ -867,9 +869,9 @@ export function CandidatePreviewModal({
                             width: "100%",
                             padding: "0.45rem 0.6rem",
                             borderRadius: "6px",
-                            background: "rgba(255, 255, 255, 0.05)",
-                            border: "1px solid rgba(255, 255, 255, 0.12)",
-                            color: "#fafafa",
+                            background: "var(--bg-surface)",
+                            border: "1px solid var(--border-default)",
+                            color: "var(--text-primary)",
                             fontSize: "0.78rem",
                             cursor: "pointer",
                           }}
@@ -899,16 +901,17 @@ export function CandidatePreviewModal({
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: captionPosition === "top" ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
-                              background: captionPosition === "top" ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
-                              color: "#fafafa",
+                              border: captionPosition === "top" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: captionPosition === "top" ? "#fafafa" : "var(--bg-surface)",
+                              color: captionPosition === "top" ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: captionPosition === "top" ? 700 : 400,
+                              fontWeight: captionPosition === "top" ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               gap: "3px",
+                              transition: "all 0.15s ease",
                             }}
                           >
                             <AlignVerticalJustifyStart size={12} />
@@ -922,16 +925,17 @@ export function CandidatePreviewModal({
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: captionPosition === "center" ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
-                              background: captionPosition === "center" ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
-                              color: "#fafafa",
+                              border: captionPosition === "center" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: captionPosition === "center" ? "#fafafa" : "var(--bg-surface)",
+                              color: captionPosition === "center" ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: captionPosition === "center" ? 700 : 400,
+                              fontWeight: captionPosition === "center" ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               gap: "3px",
+                              transition: "all 0.15s ease",
                             }}
                           >
                             <AlignVerticalJustifyCenter size={12} />
@@ -945,16 +949,17 @@ export function CandidatePreviewModal({
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: captionPosition === "bottom" ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
-                              background: captionPosition === "bottom" ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
-                              color: "#fafafa",
+                              border: captionPosition === "bottom" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: captionPosition === "bottom" ? "#fafafa" : "var(--bg-surface)",
+                              color: captionPosition === "bottom" ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: captionPosition === "bottom" ? 700 : 400,
+                              fontWeight: captionPosition === "bottom" ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               gap: "3px",
+                              transition: "all 0.15s ease",
                             }}
                           >
                             <AlignVerticalJustifyEnd size={12} />
@@ -970,10 +975,10 @@ export function CandidatePreviewModal({
                         display: "grid",
                         gridTemplateColumns: "1fr 1fr",
                         gap: "0.85rem",
-                        background: "rgba(255, 255, 255, 0.02)",
+                        background: "var(--bg-surface)",
                         padding: "0.75rem",
                         borderRadius: "8px",
-                        border: "1px solid rgba(255, 255, 255, 0.06)",
+                        border: "1px solid var(--border-default)",
                       }}
                     >
                       <div>
@@ -988,7 +993,7 @@ export function CandidatePreviewModal({
                             fontWeight: 600,
                           }}
                         >
-                          <Palette size={12} color="#38bdf8" />
+                          <Palette size={12} color="var(--text-secondary)" />
                           Color de texto:
                         </label>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -1010,7 +1015,8 @@ export function CandidatePreviewModal({
                                   height: "22px",
                                   borderRadius: "4px",
                                   background: swatch.color,
-                                  border: captionColor.toLowerCase() === swatch.color.toLowerCase() ? "2px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.2)",
+                                  border: captionColor.toLowerCase() === swatch.color.toLowerCase() ? "2px solid #fafafa" : "1px solid rgba(255,255,255,0.2)",
+                                  boxShadow: captionColor.toLowerCase() === swatch.color.toLowerCase() ? "0 0 0 1px #000" : "none",
                                   cursor: "pointer",
                                   padding: 0,
                                 }}
@@ -1023,12 +1029,12 @@ export function CandidatePreviewModal({
                             onChange={(e) => setCaptionColor(e.target.value)}
                             title="Personalizar color de texto"
                             style={{
-                              width: "28px",
-                              height: "24px",
+                              width: "26px",
+                              height: "22px",
                               padding: "0 1px",
                               borderRadius: "4px",
-                              border: "1px solid rgba(255, 255, 255, 0.2)",
-                              background: "transparent",
+                              border: "1px solid var(--border-default)",
+                              background: "var(--bg-surface-raised)",
                               cursor: "pointer",
                             }}
                           />
@@ -1070,7 +1076,8 @@ export function CandidatePreviewModal({
                                   height: "22px",
                                   borderRadius: "4px",
                                   background: swatch.color,
-                                  border: captionHighlight.toLowerCase() === swatch.color.toLowerCase() ? "2px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.2)",
+                                  border: captionHighlight.toLowerCase() === swatch.color.toLowerCase() ? "2px solid #fafafa" : "1px solid rgba(255,255,255,0.2)",
+                                  boxShadow: captionHighlight.toLowerCase() === swatch.color.toLowerCase() ? "0 0 0 1px #000" : "none",
                                   cursor: "pointer",
                                   padding: 0,
                                 }}
@@ -1083,12 +1090,12 @@ export function CandidatePreviewModal({
                             onChange={(e) => setCaptionHighlight(e.target.value)}
                             title="Personalizar color de resaltado"
                             style={{
-                              width: "28px",
-                              height: "24px",
+                              width: "26px",
+                              height: "22px",
                               padding: "0 1px",
                               borderRadius: "4px",
-                              border: "1px solid rgba(255, 255, 255, 0.2)",
-                              background: "transparent",
+                              border: "1px solid var(--border-default)",
+                              background: "var(--bg-surface-raised)",
                               cursor: "pointer",
                             }}
                           />
@@ -1102,10 +1109,10 @@ export function CandidatePreviewModal({
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        background: "rgba(255, 255, 255, 0.02)",
+                        background: "var(--bg-surface)",
                         padding: "0.75rem",
                         borderRadius: "8px",
-                        border: "1px solid rgba(255, 255, 255, 0.06)",
+                        border: "1px solid var(--border-default)",
                       }}
                     >
                       <div>
@@ -1123,12 +1130,13 @@ export function CandidatePreviewModal({
                           style={{
                             padding: "0.35rem 0.75rem",
                             borderRadius: "5px",
-                            border: captionLines === "1" ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
-                            background: captionLines === "1" ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
-                            color: "#fafafa",
+                            border: captionLines === "1" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                            background: captionLines === "1" ? "#fafafa" : "var(--bg-surface)",
+                            color: captionLines === "1" ? "#09090b" : "var(--text-secondary)",
                             fontSize: "0.74rem",
-                            fontWeight: captionLines === "1" ? 700 : 400,
+                            fontWeight: captionLines === "1" ? 700 : 500,
                             cursor: "pointer",
+                            transition: "all 0.15s ease",
                           }}
                         >
                           1 Sola Línea
@@ -1139,12 +1147,13 @@ export function CandidatePreviewModal({
                           style={{
                             padding: "0.35rem 0.75rem",
                             borderRadius: "5px",
-                            border: captionLines === "2" ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
-                            background: captionLines === "2" ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
-                            color: "#fafafa",
+                            border: captionLines === "2" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                            background: captionLines === "2" ? "#fafafa" : "var(--bg-surface)",
+                            color: captionLines === "2" ? "#09090b" : "var(--text-secondary)",
                             fontSize: "0.74rem",
-                            fontWeight: captionLines === "2" ? 700 : 400,
+                            fontWeight: captionLines === "2" ? 700 : 500,
                             cursor: "pointer",
+                            transition: "all 0.15s ease",
                           }}
                         >
                           2 Líneas
@@ -1157,9 +1166,9 @@ export function CandidatePreviewModal({
                     style={{
                       padding: "1.5rem",
                       textAlign: "center",
-                      background: "rgba(255, 255, 255, 0.02)",
+                      background: "var(--bg-surface)",
                       borderRadius: "8px",
-                      border: "1px dashed rgba(255, 255, 255, 0.1)",
+                      border: "1px dashed var(--border-default)",
                       color: "var(--text-muted)",
                       fontSize: "0.8rem",
                     }}
@@ -1187,9 +1196,9 @@ export function CandidatePreviewModal({
                       type="checkbox"
                       checked={ctaEnabled}
                       onChange={(e) => setCtaEnabled(e.target.checked)}
-                      style={{ accentColor: "#f43f5e", cursor: "pointer" }}
+                      style={{ accentColor: "#fafafa", cursor: "pointer" }}
                     />
-                    <span style={{ color: ctaEnabled ? "#f43f5e" : "var(--text-secondary)", fontWeight: 700 }}>
+                    <span style={{ color: ctaEnabled ? "var(--text-primary)" : "var(--text-secondary)", fontWeight: ctaEnabled ? 700 : 500 }}>
                       Incrustar Insignia
                     </span>
                   </label>
@@ -1199,10 +1208,10 @@ export function CandidatePreviewModal({
                   <>
                     <div
                       style={{
-                        background: "rgba(255, 255, 255, 0.02)",
+                        background: "var(--bg-surface)",
                         padding: "0.75rem",
                         borderRadius: "8px",
-                        border: "1px solid rgba(255, 255, 255, 0.06)",
+                        border: "1px solid var(--border-default)",
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
@@ -1217,7 +1226,7 @@ export function CandidatePreviewModal({
                           style={{
                             background: "transparent",
                             border: "none",
-                            color: "#38bdf8",
+                            color: "var(--text-secondary)",
                             fontSize: "0.72rem",
                             cursor: "pointer",
                           }}
@@ -1239,9 +1248,9 @@ export function CandidatePreviewModal({
                           width: "100%",
                           padding: "0.45rem 0.65rem",
                           borderRadius: "6px",
-                          background: "rgba(255, 255, 255, 0.05)",
-                          border: "1px solid rgba(255, 255, 255, 0.12)",
-                          color: "#fafafa",
+                          background: "var(--bg-surface-raised)",
+                          border: "1px solid var(--border-default)",
+                          color: "var(--text-primary)",
                           fontSize: "0.78rem",
                         }}
                       />
@@ -1259,9 +1268,9 @@ export function CandidatePreviewModal({
                             width: "100%",
                             padding: "0.45rem 0.6rem",
                             borderRadius: "6px",
-                            background: "rgba(255, 255, 255, 0.05)",
-                            border: "1px solid rgba(255, 255, 255, 0.12)",
-                            color: "#fafafa",
+                            background: "var(--bg-surface)",
+                            border: "1px solid var(--border-default)",
+                            color: "var(--text-primary)",
                             fontSize: "0.76rem",
                             cursor: "pointer",
                           }}
@@ -1286,16 +1295,17 @@ export function CandidatePreviewModal({
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: ctaPosition === "top" ? "1px solid #f43f5e" : "1px solid rgba(255, 255, 255, 0.1)",
-                              background: ctaPosition === "top" ? "#e11d48" : "rgba(255, 255, 255, 0.04)",
-                              color: "#fafafa",
+                              border: ctaPosition === "top" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: ctaPosition === "top" ? "#fafafa" : "var(--bg-surface)",
+                              color: ctaPosition === "top" ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: ctaPosition === "top" ? 700 : 400,
+                              fontWeight: ctaPosition === "top" ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               gap: "3px",
+                              transition: "all 0.15s ease",
                             }}
                           >
                             <AlignVerticalJustifyStart size={12} />
@@ -1309,16 +1319,17 @@ export function CandidatePreviewModal({
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: ctaPosition === "center" ? "1px solid #f43f5e" : "1px solid rgba(255, 255, 255, 0.1)",
-                              background: ctaPosition === "center" ? "#e11d48" : "rgba(255, 255, 255, 0.04)",
-                              color: "#fafafa",
+                              border: ctaPosition === "center" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: ctaPosition === "center" ? "#fafafa" : "var(--bg-surface)",
+                              color: ctaPosition === "center" ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: ctaPosition === "center" ? 700 : 400,
+                              fontWeight: ctaPosition === "center" ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               gap: "3px",
+                              transition: "all 0.15s ease",
                             }}
                           >
                             <AlignVerticalJustifyCenter size={12} />
@@ -1332,16 +1343,17 @@ export function CandidatePreviewModal({
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: ctaPosition === "bottom" ? "1px solid #f43f5e" : "1px solid rgba(255, 255, 255, 0.1)",
-                              background: ctaPosition === "bottom" ? "#e11d48" : "rgba(255, 255, 255, 0.04)",
-                              color: "#fafafa",
+                              border: ctaPosition === "bottom" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: ctaPosition === "bottom" ? "#fafafa" : "var(--bg-surface)",
+                              color: ctaPosition === "bottom" ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: ctaPosition === "bottom" ? 700 : 400,
+                              fontWeight: ctaPosition === "bottom" ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               gap: "3px",
+                              transition: "all 0.15s ease",
                             }}
                           >
                             <AlignVerticalJustifyEnd size={12} />
@@ -1356,9 +1368,9 @@ export function CandidatePreviewModal({
                     style={{
                       padding: "1.5rem",
                       textAlign: "center",
-                      background: "rgba(255, 255, 255, 0.02)",
+                      background: "var(--bg-surface)",
                       borderRadius: "8px",
-                      border: "1px dashed rgba(255, 255, 255, 0.1)",
+                      border: "1px dashed var(--border-default)",
                       color: "var(--text-muted)",
                       fontSize: "0.8rem",
                     }}
@@ -1376,14 +1388,15 @@ export function CandidatePreviewModal({
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
             <span
               style={{
-                background: "rgba(2, 132, 199, 0.15)",
-                color: "#38bdf8",
-                border: "1px solid rgba(2, 132, 199, 0.3)",
+                background: "var(--bg-surface)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border-default)",
                 fontSize: "0.72rem",
                 fontWeight: 700,
                 padding: "3px 8px",
-                borderRadius: "9999px",
+                borderRadius: "4px",
                 whiteSpace: "nowrap",
+                fontFamily: "var(--font-mono)",
               }}
             >
               ● Score IA: {Math.round(candidate.score * 10)}/100
@@ -1442,12 +1455,12 @@ export function CandidatePreviewModal({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "7px",
-                background: "#0284c7",
-                color: "#ffffff",
-                border: "1px solid #0284c7",
+                background: "#fafafa",
+                color: "#09090b",
+                border: "1px solid #fafafa",
                 fontWeight: 700,
                 borderRadius: "6px",
-                boxShadow: "0 2px 10px rgba(2, 132, 199, 0.4)",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.4)",
                 cursor: "pointer",
               }}
             >

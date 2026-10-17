@@ -1536,17 +1536,17 @@
 }
 
 /* ==========================================================================
-   Clip Studio Modal (2-Column Studio Layout)
+   Clip Studio Modal (2-Column Studio Layout - Harmonized Theme)
    ========================================================================== */
 .clip-studio-modal {
   width: 1040px;
   max-width: 95vw;
   height: 90vh;
   max-height: 840px;
-  background: #090a10;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.9), 0 0 1px 1px rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1557,10 +1557,9 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.85rem 1.4rem;
-  background: rgba(18, 20, 29, 0.85);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.9rem 1.4rem;
+  background: var(--bg-panel-header);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 
@@ -1583,8 +1582,8 @@
   display: flex;
   flex-direction: column;
   padding: 1rem 1.25rem;
-  background: #06070a;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
   justify-content: space-between;
   min-height: 0;
   overflow-y: auto;
@@ -1597,9 +1596,10 @@
   aspect-ratio: 9 / 16;
   max-height: 460px;
   background: #000;
-  border-radius: 14px;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.85), 0 0 0 1.5px rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1625,7 +1625,7 @@
   display: flex;
   flex-direction: column;
   padding: 1.1rem 1.4rem;
-  background: #0d0e15;
+  background: var(--bg-surface-raised);
   min-height: 0;
   overflow-y: auto;
 }
@@ -1633,10 +1633,10 @@
 .studio-tabs-bar {
   display: flex;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-surface);
   padding: 4px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-default);
   margin-bottom: 1.1rem;
   flex-shrink: 0;
 }
@@ -1647,26 +1647,28 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 7px 12px;
   border-radius: 6px;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-secondary);
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .studio-tab-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
 }
 
 .studio-tab-btn.active {
-  color: #fff;
-  background: #0284c7;
-  box-shadow: 0 2px 10px rgba(2, 132, 199, 0.45);
+  color: #09090b;
+  background: #fafafa;
+  border-color: #fafafa;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 .studio-tab-pane {
@@ -1681,8 +1683,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.85rem 1.4rem;
-  background: rgba(14, 16, 24, 0.96);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-panel-header);
+  border-top: 1px solid var(--border-default);
   gap: 1rem;
   flex-shrink: 0;
 }
