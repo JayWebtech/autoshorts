@@ -490,6 +490,75 @@ def remap_words_for_sub_ranges(
     return remapped_words, 0.0, total_duration
 
 
+def chunk_words_remotion(
+    words: List[Dict[str, Any]],
+    max_words: int,
+    max_chars: int,
+    silence_break_sec: float = 0.35,
+    prevent_orphans: bool = True
+) -> List[List[Dict[str, Any]]]:
+    """
+    Implements Remotion's TikTok-style caption chunking:
+    - breakOnSilenceAfterMilliseconds (forces break when gap between words >= silence_break_sec)
+    - ensureMaxCharactersPerLine & max_words budget
+    - preventOrphanWord: prevents awkward solitary words at sentence boundaries
+    """
+    if not words:
+        return []
+
+    chunks: List[List[Dict[str, Any]]] = []
+    current_chunk: List[Dict[str, Any]] = []
+    current_char_count = 0
+
+    for w in words:
+        raw = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", "")).strip()
+        if not raw:
+            raw = w.get("text", "").strip()
+        if not raw:
+            continue
+        w_len = len(raw)
+
+        is_silence_break = False
+        if current_chunk:
+            prev_end = current_chunk[-1].get("end", 0.0)
+            curr_start = w.get("start", 0.0)
+            if (curr_start - prev_end) >= silence_break_sec:
+                is_silence_break = True
+
+        is_budget_exceeded = False
+        if current_chunk:
+            new_char_count = current_char_count + 1 + w_len
+            if len(current_chunk) >= max_words or new_char_count > max_chars:
+                is_budget_exceeded = True
+
+        if (is_silence_break or is_budget_exceeded) and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = [w]
+            current_char_count = w_len
+        else:
+            current_chunk.append(w)
+            current_char_count += (1 if current_char_count > 0 else 0) + w_len
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    if prevent_orphans and len(chunks) > 1:
+        optimized: List[List[Dict[str, Any]]] = []
+        for ch in chunks:
+            if len(ch) == 1 and optimized:
+                prev_ch = optimized[-1]
+                prev_len = sum(len(w.get("text", "")) for w in prev_ch) + len(prev_ch) - 1
+                ch_len = len(ch[0].get("text", ""))
+                gap = ch[0].get("start", 0.0) - prev_ch[-1].get("end", 0.0)
+                if gap < silence_break_sec and (prev_len + 1 + ch_len) <= (max_chars + 4):
+                    prev_ch.append(ch[0])
+                    continue
+            optimized.append(ch)
+        chunks = optimized
+
+    return chunks
+
+
 def generate_srt(
     words: List[Dict[str, Any]],
     start_sec: float,
@@ -497,19 +566,31 @@ def generate_srt(
     sub_ranges: Optional[List[Dict[str, float]]] = None
 ) -> str:
     candidate_words, eff_start, eff_end = remap_words_for_sub_ranges(words, sub_ranges, start_sec, end_sec)
+    if not candidate_words:
+        return ""
+
+    chunks = chunk_words_remotion(
+        words=candidate_words,
+        max_words=3,
+        max_chars=24,
+        silence_break_sec=0.35,
+        prevent_orphans=False
+    )
+
     lines = []
     index = 1
-
-    # Chunk into 3 words
-    for i in range(0, len(candidate_words), 3):
-        chunk = candidate_words[i:i+3]
+    for chunk in chunks:
         if not chunk:
             continue
         first = chunk[0]
         last = chunk[-1]
         start_rel = max(0.0, first["start"] - eff_start)
         end_rel = max(0.0, min(eff_end - eff_start, last["end"] - eff_start))
-        text = " ".join(w["text"] for w in chunk)
+        if end_rel <= start_rel:
+            end_rel = start_rel + 0.3
+        text = " ".join(w["text"].strip() for w in chunk)
+        if not text:
+            continue
 
         lines.append(f"{index}")
         lines.append(f"{format_srt_time(start_rel)} --> {format_srt_time(end_rel)}")
@@ -633,78 +714,6 @@ HERO_TRIGGER_WORDS = {
 def is_hero_word(raw_w: str) -> bool:
     clean = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", raw_w).lower()
     return clean in HERO_TRIGGER_WORDS
-
-
-def chunk_words_remotion(
-    words: List[Dict[str, Any]],
-    max_words: int,
-    max_chars: int,
-    silence_break_sec: float = 0.35,
-    prevent_orphans: bool = True
-) -> List[List[Dict[str, Any]]]:
-    """
-    Implements Remotion's TikTok-style caption chunking:
-    - breakOnSilenceAfterMilliseconds (forces break when gap between words >= silence_break_sec)
-    - ensureMaxCharactersPerLine & max_words budget
-    - preventOrphanWord: prevents awkward solitary words at sentence boundaries
-    """
-    if not words:
-        return []
-
-    chunks: List[List[Dict[str, Any]]] = []
-    current_chunk: List[Dict[str, Any]] = []
-    current_char_count = 0
-
-    for w in words:
-        raw = re.sub(r"[^\wáéíóúÁÉÍÓÚñÑüÜ]", "", w.get("text", "")).strip()
-        if not raw:
-            raw = w.get("text", "").strip()
-        if not raw:
-            continue
-        w_len = len(raw)
-
-        # 1. Break on silence pause (Remotion breakOnSilenceAfterMilliseconds)
-        is_silence_break = False
-        if current_chunk:
-            prev_end = current_chunk[-1].get("end", 0.0)
-            curr_start = w.get("start", 0.0)
-            if (curr_start - prev_end) >= silence_break_sec:
-                is_silence_break = True
-
-        # 2. Character & word budget check (Remotion ensureMaxCharactersPerLine)
-        is_budget_exceeded = False
-        if current_chunk:
-            new_char_count = current_char_count + 1 + w_len
-            if len(current_chunk) >= max_words or new_char_count > max_chars:
-                is_budget_exceeded = True
-
-        if (is_silence_break or is_budget_exceeded) and current_chunk:
-            chunks.append(current_chunk)
-            current_chunk = [w]
-            current_char_count = w_len
-        else:
-            current_chunk.append(w)
-            current_char_count += (1 if current_char_count > 0 else 0) + w_len
-
-    if current_chunk:
-        chunks.append(current_chunk)
-
-    # 3. Remotion preventOrphanWord pass: merge awkward 1-word hanging tails if space allows
-    if prevent_orphans and len(chunks) > 1:
-        optimized: List[List[Dict[str, Any]]] = []
-        for ch in chunks:
-            if len(ch) == 1 and optimized:
-                prev_ch = optimized[-1]
-                prev_len = sum(len(w.get("text", "")) for w in prev_ch) + len(prev_ch) - 1
-                ch_len = len(ch[0].get("text", ""))
-                gap = ch[0].get("start", 0.0) - prev_ch[-1].get("end", 0.0)
-                if gap < silence_break_sec and (prev_len + 1 + ch_len) <= (max_chars + 4):
-                    prev_ch.append(ch[0])
-                    continue
-            optimized.append(ch)
-        chunks = optimized
-
-    return chunks
 
 
 def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = True) -> str:
@@ -1101,6 +1110,14 @@ def render_flat_clip(
 
     has_cta = bool(cta_badge_path and os.path.exists(str(cta_badge_path)))
 
+    log_buffer.push(f"[FFmpeg] Iniciando renderizado de '{output_path.name}' ({dur_sec:.1f}s)...")
+    if is_vertical:
+        log_buffer.push("[FFmpeg] Salida vertical 9:16 (1080x1920) | CRF 19 | VBV 10M | AAC 192k")
+    else:
+        log_buffer.push("[FFmpeg] Salida nativa | CRF 19 | VBV 10M | AAC 192k")
+    if has_multi_segment:
+        log_buffer.push(f"[FFmpeg] Aplicando {len(sorted_ranges)} segmentos sincronizados (cortes internos)...")
+
     # Calibrated video encoding flags for TikTok and vertical video platforms:
     # Constrained CRF 19 with VBV 10M cap, yuv420p, high profile, level 4.2
     enc_flags = [
@@ -1180,12 +1197,12 @@ def render_flat_clip(
                 if has_audio:
                     filter_parts.append(f"[0:a]atrim=start={rs:.3f}:end={re_:.3f},asetpts=PTS-STARTPTS[aseg{i}]")
 
-            v_inputs = "".join(f"[vseg{i}]" for i in range(N))
             if has_audio:
-                a_inputs = "".join(f"[aseg{i}]" for i in range(N))
-                filter_parts.append(f"{v_inputs}{a_inputs}concat=n={N}:v=1:a=1[vjoined][ajoined]")
+                concat_inputs = "".join(f"[vseg{i}][aseg{i}]" for i in range(N))
+                filter_parts.append(f"{concat_inputs}concat=n={N}:v=1:a=1[vjoined][ajoined]")
             else:
-                filter_parts.append(f"{v_inputs}concat=n={N}:v=1:a=0[vjoined]")
+                concat_inputs = "".join(f"[vseg{i}]" for i in range(N))
+                filter_parts.append(f"{concat_inputs}concat=n={N}:v=1:a=0[vjoined]")
 
             if needs_crop:
                 filter_parts.append("[vjoined]crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)',scale=1080:1920:flags=lanczos,setsar=1[vbase]")
@@ -1293,8 +1310,10 @@ def render_flat_clip(
 
     res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", **get_no_window_kwargs())
     if res.returncode != 0:
+        log_buffer.push(f"[FFmpeg AVISO] Intento con filtros falló: {res.stderr.strip()[-250:]}")
         # Fallback without subtitle/drawtext if filters caused error
         if subtitle_filter or drawtext_filters or has_cta:
+            log_buffer.push("[FFmpeg] Reintentando renderizado sin filtros adicionales...")
             return render_flat_clip(
                 source_path=source_path,
                 start_sec=start_sec,
@@ -1308,7 +1327,12 @@ def render_flat_clip(
                 transition=transition,
                 target_fps=target_fps
             )
+        log_buffer.push(f"[FFmpeg ERROR] Error crítico al codificar video: {res.stderr.strip()[-300:]}")
         raise RuntimeError(f"ffmpeg clip render failed: {res.stderr.strip()}")
+
+    if output_path.exists():
+        size_mb = output_path.stat().st_size / (1024 * 1024)
+        log_buffer.push(f"[FFmpeg] ¡Clip exportado exitosamente! {output_path.name} ({size_mb:.2f} MB)")
 
     return output_path
 

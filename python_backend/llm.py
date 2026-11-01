@@ -5,6 +5,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import requests
 
+from .logger import log_buffer
 from python_backend.llm_prompts import (
     DURATION_SPECS,
     parse_time_to_seconds,
@@ -243,6 +244,43 @@ def preload_local_model(model_name: str, provider: str = "local", lmstudio_base_
             return {"success": False, "error": str(e)}
 
     return {"success": False, "error": f"El proveedor {provider} no admite carga en VRAM local."}
+
+
+def ensure_model_loaded(
+    provider: str,
+    model_name: Optional[str] = None,
+    lmstudio_base_url: Optional[str] = None
+) -> None:
+    """
+    Ensures that the LLM model is fully loaded in memory/VRAM before querying context
+    size or launching generation chunks, preventing circuit breaker timeouts or default 8k fallbacks.
+    """
+    if provider == "lmstudio":
+        try:
+            raw_url = (lmstudio_base_url or os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")).rstrip("/")
+            root_url = raw_url[:-3] if raw_url.endswith("/v1") else raw_url
+
+            r = requests.get(f"{root_url}/api/v0/models", timeout=2.0)
+            if r.ok:
+                data = r.json().get("data", [])
+                loaded_models = [m for m in data if m.get("state") == "loaded"]
+                if loaded_models:
+                    if model_name:
+                        matched = next((m for m in loaded_models if model_name.lower() in m.get("id", "").lower()), None)
+                        if matched:
+                            return
+                    else:
+                        return
+
+            display_name = model_name or "local"
+            log_buffer.push(f"[LM Studio] Inicializando y cargando modelo '{display_name}' en memoria...")
+            preload_res = preload_local_model(model_name=model_name or "", provider="lmstudio", lmstudio_base_url=lmstudio_base_url)
+            if preload_res.get("success"):
+                log_buffer.push(f"[LM Studio] Modelo '{display_name}' cargado con éxito en memoria.")
+            else:
+                log_buffer.push(f"[LM Studio] Aviso en precarga: {preload_res.get('error')}")
+        except Exception as e:
+            log_buffer.push(f"[LM Studio] Nota durante verificación de modelo: {e}")
 
 
 def compact_segments(segments: List[Dict[str, Any]]) -> str:
@@ -858,8 +896,13 @@ def detect_candidates_pipeline(
         except Exception as e:
             print(f"Nota en detección de picos de audio: {e}")
 
+    # Ensure model is active in LM Studio before querying context length
+    if provider == "lmstudio":
+        ensure_model_loaded(provider=provider, model_name=model_name)
+
     # Detect active context size from LM Studio / Ollama
     available_ctx = get_available_context_size(provider=provider, model_name=model_name)
+    log_buffer.push(f"[Contexto IA] Contexto detectado: {available_ctx} tokens.")
     if available_ctx <= 4096:
         chunk_dur = 180.0
         overlap = 30.0

@@ -17,6 +17,7 @@ import {
   RotateCcw,
   Split,
   Film,
+  Loader2,
 } from "lucide-react";
 import { Candidate, Clip, ProjectDetail } from "../../types";
 import { formatTime } from "../../utils/format";
@@ -151,21 +152,42 @@ export function CandidatePreviewModal({
     localStorage.setItem("autoshorts_cta_animation", ctaAnimation);
   }, [ctaAnimation]);
 
-  const [segments, setSegments] = useState<InternalSegment[]>(() => [
-    { id: "seg-1", start: trimStart, end: trimEnd, deleted: false },
-  ]);
+  const [segments, setSegments] = useState<InternalSegment[]>(() => {
+    try {
+      const saved = localStorage.getItem("autoshorts_candidate_segments_" + candidate.id);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return [{ id: "seg-1", start: trimStart, end: trimEnd, deleted: false }];
+  });
   const [selectedSegmentId, setSelectedSegmentId] = useState<string>("seg-1");
   const [hasTransition, setHasTransition] = useState<boolean>(false);
   const [selectedFps, setSelectedFps] = useState<string>("auto");
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<boolean>(false);
 
   useEffect(() => {
-    setSegments((prev) => {
-      if (prev.length <= 1) {
-        return [{ id: "seg-1", start: trimStart, end: trimEnd, deleted: false }];
+    try {
+      const saved = localStorage.getItem("autoshorts_candidate_segments_" + candidate.id);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSegments(parsed);
+          setSelectedSegmentId(parsed[0].id);
+          return;
+        }
       }
-      return prev;
-    });
-  }, [trimStart, trimEnd]);
+    } catch {
+      // ignore
+    }
+    setSegments([{ id: "seg-1", start: trimStart, end: trimEnd, deleted: false }]);
+    setSelectedSegmentId("seg-1");
+  }, [candidate.id]);
 
   const handleSplitAtPlayhead = () => {
     const playhead = isExported ? currentPlayTime : trimStart + currentPlayTime;
@@ -482,8 +504,10 @@ export function CandidatePreviewModal({
           <button
             type="button"
             className="modal-close-btn"
-            onClick={onClose}
-            title="Cerrar modal"
+            onClick={isExporting ? undefined : onClose}
+            disabled={isExporting}
+            title={isExporting ? "Exportación en curso..." : "Cerrar modal"}
+            style={{ opacity: isExporting ? 0.35 : 1, cursor: isExporting ? "not-allowed" : "pointer" }}
           >
             <X size={16} />
           </button>
@@ -894,19 +918,59 @@ export function CandidatePreviewModal({
                       onClick={() => {
                         setTrimStart(candidate.startSec);
                         setTrimEnd(candidate.endSec);
+                        setSegments([{ id: "seg-1", start: candidate.startSec, end: candidate.endSec, deleted: false }]);
+                        setSelectedSegmentId("seg-1");
+                        try {
+                          localStorage.removeItem("autoshorts_candidate_segments_" + candidate.id);
+                        } catch {}
                       }}
-                      disabled={trimStart === candidate.startSec && trimEnd === candidate.endSec}
+                      disabled={trimStart === candidate.startSec && trimEnd === candidate.endSec && segments.length <= 1 && !segments[0]?.deleted}
                     >
                       Restablecer Original
                     </button>
                     <button
                       type="button"
                       className="btn-confirm"
-                      style={{ minHeight: "32px", fontSize: "0.76rem", padding: "0 16px" }}
-                      onClick={onSaveTrim}
+                      style={{
+                        minHeight: "32px",
+                        fontSize: "0.76rem",
+                        padding: "0 16px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                      onClick={async () => {
+                        try {
+                          localStorage.setItem("autoshorts_candidate_segments_" + candidate.id, JSON.stringify(segments));
+                          const activeSubRanges = segments.filter((s) => !s.deleted);
+                          if (activeSubRanges.length > 0) {
+                            const newStart = activeSubRanges[0].start;
+                            const newEnd = activeSubRanges[activeSubRanges.length - 1].end;
+                            setTrimStart(newStart);
+                            setTrimEnd(newEnd);
+                          }
+                          await onSaveTrim();
+                          setSaveFeedback(true);
+                          setTimeout(() => setSaveFeedback(false), 2500);
+                        } catch (e) {
+                          console.error("Error guardando ajuste:", e);
+                        }
+                      }}
                       disabled={isSavingTrim || trimStart >= trimEnd}
                     >
-                      {isSavingTrim ? "Guardando..." : "Guardar Ajuste"}
+                      {isSavingTrim ? (
+                        <>
+                          <Loader2 size={13} className="spin" />
+                          <span>Guardando...</span>
+                        </>
+                      ) : saveFeedback ? (
+                        <>
+                          <Sparkles size={13} style={{ color: "#10b981" }} />
+                          <span style={{ color: "#10b981", fontWeight: 700 }}>¡Ajuste Guardado!</span>
+                        </>
+                      ) : (
+                        "Guardar Ajuste"
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1027,25 +1091,28 @@ export function CandidatePreviewModal({
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
                     <button
                       type="button"
-                      className="btn-confirm"
                       onClick={handleSplitAtPlayhead}
                       style={{
-                        minHeight: "30px",
-                        padding: "0 12px",
-                        fontSize: "0.76rem",
+                        minHeight: "32px",
+                        padding: "0 14px",
+                        fontSize: "0.78rem",
                         display: "inline-flex",
                         alignItems: "center",
-                        gap: "5px",
-                        background: "var(--accent-primary, #6366f1)",
+                        gap: "6px",
+                        background: "#4f46e5",
                         color: "#ffffff",
-                        border: "none",
+                        border: "1px solid #6366f1",
                         borderRadius: "6px",
+                        fontWeight: 600,
                         cursor: "pointer",
+                        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.3)",
                       }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#4338ca")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "#4f46e5")}
                       title="Divide el segmento actual en el segundo exacto donde está pausado el video"
                     >
                       <Split size={14} />
-                      Dividir en cabezal ({absoluteCurrentTime.toFixed(1)}s)
+                      <span>Dividir en cabezal ({absoluteCurrentTime.toFixed(1)}s)</span>
                     </button>
 
                     {selectedSegmentId && (
@@ -1726,43 +1793,82 @@ export function CandidatePreviewModal({
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
+            {exportError && (
+              <span
+                style={{
+                  fontSize: "0.76rem",
+                  color: "#ef4444",
+                  background: "rgba(239, 68, 68, 0.12)",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  maxWidth: "240px",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={exportError}
+              >
+                Error: {exportError}
+              </span>
+            )}
+            {isExporting && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#38bdf8", fontSize: "0.78rem" }}>
+                <Loader2 size={13} className="spin" />
+                <span>Renderizando video...</span>
+              </div>
+            )}
             <button
               type="button"
               className="btn-cancel"
               onClick={onClose}
-              style={{ minHeight: "36px", padding: "0 16px", fontSize: "0.82rem" }}
+              disabled={isExporting}
+              style={{
+                minHeight: "36px",
+                padding: "0 16px",
+                fontSize: "0.82rem",
+                opacity: isExporting ? 0.4 : 1,
+                cursor: isExporting ? "not-allowed" : "pointer",
+              }}
             >
               Descartar
             </button>
             <button
               type="button"
               className="btn-confirm"
-              onClick={() => {
+              onClick={async () => {
                 const id = candidate.id;
-                onClose();
                 const activeSubRanges = segments
                   .filter((s) => !s.deleted)
                   .map((s) => ({ start: s.start, end: s.end }));
-                void onCutCandidate(id, {
-                  burnSubtitles,
-                  captionStyle,
-                  captionPosition,
-                  captionColor,
-                  captionHighlight,
-                  captionLines,
-                  ctaEnabled,
-                  ctaText,
-                  ctaPosition,
-                  ctaAnimation,
-                  aspectRatio: (localStorage.getItem("autoshorts_clip_aspect_ratio") as "original" | "9:16") || "original",
-                  startSec: activeSubRanges[0]?.start ?? trimStart,
-                  endSec: activeSubRanges[activeSubRanges.length - 1]?.end ?? trimEnd,
-                  subRanges: activeSubRanges.length > 1 ? activeSubRanges : undefined,
-                  transition: hasTransition ? "crossfade" : undefined,
-                  fps: selectedFps !== "auto" ? Number(selectedFps) : undefined,
-                });
+                setIsExporting(true);
+                setExportError(null);
+                try {
+                  await onCutCandidate(id, {
+                    burnSubtitles,
+                    captionStyle,
+                    captionPosition,
+                    captionColor,
+                    captionHighlight,
+                    captionLines,
+                    ctaEnabled,
+                    ctaText,
+                    ctaPosition,
+                    ctaAnimation,
+                    aspectRatio: (localStorage.getItem("autoshorts_clip_aspect_ratio") as "original" | "9:16") || "original",
+                    startSec: activeSubRanges[0]?.start ?? trimStart,
+                    endSec: activeSubRanges[activeSubRanges.length - 1]?.end ?? trimEnd,
+                    subRanges: activeSubRanges.length > 1 ? activeSubRanges : undefined,
+                    transition: hasTransition ? "crossfade" : undefined,
+                    fps: selectedFps !== "auto" ? Number(selectedFps) : undefined,
+                  });
+                  setIsExporting(false);
+                  onClose();
+                } catch (err: any) {
+                  setExportError(err?.message || String(err));
+                  setIsExporting(false);
+                }
               }}
-              disabled={busy !== "idle"}
+              disabled={isExporting || busy !== "idle"}
               style={{
                 minHeight: "36px",
                 padding: "0 18px",
@@ -1770,17 +1876,27 @@ export function CandidatePreviewModal({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "7px",
-                background: "#fafafa",
-                color: "#09090b",
-                border: "1px solid #fafafa",
+                background: isExporting ? "#27272a" : "#fafafa",
+                color: isExporting ? "#a1a1aa" : "#09090b",
+                border: isExporting ? "1px solid #3f3f46" : "1px solid #fafafa",
                 fontWeight: 700,
                 borderRadius: "6px",
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.4)",
-                cursor: "pointer",
+                cursor: isExporting || busy !== "idle" ? "not-allowed" : "pointer",
+                opacity: isExporting || busy !== "idle" ? 0.7 : 1,
               }}
             >
-              <Scissors size={15} />
-              <span>Cortar y Exportar Clip</span>
+              {isExporting ? (
+                <>
+                  <Loader2 size={15} className="spin" />
+                  <span>Exportando video...</span>
+                </>
+              ) : (
+                <>
+                  <Scissors size={15} />
+                  <span>Cortar y Exportar Clip</span>
+                </>
+              )}
             </button>
           </div>
         </div>

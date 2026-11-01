@@ -1071,11 +1071,13 @@ class Api:
         # Sanitize hook for filename: strip all emojis, quotes, and invalid symbols
         raw_hook = candidate.get("hook", "").strip()
         no_emoji = re.sub(r'[\U00010000-\U0010ffff\u2600-\u27bf\ufe00-\ufe0f\u200d\u2300-\u23ff\u2b50-\u2b55]', '', raw_hook)
-        safe_hook = re.sub(r'[\\/*?:"<>|#\'`]', "", no_emoji)
+        safe_hook = re.sub(r'[\\/*?:"<>|#\'`¡¿!]', "", no_emoji)
         safe_hook = re.sub(r'\s+', ' ', safe_hook).strip()[:50]
         base_name = f"Clip {candidate['rank']:02d} - {safe_hook}" if safe_hook else f"Clip {candidate['rank']:02d}"
         output_path = out_dir / f"{base_name}.mp4"
         exported_srt_path = out_dir / f"{base_name}.srt"
+
+        log_buffer.push(f"[Exportación] Preparando clip #{candidate.get('rank', 1)}: '{base_name}'...")
 
         drawtext_filters = None
         subtitle_filter = None
@@ -1161,6 +1163,7 @@ class Api:
             output_path=str(rendered_path),
             caption_path=srt_path
         )
+        log_buffer.push(f"[Exportación] Clip completado y registrado en proyecto: {base_name}.mp4")
         return str(rendered_path)
 
     def update_candidate_trim(self, args: Any) -> Dict[str, Any]:
