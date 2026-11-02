@@ -716,6 +716,23 @@ def is_hero_word(raw_w: str) -> bool:
     return clean in HERO_TRIGGER_WORDS
 
 
+def get_exact_glyph_bbox(text: str, font, is_emoji: bool = False):
+    from PIL import Image, ImageDraw
+    test_img = Image.new("RGBA", (400, 200), (0, 0, 0, 0))
+    td = ImageDraw.Draw(test_img)
+    if is_emoji:
+        try:
+            td.text((50, 50), text, font=font, embedded_color=True)
+        except Exception:
+            td.text((50, 50), text, font=font, fill=(255, 255, 255, 255))
+    else:
+        td.text((50, 50), text, font=font, fill=(255, 255, 255, 255))
+    bb = test_img.getbbox()
+    if bb:
+        return (bb[0] - 50, bb[1] - 50, bb[2] - 50, bb[3] - 50)
+    return (0, 0, 0, 0)
+
+
 def generate_cta_badge_image(
     text: str,
     output_path: str,
@@ -727,6 +744,7 @@ def generate_cta_badge_image(
     - 2X supersampling with Lanczos downscaling for perfectly smooth curves and text
     - True color emojis (using Segoe UI Emoji)
     - Bold, modern typography (Segoe UI Bold / Arial Bold)
+    - Subpixel centroid alignment between emoji and text
     - Motionmaxxing-inspired dark glass pill with glowing neon borders
     - Streamer platform badge highlights
     """
@@ -770,29 +788,25 @@ def generate_cta_badge_image(
     if not emoji_font:
         emoji_font = text_font
 
-    dummy = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-    draw_d = ImageDraw.Draw(dummy)
-
     emoji_w = 0
-    emoji_left_bearing = 0
+    emoji_h = 0
+    bbox_e = (0, 0, 0, 0)
     if emoji_part:
-        try:
-            bbox_e = draw_d.textbbox((0, 0), emoji_part, font=emoji_font, embedded_color=True)
-            emoji_left_bearing = min(0, bbox_e[0])
-            emoji_w = (bbox_e[2] - bbox_e[0]) + int(14 * scale * ss)
-        except Exception:
-            bbox_e = draw_d.textbbox((0, 0), emoji_part, font=text_font)
-            emoji_left_bearing = min(0, bbox_e[0])
-            emoji_w = (bbox_e[2] - bbox_e[0]) + int(14 * scale * ss)
+        bbox_e = get_exact_glyph_bbox(emoji_part, emoji_font, is_emoji=True)
+        emoji_w = bbox_e[2] - bbox_e[0]
+        emoji_h = bbox_e[3] - bbox_e[1]
 
-    bbox_t = draw_d.textbbox((0, 0), rest_text, font=text_font)
+    bbox_t = get_exact_glyph_bbox(rest_text, text_font, is_emoji=False)
     text_w = bbox_t[2] - bbox_t[0]
-    text_h = max(bbox_t[3] - bbox_t[1], int(ss_font_size * 1.15))
+    text_h = bbox_t[3] - bbox_t[1]
 
-    pad_x = int(24 * scale * ss) + abs(emoji_left_bearing) + int(6 * scale * ss)
-    pad_y = int(12 * scale * ss)
-    total_w = emoji_w + text_w + pad_x * 2
-    total_h = text_h + pad_y * 2
+    pad_x = int(22 * scale * ss)
+    pad_y = int(10 * scale * ss)
+    gap_x = int(9 * scale * ss) if emoji_part else 0
+
+    content_h = max(emoji_h, text_h)
+    total_h = content_h + pad_y * 2
+    total_w = pad_x * 2 + (emoji_w + gap_x if emoji_part else 0) + text_w
 
     # Draw at 2X resolution
     img_ss = Image.new("RGBA", (total_w, total_h), (0, 0, 0, 0))
@@ -820,15 +834,20 @@ def generate_cta_badge_image(
         width=max(2, int(2.0 * scale * ss))
     )
 
-    cur_x = pad_x - emoji_left_bearing
     if emoji_part:
+        emoji_target_top = (total_h - emoji_h) // 2
+        emoji_draw_y = emoji_target_top - bbox_e[1]
+        emoji_draw_x = pad_x - bbox_e[0]
         try:
-            draw.text((cur_x, pad_y - int(3 * scale * ss)), emoji_part, font=emoji_font, embedded_color=True)
+            draw.text((emoji_draw_x, emoji_draw_y), emoji_part, font=emoji_font, embedded_color=True)
         except Exception:
-            draw.text((cur_x, pad_y - int(3 * scale * ss)), emoji_part, font=text_font, fill=(255, 255, 255, 255))
-        cur_x += emoji_w
+            draw.text((emoji_draw_x, emoji_draw_y), emoji_part, font=emoji_font, fill=(255, 255, 255, 255))
 
-    draw.text((cur_x, pad_y), rest_text, font=text_font, fill=(255, 255, 255, 255))
+    text_target_top = (total_h - text_h) // 2
+    text_draw_y = text_target_top - bbox_t[1]
+    text_draw_x = pad_x + (emoji_w + gap_x if emoji_part else 0) - bbox_t[0]
+
+    draw.text((text_draw_x, text_draw_y), rest_text, font=text_font, fill=(255, 255, 255, 255))
 
     # Downscale smoothly to 1X with Lanczos for flawless anti-aliasing
     final_w = max(1, total_w // ss)
@@ -1025,8 +1044,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if plain_len > max_safe_len:
                 line_fs = max(int(font_size * 0.75), int(font_size - (plain_len - max_safe_len) * 1.2))
                 fs_tag = f"{{\\fs{line_fs}}}"
+                inner_fs = f"\\fs{line_fs}"
             else:
                 fs_tag = ""
+                inner_fs = ""
 
             if supports_karaoke:
                 for w_idx, active_w in enumerate(chunk):
@@ -1050,17 +1071,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                             # Active word pop
                             if is_hero_word(raw_w):
                                 # Hero Word: extra pop (125%) with hero fire/accent color
-                                words_text.append(f"{{\\fscx125\\fscy125\\c{hero_color}}}{display_w}{{\\rAutoStyle\\fscx100\\fscy100{pos_tag}{fs_tag}}}")
+                                words_text.append(f"{{\\fscx125\\fscy125\\c{hero_color}}}{display_w}{{\\rAutoStyle\\fscx100\\fscy100{inner_fs}}}")
                             elif caption_style == "cyber-terminal":
                                 # Cyber terminal bracket prompt
-                                words_text.append(f"{{\\c{highlight_color}}}[{display_w}]{{\\rAutoStyle{pos_tag}{fs_tag}}}")
+                                words_text.append(f"{{\\c{highlight_color}}}[{display_w}]{{\\rAutoStyle{inner_fs}}}")
                             else:
                                 pop_scale = 122 if caption_style == "loud-viral" else (108 if caption_style == "clean-editorial" else 118)
-                                words_text.append(f"{{\\fscx{pop_scale}\\fscy{pop_scale}\\c{highlight_color}}}{display_w}{{\\rAutoStyle\\fscx100\\fscy100{pos_tag}{fs_tag}}}")
+                                words_text.append(f"{{\\fscx{pop_scale}\\fscy{pop_scale}\\c{highlight_color}}}{display_w}{{\\rAutoStyle\\fscx100\\fscy100{inner_fs}}}")
                         else:
                             # Inactive word
                             if is_hero_word(raw_w) and caption_style == "loud-viral":
-                                words_text.append(f"{{\\c{hero_color}}}{display_w}{{\\rAutoStyle{pos_tag}{fs_tag}}}")
+                                words_text.append(f"{{\\c{hero_color}}}{display_w}{{\\rAutoStyle{inner_fs}}}")
                             else:
                                 words_text.append(display_w)
 

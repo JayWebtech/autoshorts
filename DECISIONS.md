@@ -132,3 +132,21 @@
      - El smartphone preview proyecta las coordenadas exactas con `(X/1080)*100%` y `(Y/1920)*100%`, logrando fidelidad idéntica al render final.
      - Renombrar el botón inferior a "Cerrar" (sin mutar el estado) y añadir el botón "Descartar Momento" que invoca `toggleCandidateDismissed` y cierra el estudio.
 - **Motivo:** Otorgar a los creadores control absoluto sobre la ubicación y tamaño de subtítulos y stickers para evitar solapamientos con sus plantillas u overlays de streaming, asegurar que los recortes se guarden con total fidelidad y proporcionar un flujo de descarte ágil dentro del estudio.
+
+## D-022: Auto-Apertura del Último Proyecto, Supresión de '}' en Subtítulos ASS y Centrado Métrico Subpixel en CTA
+- **Decisión:**
+  1. **Auto-Apertura del Último Proyecto (`src/hooks/useProjectActions.ts`):**
+     - Persistir la clave `autoshorts_last_active_project_id` en `localStorage` al seleccionar o abrir proyectos.
+     - En `refresh()`, cuando no se especifique un ID objetivo, restaurar automáticamente el último proyecto activo si continúa disponible en `projectList`, o seleccionar por defecto el proyecto más reciente (`projectList[0].id`).
+     - Al borrar un proyecto (`deleteProject`) o deseleccionar explícitamente, limpiar la clave de `localStorage` para un comportamiento intuitivo idéntico a Premiere Pro y CapCut.
+  2. **Supresión Definitiva del Carácter '}' Parásito en Subtítulos ASS (`python_backend/media.py`):**
+     - Eliminar `{pos_tag}` y `{fs_tag}` de las directivas de reset inline de palabras individuales (`words_text`) en karaoke.
+     - Mantener `{pos_tag}` y `{fs_tag}` exclusivamente al inicio del evento Dialogue (`Dialogue: ... {pos_tag}{fs_tag}{text_line}`), preservando una sintaxis ASS limpia sin llaves anidadas que confundan a libass.
+  3. **Centrado Métrico Subpixel de Insignia CTA (`python_backend/media.py`):**
+     - Medir la caja envolvente de píxeles exacta de cada glifo con `get_exact_glyph_bbox`.
+     - Alinear verticalmente los centroides visuales del emoji y del texto respecto a la línea media del badge mediante compensación de offsets de glifo:
+       `emoji_draw_y = (total_h - emoji_h) // 2 - bbox_e[1]`
+       `text_draw_y = (total_h - text_h) // 2 - bbox_t[1]`
+     - Establecer un espaciado horizontal calibrado entre el extremo derecho real del emoji y el inicio del texto.
+- **Motivo:** Eliminar la fricción de tener que re-seleccionar proyectos al abrir la app, solucionar el error visual de la llave '}' en pantalla sobre las palabras activas de karaoke y lograr una estética tipográfica perfectamente equilibrada en la insignia de llamado a la acción.
+

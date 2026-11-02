@@ -17,6 +17,8 @@ interface UseProjectActionsOptions {
   setEnvironment?: (env: EnvironmentStatus) => void;
 }
 
+const LAST_ACTIVE_PROJECT_KEY = "autoshorts_last_active_project_id";
+
 export function useProjectActions(options: UseProjectActionsOptions) {
   const { transcriptionEngine, onAutoPipeline, onProjectSelected, setEnvironment } = options;
 
@@ -41,7 +43,7 @@ export function useProjectActions(options: UseProjectActionsOptions) {
   const [importModalTab, setImportModalTab] = useState<"subtitles" | "ai">("subtitles");
 
   const refresh = useCallback(
-    async (nextProjectId?: string) => {
+    async (nextProjectId?: string | null) => {
       setError(null);
       const [env, projectList] = await Promise.all([
         invoke<EnvironmentStatus>("environment_status"),
@@ -50,14 +52,38 @@ export function useProjectActions(options: UseProjectActionsOptions) {
       if (setEnvironment) setEnvironment(env);
       setProjects(projectList);
 
-      if (nextProjectId) {
-        const nextDetail = await invoke<ProjectDetail>("get_project_detail", { projectId: nextProjectId });
-        setDetail(nextDetail);
+      let targetId: string | null = null;
+      if (nextProjectId === null) {
+        targetId = null;
+        localStorage.removeItem(LAST_ACTIVE_PROJECT_KEY);
+      } else if (typeof nextProjectId === "string") {
+        targetId = nextProjectId;
+      } else {
+        const storedLastId = localStorage.getItem(LAST_ACTIVE_PROJECT_KEY);
+        if (storedLastId && projectList.some((p) => p.id === storedLastId)) {
+          targetId = storedLastId;
+        } else if (projectList.length > 0) {
+          targetId = projectList[0].id;
+        }
+      }
+
+      if (targetId) {
+        try {
+          const nextDetail = await invoke<ProjectDetail>("get_project_detail", { projectId: targetId });
+          setDetail(nextDetail);
+          localStorage.setItem(LAST_ACTIVE_PROJECT_KEY, targetId);
+          if (onProjectSelected) onProjectSelected(targetId);
+        } catch {
+          setDetail(null);
+          localStorage.removeItem(LAST_ACTIVE_PROJECT_KEY);
+          if (onProjectSelected) onProjectSelected(null);
+        }
       } else {
         setDetail(null);
+        if (onProjectSelected) onProjectSelected(null);
       }
     },
-    [setEnvironment]
+    [setEnvironment, onProjectSelected]
   );
 
   const run = useCallback(async (action: BusyState, task: () => Promise<void>) => {
@@ -76,12 +102,14 @@ export function useProjectActions(options: UseProjectActionsOptions) {
     async (projectId: string | null) => {
       if (!projectId) {
         setDetail(null);
+        localStorage.removeItem(LAST_ACTIVE_PROJECT_KEY);
         if (onProjectSelected) onProjectSelected(null);
         return;
       }
       await run("idle", async () => {
         const nextDetail = await invoke<ProjectDetail>("get_project_detail", { projectId });
         setDetail(nextDetail);
+        localStorage.setItem(LAST_ACTIVE_PROJECT_KEY, projectId);
         if (onProjectSelected) onProjectSelected(projectId);
       });
     },
@@ -118,7 +146,7 @@ export function useProjectActions(options: UseProjectActionsOptions) {
       try {
         await invoke("delete_project", { projectId });
         const nextActiveId = detail?.project.id === projectId ? null : detail?.project.id;
-        await refresh(nextActiveId ?? undefined);
+        await refresh(nextActiveId);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
