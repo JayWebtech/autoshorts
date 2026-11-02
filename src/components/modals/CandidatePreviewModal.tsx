@@ -6,6 +6,10 @@ import {
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyStart,
   AlignVerticalJustifyEnd,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Move,
   Clock,
   Play,
   Pause,
@@ -47,6 +51,7 @@ interface CandidatePreviewModalProps {
   onCutCandidate: (candidateId: string, options?: any) => Promise<void>;
   clipByCandidate: Map<string, Clip>;
   busy: string;
+  onToggleDismissed?: (candidateId: string, dismissed: boolean) => Promise<void>;
 }
 
 export function CandidatePreviewModal({
@@ -62,6 +67,7 @@ export function CandidatePreviewModal({
   onCutCandidate,
   clipByCandidate,
   busy,
+  onToggleDismissed,
 }: CandidatePreviewModalProps) {
   if (!candidate || !detail) return null;
 
@@ -111,6 +117,72 @@ export function CandidatePreviewModal({
   const [ctaAnimation, setCtaAnimation] = useState<string>(() => {
     return localStorage.getItem("autoshorts_cta_animation") || "bounce-land";
   });
+
+  // Coordenadas absolutas exactas (Lienzo 1080x1920 nativo estilo Premiere Pro / OBS)
+  const [captionX, setCaptionX] = useState<number>(() => {
+    const saved = localStorage.getItem("autoshorts_caption_x");
+    return saved !== null ? Number(saved) : 540;
+  });
+  const [captionY, setCaptionY] = useState<number>(() => {
+    const saved = localStorage.getItem("autoshorts_caption_y");
+    if (saved !== null) return Number(saved);
+    const pos = localStorage.getItem("autoshorts_caption_position");
+    if (pos === "top") return 280;
+    if (pos === "center") return 960;
+    return 1680;
+  });
+  const [captionFontSize, setCaptionFontSize] = useState<number>(() => {
+    const saved = localStorage.getItem("autoshorts_caption_font_size");
+    return saved !== null ? Number(saved) : 62;
+  });
+  const [captionAlignH, setCaptionAlignH] = useState<"left" | "center" | "right">(() => {
+    return (localStorage.getItem("autoshorts_caption_align_h") as "left" | "center" | "right") || "center";
+  });
+
+  const [ctaX, setCtaX] = useState<number>(() => {
+    const saved = localStorage.getItem("autoshorts_cta_x");
+    return saved !== null ? Number(saved) : 540;
+  });
+  const [ctaY, setCtaY] = useState<number>(() => {
+    const saved = localStorage.getItem("autoshorts_cta_y");
+    if (saved !== null) return Number(saved);
+    const pos = localStorage.getItem("autoshorts_cta_position");
+    if (pos === "center") return 960;
+    if (pos === "bottom") return 1550;
+    return 240;
+  });
+  const [ctaScale, setCtaScale] = useState<number>(() => {
+    const saved = localStorage.getItem("autoshorts_cta_scale");
+    return saved !== null ? Number(saved) : 100;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_caption_x", String(captionX));
+  }, [captionX]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_caption_y", String(captionY));
+  }, [captionY]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_caption_font_size", String(captionFontSize));
+  }, [captionFontSize]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_caption_align_h", captionAlignH);
+  }, [captionAlignH]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_cta_x", String(ctaX));
+  }, [ctaX]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_cta_y", String(ctaY));
+  }, [ctaY]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_cta_scale", String(ctaScale));
+  }, [ctaScale]);
 
   useEffect(() => {
     localStorage.setItem("autoshorts_burn_subtitles", String(burnSubtitles));
@@ -222,6 +294,29 @@ export function CandidatePreviewModal({
   const handleResetSegments = () => {
     setSegments([{ id: "seg-1", start: trimStart, end: trimEnd, deleted: false }]);
     setSelectedSegmentId("seg-1");
+  };
+
+  const handleUpdateTrimStart = (delta: number) => {
+    const newStart = Math.max(0, Math.min(trimEnd - 1, Number((trimStart + delta).toFixed(1))));
+    setTrimStart(newStart);
+    setSegments((prev) => {
+      if (!prev || prev.length === 0) {
+        return [{ id: "seg-1", start: newStart, end: trimEnd, deleted: false }];
+      }
+      return [{ ...prev[0], start: newStart }, ...prev.slice(1)];
+    });
+  };
+
+  const handleUpdateTrimEnd = (delta: number) => {
+    const newEnd = Math.max(trimStart + 1, Number((trimEnd + delta).toFixed(1)));
+    setTrimEnd(newEnd);
+    setSegments((prev) => {
+      if (!prev || prev.length === 0) {
+        return [{ id: "seg-1", start: trimStart, end: newEnd, deleted: false }];
+      }
+      const last = prev[prev.length - 1];
+      return [...prev.slice(0, prev.length - 1), { ...last, end: newEnd }];
+    });
   };
 
   const totalKeptDuration = segments
@@ -598,34 +693,58 @@ export function CandidatePreviewModal({
 
               {/* Lienzo Dinámico sobre el Video: Subtítulos y CTA en Tiempo Real (solo en fuente original) */}
               {!isExported && (burnSubtitles || ctaEnabled) && (
-                <div className="clip-phone-overlay-container">
-                  {/* ZONA SUPERIOR */}
-                  <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-                    {ctaEnabled && ctaPosition === "top" && renderCtaBadgePreview()}
-                    {burnSubtitles && captionPosition === "top" && (
-                      <div style={{ marginTop: ctaEnabled && ctaPosition === "top" ? "4px" : "8px" }}>
-                        {renderCaptionPreview()}
-                      </div>
-                    )}
-                  </div>
+                <div
+                  className="clip-phone-overlay-container"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    pointerEvents: "none",
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* Insignia CTA con coordenadas absolutas exactas (0 a 1080 X, 0 a 1920 Y) */}
+                  {ctaEnabled && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: `${(ctaX / 1080) * 100}%`,
+                        top: `${(ctaY / 1920) * 100}%`,
+                        transform: `translate(-50%, -50%) scale(${(ctaScale / 100).toFixed(2)})`,
+                        transformOrigin: "center center",
+                        pointerEvents: "none",
+                        whiteSpace: "nowrap",
+                        zIndex: 2,
+                      }}
+                    >
+                      {renderCtaBadgePreview()}
+                    </div>
+                  )}
 
-                  {/* ZONA CENTRAL */}
-                  <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-                    {ctaEnabled && ctaPosition === "center" && renderCtaBadgePreview()}
-                    {burnSubtitles && captionPosition === "center" && (
-                      <div>{renderCaptionPreview()}</div>
-                    )}
-                  </div>
-
-                  {/* ZONA INFERIOR */}
-                  <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-                    {burnSubtitles && captionPosition === "bottom" && (
-                      <div style={{ marginBottom: ctaEnabled && ctaPosition === "bottom" ? "4px" : "0" }}>
-                        {renderCaptionPreview()}
-                      </div>
-                    )}
-                    {ctaEnabled && ctaPosition === "bottom" && renderCtaBadgePreview()}
-                  </div>
+                  {/* Subtítulos con coordenadas absolutas exactas y escala de tamaño */}
+                  {burnSubtitles && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: `${(captionX / 1080) * 100}%`,
+                        top: `${(captionY / 1920) * 100}%`,
+                        transform:
+                          captionAlignH === "left"
+                            ? "translate(0, -50%)"
+                            : captionAlignH === "right"
+                            ? "translate(-100%, -50%)"
+                            : "translate(-50%, -50%)",
+                        transformOrigin: `${captionAlignH} center`,
+                        width: "max-content",
+                        maxWidth: "92%",
+                        pointerEvents: "none",
+                        textAlign: captionAlignH,
+                        zIndex: 3,
+                        zoom: Number((captionFontSize / 62).toFixed(2)),
+                      }}
+                    >
+                      {renderCaptionPreview()}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -810,7 +929,7 @@ export function CandidatePreviewModal({
                         type="button"
                         className="btn-cancel"
                         style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
-                        onClick={() => setTrimStart((curr) => Math.max(0, Number((curr - 5).toFixed(1))))}
+                        onClick={() => handleUpdateTrimStart(-5)}
                         title="Retroceder inicio 5s"
                       >
                         -5s
@@ -819,7 +938,7 @@ export function CandidatePreviewModal({
                         type="button"
                         className="btn-cancel"
                         style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
-                        onClick={() => setTrimStart((curr) => Math.max(0, Number((curr - 1).toFixed(1))))}
+                        onClick={() => handleUpdateTrimStart(-1)}
                         title="Retroceder inicio 1s"
                       >
                         -1s
@@ -828,7 +947,7 @@ export function CandidatePreviewModal({
                         type="button"
                         className="btn-cancel"
                         style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
-                        onClick={() => setTrimStart((curr) => Math.min(trimEnd - 1, Number((curr + 1).toFixed(1))))}
+                        onClick={() => handleUpdateTrimStart(1)}
                         title="Avanzar inicio 1s"
                       >
                         +1s
@@ -837,7 +956,7 @@ export function CandidatePreviewModal({
                         type="button"
                         className="btn-cancel"
                         style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
-                        onClick={() => setTrimStart((curr) => Math.min(trimEnd - 1, Number((curr + 5).toFixed(1))))}
+                        onClick={() => handleUpdateTrimStart(5)}
                         title="Avanzar inicio 5s"
                       >
                         +5s
@@ -865,7 +984,7 @@ export function CandidatePreviewModal({
                         type="button"
                         className="btn-cancel"
                         style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
-                        onClick={() => setTrimEnd((curr) => Math.max(trimStart + 1, Number((curr - 5).toFixed(1))))}
+                        onClick={() => handleUpdateTrimEnd(-5)}
                         title="Acortar fin 5s"
                       >
                         -5s
@@ -874,7 +993,7 @@ export function CandidatePreviewModal({
                         type="button"
                         className="btn-cancel"
                         style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
-                        onClick={() => setTrimEnd((curr) => Math.max(trimStart + 1, Number((curr - 1).toFixed(1))))}
+                        onClick={() => handleUpdateTrimEnd(-1)}
                         title="Acortar fin 1s"
                       >
                         -1s
@@ -883,7 +1002,7 @@ export function CandidatePreviewModal({
                         type="button"
                         className="btn-cancel"
                         style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
-                        onClick={() => setTrimEnd((curr) => Number((curr + 1).toFixed(1)))}
+                        onClick={() => handleUpdateTrimEnd(1)}
                         title="Extender fin 1s"
                       >
                         +1s
@@ -892,7 +1011,7 @@ export function CandidatePreviewModal({
                         type="button"
                         className="btn-cancel"
                         style={{ flex: 1, padding: 0, height: "28px", minHeight: "28px", fontSize: "0.74rem", fontFamily: "var(--font-mono)" }}
-                        onClick={() => setTrimEnd((curr) => Number((curr + 5).toFixed(1)))}
+                        onClick={() => handleUpdateTrimEnd(5)}
                         title="Extender fin 5s"
                       >
                         +5s
@@ -901,78 +1020,14 @@ export function CandidatePreviewModal({
                   </div>
                 </div>
 
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.5rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.25rem" }}>
                   {trimStart !== candidate.startSec || trimEnd !== candidate.endSec ? (
-                    <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                    <span style={{ fontSize: "0.74rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                       Original IA: {formatTime(candidate.startSec)} - {formatTime(candidate.endSec)}
                     </span>
                   ) : (
                     <div />
                   )}
-
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button
-                      type="button"
-                      className="btn-cancel"
-                      style={{ minHeight: "32px", fontSize: "0.76rem", padding: "0 12px" }}
-                      onClick={() => {
-                        setTrimStart(candidate.startSec);
-                        setTrimEnd(candidate.endSec);
-                        setSegments([{ id: "seg-1", start: candidate.startSec, end: candidate.endSec, deleted: false }]);
-                        setSelectedSegmentId("seg-1");
-                        try {
-                          localStorage.removeItem("autoshorts_candidate_segments_" + candidate.id);
-                        } catch {}
-                      }}
-                      disabled={trimStart === candidate.startSec && trimEnd === candidate.endSec && segments.length <= 1 && !segments[0]?.deleted}
-                    >
-                      Restablecer Original
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-confirm"
-                      style={{
-                        minHeight: "32px",
-                        fontSize: "0.76rem",
-                        padding: "0 16px",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                      onClick={async () => {
-                        try {
-                          localStorage.setItem("autoshorts_candidate_segments_" + candidate.id, JSON.stringify(segments));
-                          const activeSubRanges = segments.filter((s) => !s.deleted);
-                          if (activeSubRanges.length > 0) {
-                            const newStart = activeSubRanges[0].start;
-                            const newEnd = activeSubRanges[activeSubRanges.length - 1].end;
-                            setTrimStart(newStart);
-                            setTrimEnd(newEnd);
-                          }
-                          await onSaveTrim();
-                          setSaveFeedback(true);
-                          setTimeout(() => setSaveFeedback(false), 2500);
-                        } catch (e) {
-                          console.error("Error guardando ajuste:", e);
-                        }
-                      }}
-                      disabled={isSavingTrim || trimStart >= trimEnd}
-                    >
-                      {isSavingTrim ? (
-                        <>
-                          <Loader2 size={13} className="spin" />
-                          <span>Guardando...</span>
-                        </>
-                      ) : saveFeedback ? (
-                        <>
-                          <Sparkles size={13} style={{ color: "#10b981" }} />
-                          <span style={{ color: "#10b981", fontWeight: 700 }}>¡Ajuste Guardado!</span>
-                        </>
-                      ) : (
-                        "Guardar Ajuste"
-                      )}
-                    </button>
-                  </div>
                 </div>
 
                 {/* SECCIÓN CORTES INTERNOS / CAPCUT TIMELINE */}
@@ -1202,6 +1257,94 @@ export function CandidatePreviewModal({
                     </div>
                   </div>
                 </div>
+
+                {/* BOTONES UNIFICADOS DE GUARDAR Y RESTABLECER AJUSTE (TIEMPOS Y CORTES) */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    paddingTop: "0.85rem",
+                    marginTop: "0.4rem",
+                    borderTop: "1px solid var(--border-default)",
+                  }}
+                >
+                  <div>
+                    {trimStart !== candidate.startSec || trimEnd !== candidate.endSec || segments.length > 1 || segments[0]?.deleted ? (
+                      <span style={{ fontSize: "0.74rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                        Original IA: {formatTime(candidate.startSec)} - {formatTime(candidate.endSec)}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                        Clip con valores sugeridos por IA
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      className="btn-cancel"
+                      style={{ minHeight: "34px", fontSize: "0.78rem", padding: "0 14px" }}
+                      onClick={() => {
+                        setTrimStart(candidate.startSec);
+                        setTrimEnd(candidate.endSec);
+                        setSegments([{ id: "seg-1", start: candidate.startSec, end: candidate.endSec, deleted: false }]);
+                        setSelectedSegmentId("seg-1");
+                        try {
+                          localStorage.removeItem("autoshorts_candidate_segments_" + candidate.id);
+                        } catch {}
+                      }}
+                      disabled={trimStart === candidate.startSec && trimEnd === candidate.endSec && segments.length <= 1 && !segments[0]?.deleted}
+                    >
+                      Restablecer Original
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-confirm"
+                      style={{
+                        minHeight: "34px",
+                        fontSize: "0.78rem",
+                        padding: "0 18px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                      onClick={async () => {
+                        try {
+                          localStorage.setItem("autoshorts_candidate_segments_" + candidate.id, JSON.stringify(segments));
+                          const activeSubRanges = segments.filter((s) => !s.deleted);
+                          if (activeSubRanges.length > 0) {
+                            const newStart = activeSubRanges[0].start;
+                            const newEnd = activeSubRanges[activeSubRanges.length - 1].end;
+                            setTrimStart(newStart);
+                            setTrimEnd(newEnd);
+                          }
+                          await onSaveTrim();
+                          setSaveFeedback(true);
+                          setTimeout(() => setSaveFeedback(false), 2500);
+                        } catch (e) {
+                          console.error("Error guardando ajuste:", e);
+                        }
+                      }}
+                      disabled={isSavingTrim || trimStart >= trimEnd}
+                    >
+                      {isSavingTrim ? (
+                        <>
+                          <Loader2 size={13} className="spin" />
+                          <span>Guardando...</span>
+                        </>
+                      ) : saveFeedback ? (
+                        <>
+                          <Sparkles size={13} style={{ color: "#10b981" }} />
+                          <span style={{ color: "#10b981", fontWeight: 700 }}>¡Ajuste Guardado!</span>
+                        </>
+                      ) : (
+                        "Guardar Ajuste"
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1263,25 +1406,28 @@ export function CandidatePreviewModal({
                         </select>
                       </div>
 
-                      {/* Posición */}
+                      {/* Posición Rápida */}
                       <div>
                         <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.4rem", fontWeight: 600 }}>
-                          Posición en pantalla:
+                          Posición rápida:
                         </label>
                         <div style={{ display: "flex", gap: "0.3rem" }}>
                           <button
                             type="button"
-                            onClick={() => setCaptionPosition("top")}
-                            title="Arriba"
+                            onClick={() => {
+                              setCaptionPosition("top");
+                              setCaptionY(280);
+                            }}
+                            title="Arriba (Y=280)"
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: captionPosition === "top" ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: captionPosition === "top" ? "#fafafa" : "var(--bg-surface)",
-                              color: captionPosition === "top" ? "#09090b" : "var(--text-secondary)",
+                              border: captionY <= 400 ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: captionY <= 400 ? "#fafafa" : "var(--bg-surface)",
+                              color: captionY <= 400 ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: captionPosition === "top" ? 700 : 500,
+                              fontWeight: captionY <= 400 ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -1295,17 +1441,20 @@ export function CandidatePreviewModal({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setCaptionPosition("center")}
-                            title="Centro"
+                            onClick={() => {
+                              setCaptionPosition("center");
+                              setCaptionY(960);
+                            }}
+                            title="Centro (Y=960)"
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: captionPosition === "center" ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: captionPosition === "center" ? "#fafafa" : "var(--bg-surface)",
-                              color: captionPosition === "center" ? "#09090b" : "var(--text-secondary)",
+                              border: captionY > 400 && captionY < 1300 ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: captionY > 400 && captionY < 1300 ? "#fafafa" : "var(--bg-surface)",
+                              color: captionY > 400 && captionY < 1300 ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: captionPosition === "center" ? 700 : 500,
+                              fontWeight: captionY > 400 && captionY < 1300 ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -1319,17 +1468,20 @@ export function CandidatePreviewModal({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setCaptionPosition("bottom")}
-                            title="Abajo"
+                            onClick={() => {
+                              setCaptionPosition("bottom");
+                              setCaptionY(1680);
+                            }}
+                            title="Abajo (Y=1680)"
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: captionPosition === "bottom" ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: captionPosition === "bottom" ? "#fafafa" : "var(--bg-surface)",
-                              color: captionPosition === "bottom" ? "#09090b" : "var(--text-secondary)",
+                              border: captionY >= 1300 ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: captionY >= 1300 ? "#fafafa" : "var(--bg-surface)",
+                              color: captionY >= 1300 ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: captionPosition === "bottom" ? 700 : 500,
+                              fontWeight: captionY >= 1300 ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -1341,6 +1493,232 @@ export function CandidatePreviewModal({
                             <AlignVerticalJustifyEnd size={12} />
                             Abajo
                           </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PANEL DE TRANSFORMACIÓN Y COORDENADAS PREMIERE / OBS */}
+                    <div
+                      style={{
+                        background: "var(--bg-surface)",
+                        padding: "0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border-default)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.65rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.78rem", color: "var(--text-primary)", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
+                          <Move size={13} style={{ color: "var(--accent-primary, #6366f1)" }} />
+                          Posición Exacta y Transformación (Lienzo 1080x1920)
+                        </span>
+                        <div style={{ display: "flex", gap: "4px" }}>
+                          <button
+                            type="button"
+                            className="btn-cancel"
+                            style={{ height: "24px", minHeight: "24px", padding: "0 8px", fontSize: "0.7rem" }}
+                            onClick={() => {
+                              setCaptionPosition("bottom");
+                              setCaptionY(1420);
+                            }}
+                            title="Posiciona los subtítulos arriba de los overlays/HUDs de la parte inferior"
+                          >
+                            Streamer Elevado (1420)
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cancel"
+                            style={{ height: "24px", minHeight: "24px", padding: "0 8px", fontSize: "0.7rem" }}
+                            onClick={() => setCaptionX(540)}
+                            title="Centra los subtítulos horizontalmente en X=540"
+                          >
+                            Centrar X
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Coordenadas X e Y */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+                        {/* Coordenada X */}
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición X (0-1080):</span>
+                            <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontWeight: 700 }}>{captionX}px</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <input
+                              type="range"
+                              min={50}
+                              max={1030}
+                              step={5}
+                              value={captionX}
+                              onChange={(e) => setCaptionX(Number(e.target.value))}
+                              style={{ flex: 1, height: "4px", accentColor: "#6366f1", cursor: "pointer" }}
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              max={1080}
+                              value={captionX}
+                              onChange={(e) => setCaptionX(Math.max(0, Math.min(1080, Number(e.target.value))))}
+                              style={{
+                                width: "54px",
+                                padding: "2px 4px",
+                                fontSize: "0.74rem",
+                                fontFamily: "var(--font-mono)",
+                                background: "var(--bg-base)",
+                                border: "1px solid var(--border-default)",
+                                borderRadius: "4px",
+                                color: "var(--text-primary)",
+                                textAlign: "center",
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Coordenada Y */}
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición Y (0-1920):</span>
+                            <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontWeight: 700 }}>{captionY}px</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <input
+                              type="range"
+                              min={100}
+                              max={1850}
+                              step={10}
+                              value={captionY}
+                              onChange={(e) => setCaptionY(Number(e.target.value))}
+                              style={{ flex: 1, height: "4px", accentColor: "#6366f1", cursor: "pointer" }}
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              max={1920}
+                              value={captionY}
+                              onChange={(e) => setCaptionY(Math.max(0, Math.min(1920, Number(e.target.value))))}
+                              style={{
+                                width: "54px",
+                                padding: "2px 4px",
+                                fontSize: "0.74rem",
+                                fontFamily: "var(--font-mono)",
+                                background: "var(--bg-base)",
+                                border: "1px solid var(--border-default)",
+                                borderRadius: "4px",
+                                color: "var(--text-primary)",
+                                textAlign: "center",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tamaño de fuente y Alineación horizontal */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "0.85rem", alignItems: "center", paddingTop: "0.3rem" }}>
+                        {/* Tamaño de fuente */}
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Tamaño de Fuente:</span>
+                            <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontWeight: 700 }}>{captionFontSize}px</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <input
+                              type="range"
+                              min={36}
+                              max={88}
+                              step={2}
+                              value={captionFontSize}
+                              onChange={(e) => setCaptionFontSize(Number(e.target.value))}
+                              style={{ flex: 1, height: "4px", accentColor: "#6366f1", cursor: "pointer" }}
+                            />
+                            <input
+                              type="number"
+                              min={36}
+                              max={88}
+                              value={captionFontSize}
+                              onChange={(e) => setCaptionFontSize(Math.max(36, Math.min(88, Number(e.target.value))))}
+                              style={{
+                                width: "46px",
+                                padding: "2px 4px",
+                                fontSize: "0.74rem",
+                                fontFamily: "var(--font-mono)",
+                                background: "var(--bg-base)",
+                                border: "1px solid var(--border-default)",
+                                borderRadius: "4px",
+                                color: "var(--text-primary)",
+                                textAlign: "center",
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Alineación Horizontal */}
+                        <div>
+                          <span style={{ display: "block", fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600, marginBottom: "3px" }}>
+                            Alineación:
+                          </span>
+                          <div style={{ display: "flex", gap: "4px" }}>
+                            <button
+                              type="button"
+                              onClick={() => setCaptionAlignH("left")}
+                              style={{
+                                flex: 1,
+                                height: "26px",
+                                borderRadius: "4px",
+                                border: captionAlignH === "left" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                                background: captionAlignH === "left" ? "#fafafa" : "var(--bg-base)",
+                                color: captionAlignH === "left" ? "#09090b" : "var(--text-secondary)",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                              title="Alinear texto a la Izquierda"
+                            >
+                              <AlignLeft size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCaptionAlignH("center")}
+                              style={{
+                                flex: 1,
+                                height: "26px",
+                                borderRadius: "4px",
+                                border: captionAlignH === "center" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                                background: captionAlignH === "center" ? "#fafafa" : "var(--bg-base)",
+                                color: captionAlignH === "center" ? "#09090b" : "var(--text-secondary)",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                              title="Centrar texto"
+                            >
+                              <AlignCenter size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCaptionAlignH("right")}
+                              style={{
+                                flex: 1,
+                                height: "26px",
+                                borderRadius: "4px",
+                                border: captionAlignH === "right" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                                background: captionAlignH === "right" ? "#fafafa" : "var(--bg-base)",
+                                color: captionAlignH === "right" ? "#09090b" : "var(--text-secondary)",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                              title="Alinear texto a la Derecha"
+                            >
+                              <AlignRight size={13} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1660,22 +2038,25 @@ export function CandidatePreviewModal({
 
                       <div>
                         <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.4rem", fontWeight: 600 }}>
-                          Posición en pantalla:
+                          Posición rápida:
                         </label>
                         <div style={{ display: "flex", gap: "0.3rem" }}>
                           <button
                             type="button"
-                            onClick={() => setCtaPosition("top")}
-                            title="Arriba"
+                            onClick={() => {
+                              setCtaPosition("top");
+                              setCtaY(240);
+                            }}
+                            title="Arriba (Y=240)"
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: ctaPosition === "top" ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: ctaPosition === "top" ? "#fafafa" : "var(--bg-surface)",
-                              color: ctaPosition === "top" ? "#09090b" : "var(--text-secondary)",
+                              border: ctaY <= 400 ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: ctaY <= 400 ? "#fafafa" : "var(--bg-surface)",
+                              color: ctaY <= 400 ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: ctaPosition === "top" ? 700 : 500,
+                              fontWeight: ctaY <= 400 ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -1689,17 +2070,20 @@ export function CandidatePreviewModal({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setCtaPosition("center")}
-                            title="Centro"
+                            onClick={() => {
+                              setCtaPosition("center");
+                              setCtaY(960);
+                            }}
+                            title="Medio (Y=960)"
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: ctaPosition === "center" ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: ctaPosition === "center" ? "#fafafa" : "var(--bg-surface)",
-                              color: ctaPosition === "center" ? "#09090b" : "var(--text-secondary)",
+                              border: ctaY > 400 && ctaY < 1300 ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: ctaY > 400 && ctaY < 1300 ? "#fafafa" : "var(--bg-surface)",
+                              color: ctaY > 400 && ctaY < 1300 ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: ctaPosition === "center" ? 700 : 500,
+                              fontWeight: ctaY > 400 && ctaY < 1300 ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -1713,17 +2097,20 @@ export function CandidatePreviewModal({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setCtaPosition("bottom")}
-                            title="Abajo"
+                            onClick={() => {
+                              setCtaPosition("bottom");
+                              setCtaY(1550);
+                            }}
+                            title="Abajo (Y=1550)"
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: ctaPosition === "bottom" ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: ctaPosition === "bottom" ? "#fafafa" : "var(--bg-surface)",
-                              color: ctaPosition === "bottom" ? "#09090b" : "var(--text-secondary)",
+                              border: ctaY >= 1300 ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: ctaY >= 1300 ? "#fafafa" : "var(--bg-surface)",
+                              color: ctaY >= 1300 ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: ctaPosition === "bottom" ? 700 : 500,
+                              fontWeight: ctaY >= 1300 ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -1735,6 +2122,160 @@ export function CandidatePreviewModal({
                             <AlignVerticalJustifyEnd size={12} />
                             Abajo
                           </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PANEL DE COORDENADAS Y ESCALA PARA INSIGNIA CTA */}
+                    <div
+                      style={{
+                        background: "var(--bg-surface)",
+                        padding: "0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border-default)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.65rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.78rem", color: "var(--text-primary)", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
+                          <Move size={13} style={{ color: "#f43f5e" }} />
+                          Posición Exacta y Escala de Insignia (Lienzo 1080x1920)
+                        </span>
+                        <div style={{ display: "flex", gap: "4px" }}>
+                          <button
+                            type="button"
+                            className="btn-cancel"
+                            style={{ height: "24px", minHeight: "24px", padding: "0 8px", fontSize: "0.7rem" }}
+                            onClick={() => setCtaX(540)}
+                            title="Centra la insignia horizontalmente en X=540"
+                          >
+                            Centrar X
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cancel"
+                            style={{ height: "24px", minHeight: "24px", padding: "0 8px", fontSize: "0.7rem" }}
+                            onClick={() => setCtaScale(100)}
+                            title="Restablece la escala al 100%"
+                          >
+                            100% Escala
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Coordenadas X e Y */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+                        {/* Coordenada X */}
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición X (0-1080):</span>
+                            <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontWeight: 700 }}>{ctaX}px</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <input
+                              type="range"
+                              min={50}
+                              max={1030}
+                              step={5}
+                              value={ctaX}
+                              onChange={(e) => setCtaX(Number(e.target.value))}
+                              style={{ flex: 1, height: "4px", accentColor: "#f43f5e", cursor: "pointer" }}
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              max={1080}
+                              value={ctaX}
+                              onChange={(e) => setCtaX(Math.max(0, Math.min(1080, Number(e.target.value))))}
+                              style={{
+                                width: "54px",
+                                padding: "2px 4px",
+                                fontSize: "0.74rem",
+                                fontFamily: "var(--font-mono)",
+                                background: "var(--bg-base)",
+                                border: "1px solid var(--border-default)",
+                                borderRadius: "4px",
+                                color: "var(--text-primary)",
+                                textAlign: "center",
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Coordenada Y */}
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición Y (0-1920):</span>
+                            <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontWeight: 700 }}>{ctaY}px</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <input
+                              type="range"
+                              min={80}
+                              max={1850}
+                              step={10}
+                              value={ctaY}
+                              onChange={(e) => setCtaY(Number(e.target.value))}
+                              style={{ flex: 1, height: "4px", accentColor: "#f43f5e", cursor: "pointer" }}
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              max={1920}
+                              value={ctaY}
+                              onChange={(e) => setCtaY(Math.max(0, Math.min(1920, Number(e.target.value))))}
+                              style={{
+                                width: "54px",
+                                padding: "2px 4px",
+                                fontSize: "0.74rem",
+                                fontFamily: "var(--font-mono)",
+                                background: "var(--bg-base)",
+                                border: "1px solid var(--border-default)",
+                                borderRadius: "4px",
+                                color: "var(--text-primary)",
+                                textAlign: "center",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Escala de la Insignia */}
+                      <div style={{ paddingTop: "0.2rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                          <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Escala de Insignia (%):</span>
+                          <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontWeight: 700 }}>{ctaScale}%</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <input
+                            type="range"
+                            min={70}
+                            max={140}
+                            step={5}
+                            value={ctaScale}
+                            onChange={(e) => setCtaScale(Number(e.target.value))}
+                            style={{ flex: 1, height: "4px", accentColor: "#f43f5e", cursor: "pointer" }}
+                          />
+                          <input
+                            type="number"
+                            min={70}
+                            max={140}
+                            value={ctaScale}
+                            onChange={(e) => setCtaScale(Math.max(70, Math.min(140, Number(e.target.value))))}
+                            style={{
+                              width: "54px",
+                              padding: "2px 4px",
+                              fontSize: "0.74rem",
+                              fontFamily: "var(--font-mono)",
+                              background: "var(--bg-base)",
+                              border: "1px solid var(--border-default)",
+                              borderRadius: "4px",
+                              color: "var(--text-primary)",
+                              textAlign: "center",
+                            }}
+                          />
                         </div>
                       </div>
                     </div>
@@ -1830,8 +2371,39 @@ export function CandidatePreviewModal({
                 cursor: isExporting ? "not-allowed" : "pointer",
               }}
             >
-              Descartar
+              Cerrar
             </button>
+            {onToggleDismissed && (
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={async () => {
+                  try {
+                    await onToggleDismissed(candidate.id, true);
+                    onClose();
+                  } catch (e) {
+                    console.error("Error descartando momento:", e);
+                  }
+                }}
+                disabled={isExporting}
+                style={{
+                  minHeight: "36px",
+                  padding: "0 14px",
+                  fontSize: "0.82rem",
+                  color: "#f87171",
+                  borderColor: "rgba(239, 68, 68, 0.35)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  opacity: isExporting ? 0.4 : 1,
+                  cursor: isExporting ? "not-allowed" : "pointer",
+                }}
+                title="Descarta este momento para que no aparezca en la lista activa"
+              >
+                <Trash2 size={14} />
+                <span>Descartar Momento</span>
+              </button>
+            )}
             <button
               type="button"
               className="btn-confirm"
@@ -1850,10 +2422,17 @@ export function CandidatePreviewModal({
                     captionColor,
                     captionHighlight,
                     captionLines,
+                    captionX,
+                    captionY,
+                    captionFontSize,
+                    captionAlignH,
                     ctaEnabled,
                     ctaText,
                     ctaPosition,
                     ctaAnimation,
+                    ctaX,
+                    ctaY,
+                    ctaScale: ctaScale / 100,
                     aspectRatio: (localStorage.getItem("autoshorts_clip_aspect_ratio") as "original" | "9:16") || "original",
                     startSec: activeSubRanges[0]?.start ?? trimStart,
                     endSec: activeSubRanges[activeSubRanges.length - 1]?.end ?? trimEnd,

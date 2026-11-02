@@ -328,6 +328,7 @@ export function App() {
         onCutCandidate={mediaPipeline.cutCandidate}
         clipByCandidate={mediaPipeline.clipByCandidate}
         busy={projectActions.busy}
+        onToggleDismissed={mediaPipeline.toggleCandidateDismissed}
       />
 
       <LogsModal isOpen={showLogs} onClose={() => setShowLogs(false)} />

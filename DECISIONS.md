@@ -114,3 +114,21 @@
   2. Rediseño de alto contraste para "Dividir en cabezal" (`src/components/modals/CandidatePreviewModal.tsx`): Retirar la clase `.btn-confirm` (que forzaba fondo blanco) y aplicar fondo índigo `#4f46e5`, texto blanco `#ffffff`, borde `#6366f1` y feedback hover `#4338ca` para una legibilidad y contraste óptimos (>7:1).
   3. Persistencia unificada de ajustes y cortes (`CandidatePreviewModal.tsx`): El botón "Guardar Ajuste" ahora persiste tanto el punto de inicio y fin como los cortes internos (`segments` / `subRanges`) en `localStorage` por candidato, restaurándolos automáticamente al reabrir el modal y mostrando confirmación visual instantánea (`¡Ajuste Guardado!`). El botón "Restablecer Original" limpia los cortes guardados y restaura el rango inicial.
 - **Motivo:** Garantizar que la exportación de video multi-segmento con cortes internos se ejecute sin errores en FFmpeg, mejorar la experiencia de usuario con botones legibles y permitir que los cortes estilo CapCut no se pierdan al cerrar el modal.
+
+## D-021: Release v2.7.0 — Control Total de Coordenadas X/Y Estilo NLE para Subtítulos y CTA, Fix de Persistencia de Trim y Acción Descartar
+- **Decisión:**
+  1. **Control Total de Coordenadas y Tamaño para Subtítulos (Lienzo Nativo 1080x1920):**
+     - Integrar panel de transformación en pestaña 2 con sliders e inputs numéricos para Posición X (0-1080 px), Posición Y (0-1920 px), Tamaño de Fuente (36-88 px) y Alineación Horizontal (Izq, Centro, Der).
+     - Añadir presets rápidos: "Streamer Elevado (1420)" para evitar colisiones con HUDs y overlays inferiores de streamers, "Arriba (280)", "Centro (960)", "Abajo (1680)" y botón "Centrar X (540)".
+     - En backend (`python_backend/media.py`), inyectar el tag ASS `{\an{code}\pos(X, Y)}` en cada línea de diálogo para garantizar anclaje subpixel idéntico entre preview y render.
+  2. **Control Total de Coordenadas, Escala y Corrección Visual en Insignia CTA:**
+     - Panel de transformación en pestaña 3 con sliders e inputs para Posición X (0-1080), Posición Y (0-1920) y Escala (70% a 140%).
+     - Corregir el bearing del emoji de corazón (`min(0, bbox_e[0])`) y ampliar el padding perimetral en `generate_cta_badge_image` para evitar cualquier roce con el borde curvo de la pastilla.
+     - En filtergraph de FFmpeg, posicionar la insignia usando expresiones exactas centradas `overlay=x='max(0,min(W-w,X-w/2))':y='max(0,min(H-h,Y-h/2))'`.
+  3. **Sincronización Unificada de Trim y Cortes Internos:**
+     - Sincronizar en tiempo real los botones `+5s/-5s` y `+1s/-1s` de Punto de Inicio y Fin con los límites exteriores de los `segments`.
+     - Reubicar los botones "Restablecer Original" y "Guardar Ajuste" al fondo de la pestaña Trim para que gobiernen de forma unificada tanto el recorte fino como los cortes internos estilo CapCut.
+  4. **Previsualización 1:1 en Smartphone y Acción Descartar en Footer:**
+     - El smartphone preview proyecta las coordenadas exactas con `(X/1080)*100%` y `(Y/1920)*100%`, logrando fidelidad idéntica al render final.
+     - Renombrar el botón inferior a "Cerrar" (sin mutar el estado) y añadir el botón "Descartar Momento" que invoca `toggleCandidateDismissed` y cierra el estudio.
+- **Motivo:** Otorgar a los creadores control absoluto sobre la ubicación y tamaño de subtítulos y stickers para evitar solapamientos con sus plantillas u overlays de streaming, asegurar que los recortes se guarden con total fidelidad y proporcionar un flujo de descarte ágil dentro del estudio.

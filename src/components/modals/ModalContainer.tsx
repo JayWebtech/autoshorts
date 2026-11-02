@@ -109,6 +109,7 @@ export interface ModalContainerProps {
   onCutCandidate: (candidateId: string, options?: any) => Promise<void>;
   clipByCandidate: Map<string, any>;
   busy: BusyState;
+  onToggleDismissed?: (candidateId: string, dismissed: boolean) => Promise<void>;
 }
 
 export function ModalContainer(props: ModalContainerProps) {
@@ -230,6 +231,7 @@ export function ModalContainer(props: ModalContainerProps) {
         onCutCandidate={props.onCutCandidate}
         clipByCandidate={props.clipByCandidate}
         busy={props.busy}
+        onToggleDismissed={props.onToggleDismissed}
       />
 
       <ModelDownloadModal

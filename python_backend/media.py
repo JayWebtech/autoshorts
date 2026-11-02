@@ -716,7 +716,12 @@ def is_hero_word(raw_w: str) -> bool:
     return clean in HERO_TRIGGER_WORDS
 
 
-def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = True) -> str:
+def generate_cta_badge_image(
+    text: str,
+    output_path: str,
+    is_vertical: bool = True,
+    scale_factor: float = 1.0
+) -> str:
     """
     Renders a stunning, ultra-crisp streamer pill badge with:
     - 2X supersampling with Lanczos downscaling for perfectly smooth curves and text
@@ -737,7 +742,8 @@ def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = Tr
         emoji_part = m.group(1)
         rest_text = m.group(2)
 
-    scale = 1.05 if is_vertical else 0.95
+    clamped_scale = max(0.5, min(2.0, float(scale_factor)))
+    scale = (1.05 if is_vertical else 0.95) * clamped_scale
     font_size = int(32 * scale)
 
     # 2X supersampling factor for razor-sharp rendering
@@ -768,20 +774,23 @@ def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = Tr
     draw_d = ImageDraw.Draw(dummy)
 
     emoji_w = 0
+    emoji_left_bearing = 0
     if emoji_part:
         try:
             bbox_e = draw_d.textbbox((0, 0), emoji_part, font=emoji_font, embedded_color=True)
-            emoji_w = bbox_e[2] - bbox_e[0] + int(12 * scale * ss)
+            emoji_left_bearing = min(0, bbox_e[0])
+            emoji_w = (bbox_e[2] - bbox_e[0]) + int(14 * scale * ss)
         except Exception:
             bbox_e = draw_d.textbbox((0, 0), emoji_part, font=text_font)
-            emoji_w = bbox_e[2] - bbox_e[0] + int(12 * scale * ss)
+            emoji_left_bearing = min(0, bbox_e[0])
+            emoji_w = (bbox_e[2] - bbox_e[0]) + int(14 * scale * ss)
 
     bbox_t = draw_d.textbbox((0, 0), rest_text, font=text_font)
     text_w = bbox_t[2] - bbox_t[0]
     text_h = max(bbox_t[3] - bbox_t[1], int(ss_font_size * 1.15))
 
-    pad_x = int(22 * scale * ss)
-    pad_y = int(11 * scale * ss)
+    pad_x = int(24 * scale * ss) + abs(emoji_left_bearing) + int(6 * scale * ss)
+    pad_y = int(12 * scale * ss)
     total_w = emoji_w + text_w + pad_x * 2
     total_h = text_h + pad_y * 2
 
@@ -811,7 +820,7 @@ def generate_cta_badge_image(text: str, output_path: str, is_vertical: bool = Tr
         width=max(2, int(2.0 * scale * ss))
     )
 
-    cur_x = pad_x
+    cur_x = pad_x - emoji_left_bearing
     if emoji_part:
         try:
             draw.text((cur_x, pad_y - int(3 * scale * ss)), emoji_part, font=emoji_font, embedded_color=True)
@@ -843,7 +852,11 @@ def generate_ass_subtitles(
     primary_color_hex: Optional[str] = None,
     highlight_color_hex: Optional[str] = None,
     single_line: bool = True,
-    sub_ranges: Optional[List[Dict[str, float]]] = None
+    sub_ranges: Optional[List[Dict[str, float]]] = None,
+    pos_x: Optional[int] = None,
+    pos_y: Optional[int] = None,
+    font_size_override: Optional[int] = None,
+    align_h: str = "center"
 ) -> str:
     clip_words, start_sec, end_sec = remap_words_for_sub_ranges(words, sub_ranges, start_sec, end_sec)
     if not clip_words:
@@ -855,7 +868,15 @@ def generate_ass_subtitles(
 
     # Alignment and vertical margin
     # ASS alignments: 2 = Bottom Center, 5 = Middle Center, 8 = Top Center
-    if position == "top":
+    if pos_x is not None and pos_y is not None:
+        if align_h == "left":
+            alignment = 4
+        elif align_h == "right":
+            alignment = 6
+        else:
+            alignment = 5
+        margin_v = 0
+    elif position == "top":
         alignment = 8
         margin_v = 180 if is_vertical else 90
     elif position == "center":
@@ -950,6 +971,11 @@ def generate_ass_subtitles(
         outline_size = 2
         shadow_size = 3
 
+    if font_size_override is not None:
+        font_size = max(24, min(120, int(font_size_override)))
+
+    pos_tag = f"{{\\an{alignment}\\pos({int(pos_x)},{int(pos_y)})}}" if (pos_x is not None and pos_y is not None) else ""
+
     # WrapStyle: 2 forces libass to NEVER wrap onto an uncontrolled second line
     # MarginL: 70, MarginR: 70 guarantees safety margins from 9:16 borders
     header = f"""[Script Info]
@@ -997,7 +1023,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             plain_len = sum(len(w.get("text", "").strip()) for w in chunk) + max(0, len(chunk) - 1)
             max_safe_len = 22 if is_vertical else 28
             if plain_len > max_safe_len:
-                line_fs = max(50 if is_vertical else 42, int(font_size - (plain_len - max_safe_len) * 1.2))
+                line_fs = max(int(font_size * 0.75), int(font_size - (plain_len - max_safe_len) * 1.2))
                 fs_tag = f"{{\\fs{line_fs}}}"
             else:
                 fs_tag = ""
@@ -1024,17 +1050,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                             # Active word pop
                             if is_hero_word(raw_w):
                                 # Hero Word: extra pop (125%) with hero fire/accent color
-                                words_text.append(f"{{\\fscx125\\fscy125\\c{hero_color}}}{display_w}{{\\rAutoStyle\\fscx100\\fscy100{fs_tag}}}")
+                                words_text.append(f"{{\\fscx125\\fscy125\\c{hero_color}}}{display_w}{{\\rAutoStyle\\fscx100\\fscy100{pos_tag}{fs_tag}}}")
                             elif caption_style == "cyber-terminal":
                                 # Cyber terminal bracket prompt
-                                words_text.append(f"{{\\c{highlight_color}}}[{display_w}]{{\\rAutoStyle{fs_tag}}}")
+                                words_text.append(f"{{\\c{highlight_color}}}[{display_w}]{{\\rAutoStyle{pos_tag}{fs_tag}}}")
                             else:
                                 pop_scale = 122 if caption_style == "loud-viral" else (108 if caption_style == "clean-editorial" else 118)
-                                words_text.append(f"{{\\fscx{pop_scale}\\fscy{pop_scale}\\c{highlight_color}}}{display_w}{{\\rAutoStyle\\fscx100\\fscy100{fs_tag}}}")
+                                words_text.append(f"{{\\fscx{pop_scale}\\fscy{pop_scale}\\c{highlight_color}}}{display_w}{{\\rAutoStyle\\fscx100\\fscy100{pos_tag}{fs_tag}}}")
                         else:
                             # Inactive word
                             if is_hero_word(raw_w) and caption_style == "loud-viral":
-                                words_text.append(f"{{\\c{hero_color}}}{display_w}{{\\rAutoStyle{fs_tag}}}")
+                                words_text.append(f"{{\\c{hero_color}}}{display_w}{{\\rAutoStyle{pos_tag}{fs_tag}}}")
                             else:
                                 words_text.append(display_w)
 
@@ -1042,7 +1068,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     text_line = prefix + " ".join(words_text)
                     if text_line.strip():
                         dialogue_lines.append(
-                            f"Dialogue: 0,{format_ass_time(w_start)},{format_ass_time(w_end)},AutoStyle,,0,0,0,,{fs_tag}{text_line}"
+                            f"Dialogue: 0,{format_ass_time(w_start)},{format_ass_time(w_end)},AutoStyle,,0,0,0,,{pos_tag}{fs_tag}{text_line}"
                         )
             else:
                 clean_chunk = []
@@ -1053,7 +1079,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 text_line = " ".join(clean_chunk)
                 if text_line.strip():
                     dialogue_lines.append(
-                        f"Dialogue: 0,{format_ass_time(chunk_start)},{format_ass_time(chunk_end)},AutoStyle,,0,0,0,,{fs_tag}{text_line}"
+                        f"Dialogue: 0,{format_ass_time(chunk_start)},{format_ass_time(chunk_end)},AutoStyle,,0,0,0,,{pos_tag}{fs_tag}{text_line}"
                     )
 
     return header + "\n".join(dialogue_lines) + "\n"
@@ -1073,7 +1099,9 @@ def render_flat_clip(
     cta_animation: str = "bounce-land",
     sub_ranges: Optional[List[Dict[str, float]]] = None,
     transition: Optional[str] = None,
-    target_fps: Optional[int] = None
+    target_fps: Optional[int] = None,
+    cta_x: Optional[int] = None,
+    cta_y: Optional[int] = None
 ) -> Path:
     if not command_exists("ffmpeg"):
         raise RuntimeError("ffmpeg is not installed or not available on PATH")
@@ -1150,7 +1178,7 @@ def render_flat_clip(
         elif cta_animation == "slide-up":
             scale_part = "null"
             slide_delta = 60 if is_vertical else 40
-            y_part = f"if(between(t,{t_st:.2f},{t_st+0.4:.2f}), {b_y} + {slide_delta}*pow(1-(t-{t_st:.2f})/0.4, 2), {b_y})"
+            y_part = f"if(between(t,{t_st:.2f},{t_st+0.4:.2f}), ({b_y}) + {slide_delta}*pow(1-(t-{t_st:.2f})/0.4, 2), ({b_y}))"
         else:  # fade-smooth
             scale_part = "null"
             y_part = b_y
@@ -1161,7 +1189,10 @@ def render_flat_clip(
     if has_video:
         needs_crop = (aspect_ratio == "9:16") and (vid_w >= vid_h > 0)
         has_sub_collision = bool(subtitle_filter and (cta_position == caption_position))
-        if cta_position == "top":
+        overlay_x = f"max(0,min(W-w,{int(cta_x)}-w/2))" if cta_x is not None else "(W-w)/2"
+        if cta_y is not None:
+            base_y = f"max(0,min(H-h,{int(cta_y)}-h/2))"
+        elif cta_position == "top":
             base_y = "280" if (has_sub_collision and is_vertical) else ("160" if has_sub_collision else ("130" if is_vertical else "65"))
         elif cta_position == "center":
             base_y = "(H-h)/2+90" if has_sub_collision else "(H-h)/2"
@@ -1218,11 +1249,11 @@ def render_flat_clip(
                     filter_parts.append("[1:v]format=rgba,split=2[b1raw][b2raw]")
                     filter_parts.append(f"[b1raw]{chain1}[b1f]")
                     filter_parts.append(f"[b2raw]{chain2}[b2f]")
-                    filter_parts.append(f"[vbase][b1f]overlay=x='(W-w)/2':y='{y1}':shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vmid]")
-                    filter_parts.append(f"[vmid][b2f]overlay=x='(W-w)/2':y='{y2}':shortest=1:enable='between(t,{t2_start:.2f},{t2_end:.2f})'[vpost_cta]")
+                    filter_parts.append(f"[vbase][b1f]overlay=x='{overlay_x}':y='{y1}':shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vmid]")
+                    filter_parts.append(f"[vmid][b2f]overlay=x='{overlay_x}':y='{y2}':shortest=1:enable='between(t,{t2_start:.2f},{t2_end:.2f})'[vpost_cta]")
                 else:
                     filter_parts.append(f"[1:v]format=rgba,{chain1}[b1f]")
-                    filter_parts.append(f"[vbase][b1f]overlay=x='(W-w)/2':y='{y1}':shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vpost_cta]")
+                    filter_parts.append(f"[vbase][b1f]overlay=x='{overlay_x}':y='{y1}':shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vpost_cta]")
             else:
                 filter_parts.append("[vbase]null[vpost_cta]")
 
@@ -1254,14 +1285,14 @@ def render_flat_clip(
                     f"[b1raw]{chain1}[b1f]; "
                     f"[b2raw]{chain2}[b2f]; "
                     f"{crop_prep}"
-                    f"[vbase][b1f]overlay=x='(W-w)/2':y='{y1}':shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vmid]; "
-                    f"[vmid][b2f]overlay=x='(W-w)/2':y='{y2}':shortest=1:enable='between(t,{t2_start:.2f},{t2_end:.2f})'[vpost_cta]"
+                    f"[vbase][b1f]overlay=x='{overlay_x}':y='{y1}':shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vmid]; "
+                    f"[vmid][b2f]overlay=x='{overlay_x}':y='{y2}':shortest=1:enable='between(t,{t2_start:.2f},{t2_end:.2f})'[vpost_cta]"
                 )
             else:
                 fc = (
                     f"[1:v]format=rgba,{chain1}[b1f]; "
                     f"{crop_prep}"
-                    f"[vbase][b1f]overlay=x='(W-w)/2':y='{y1}':shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vpost_cta]"
+                    f"[vbase][b1f]overlay=x='{overlay_x}':y='{y1}':shortest=1:enable='between(t,{t1_start:.2f},{t1_end:.2f})'[vpost_cta]"
                 )
 
             if subtitle_filter and subtitle_filter.strip():

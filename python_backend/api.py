@@ -1053,6 +1053,14 @@ class Api:
             else "1"
         )
         single_line = (str(caption_lines) != "2")
+        caption_x = args.get("captionX") if isinstance(args, dict) and args.get("captionX") is not None else None
+        caption_y = args.get("captionY") if isinstance(args, dict) and args.get("captionY") is not None else None
+        caption_font_size = args.get("captionFontSize") if isinstance(args, dict) and args.get("captionFontSize") is not None else None
+        caption_align_h = args.get("captionAlignH", "center") if isinstance(args, dict) and args.get("captionAlignH") else "center"
+
+        cta_x = args.get("ctaX") if isinstance(args, dict) and args.get("ctaX") is not None else None
+        cta_y = args.get("ctaY") if isinstance(args, dict) and args.get("ctaY") is not None else None
+        cta_scale = float(args.get("ctaScale", 1.0)) if isinstance(args, dict) and args.get("ctaScale") is not None else 1.0
 
         if custom_dir:
             out_dir = Path(custom_dir)
@@ -1091,7 +1099,8 @@ class Api:
                 generate_cta_badge_image(
                     text=cta_text,
                     output_path=str(badge_file),
-                    is_vertical=is_vert_video
+                    is_vertical=is_vert_video,
+                    scale_factor=cta_scale
                 )
                 if badge_file.exists():
                     cta_badge_path = badge_file
@@ -1126,7 +1135,11 @@ class Api:
                         primary_color_hex=caption_color,
                         highlight_color_hex=caption_highlight,
                         single_line=single_line,
-                        sub_ranges=sub_ranges
+                        sub_ranges=sub_ranges,
+                        pos_x=caption_x,
+                        pos_y=caption_y,
+                        font_size_override=caption_font_size,
+                        align_h=caption_align_h
                     )
                     if ass_content:
                         exported_ass_path = out_dir / f"{base_name}.ass"
@@ -1154,7 +1167,9 @@ class Api:
             cta_animation=cta_animation,
             sub_ranges=sub_ranges,
             transition=transition,
-            target_fps=target_fps
+            target_fps=target_fps,
+            cta_x=cta_x,
+            cta_y=cta_y
         )
 
         self.db.update_clip_for_candidate(

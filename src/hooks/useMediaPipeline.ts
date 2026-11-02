@@ -17,10 +17,17 @@ export interface CutClipOptions {
   captionColor?: string;
   captionHighlight?: string;
   captionLines?: "1" | "2";
+  captionX?: number;
+  captionY?: number;
+  captionFontSize?: number;
+  captionAlignH?: "left" | "center" | "right";
   ctaEnabled?: boolean;
   ctaText?: string;
   ctaPosition?: "top" | "center" | "bottom";
   ctaAnimation?: string;
+  ctaX?: number;
+  ctaY?: number;
+  ctaScale?: number;
   aspectRatio?: "original" | "9:16";
   startSec?: number;
   endSec?: number;
@@ -540,6 +547,13 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           ctaText,
           ctaPosition,
           ctaAnimation,
+          ...(options?.captionX !== undefined ? { captionX: options.captionX } : {}),
+          ...(options?.captionY !== undefined ? { captionY: options.captionY } : {}),
+          ...(options?.captionFontSize !== undefined ? { captionFontSize: options.captionFontSize } : {}),
+          ...(options?.captionAlignH !== undefined ? { captionAlignH: options.captionAlignH } : {}),
+          ...(options?.ctaX !== undefined ? { ctaX: options.ctaX } : {}),
+          ...(options?.ctaY !== undefined ? { ctaY: options.ctaY } : {}),
+          ...(options?.ctaScale !== undefined ? { ctaScale: options.ctaScale } : {}),
           ...(options?.startSec !== undefined ? { startSec: options.startSec } : {}),
           ...(options?.endSec !== undefined ? { endSec: options.endSec } : {}),
           ...(options?.subRanges ? { subRanges: options.subRanges } : {}),
