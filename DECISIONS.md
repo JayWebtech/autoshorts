@@ -150,3 +150,8 @@
      - Establecer un espaciado horizontal calibrado entre el extremo derecho real del emoji y el inicio del texto.
 - **Motivo:** Eliminar la fricción de tener que re-seleccionar proyectos al abrir la app, solucionar el error visual de la llave '}' en pantalla sobre las palabras activas de karaoke y lograr una estética tipográfica perfectamente equilibrada en la insignia de llamado a la acción.
 
+## D-023: Medición Vectorial Ilimitada del Texto y Lienzo Dinámico de Emoji en Insignia CTA
+- **Decisión:** En `python_backend/media.py` (`generate_cta_badge_image`), sustituir la medición de texto mediante rasterización fija por cálculo vectorial directo con `draw_d.textbbox((0, 0), rest_text, font=text_font)`. Para el emoji (`emoji_part`), dimensionar dinámicamente el lienzo de medición en función del tamaño de fuente escalado (`ss_font_size * 3`).
+- **Motivo:** Prevenir que al escalar el CTA (por encima de 1.0x hasta 2.0x) la pastilla se trunque horizontalmente debido al límite rígido de un lienzo fijo de 400px, asegurando que frases completas ("¡Sígueme y dale like!") se dibujen al 100% íntegras con sus tapas curvas completas en cualquier resolución.
+
+

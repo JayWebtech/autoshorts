@@ -716,20 +716,20 @@ def is_hero_word(raw_w: str) -> bool:
     return clean in HERO_TRIGGER_WORDS
 
 
-def get_exact_glyph_bbox(text: str, font, is_emoji: bool = False):
+def get_exact_emoji_bbox(emoji_text: str, font, ss_font_size: int):
     from PIL import Image, ImageDraw
-    test_img = Image.new("RGBA", (400, 200), (0, 0, 0, 0))
+    # Dynamically sized canvas based on font size - never clips
+    side = int(ss_font_size * 3)
+    offset = ss_font_size
+    test_img = Image.new("RGBA", (side, side), (0, 0, 0, 0))
     td = ImageDraw.Draw(test_img)
-    if is_emoji:
-        try:
-            td.text((50, 50), text, font=font, embedded_color=True)
-        except Exception:
-            td.text((50, 50), text, font=font, fill=(255, 255, 255, 255))
-    else:
-        td.text((50, 50), text, font=font, fill=(255, 255, 255, 255))
+    try:
+        td.text((offset, offset), emoji_text, font=font, embedded_color=True)
+    except Exception:
+        td.text((offset, offset), emoji_text, font=font, fill=(255, 255, 255, 255))
     bb = test_img.getbbox()
     if bb:
-        return (bb[0] - 50, bb[1] - 50, bb[2] - 50, bb[3] - 50)
+        return (bb[0] - offset, bb[1] - offset, bb[2] - offset, bb[3] - offset)
     return (0, 0, 0, 0)
 
 
@@ -792,11 +792,13 @@ def generate_cta_badge_image(
     emoji_h = 0
     bbox_e = (0, 0, 0, 0)
     if emoji_part:
-        bbox_e = get_exact_glyph_bbox(emoji_part, emoji_font, is_emoji=True)
+        bbox_e = get_exact_emoji_bbox(emoji_part, emoji_font, ss_font_size)
         emoji_w = bbox_e[2] - bbox_e[0]
         emoji_h = bbox_e[3] - bbox_e[1]
 
-    bbox_t = get_exact_glyph_bbox(rest_text, text_font, is_emoji=False)
+    dummy = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+    draw_d = ImageDraw.Draw(dummy)
+    bbox_t = draw_d.textbbox((0, 0), rest_text, font=text_font)
     text_w = bbox_t[2] - bbox_t[0]
     text_h = bbox_t[3] - bbox_t[1]
 
