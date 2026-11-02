@@ -154,4 +154,8 @@
 - **Decisión:** En `python_backend/media.py` (`generate_cta_badge_image`), sustituir la medición de texto mediante rasterización fija por cálculo vectorial directo con `draw_d.textbbox((0, 0), rest_text, font=text_font)`. Para el emoji (`emoji_part`), dimensionar dinámicamente el lienzo de medición en función del tamaño de fuente escalado (`ss_font_size * 3`).
 - **Motivo:** Prevenir que al escalar el CTA (por encima de 1.0x hasta 2.0x) la pastilla se trunque horizontalmente debido al límite rígido de un lienzo fijo de 400px, asegurando que frases completas ("¡Sígueme y dale like!") se dibujen al 100% íntegras con sus tapas curvas completas en cualquier resolución.
 
+## D-024: Desacoplamiento de `datas` en PyInstaller y Purga de Build Previa para Actualizaciones Garantizadas
+- **Decisión:** En `AutoShorts.spec`, desacoplar la regla `datas` para incluir específicamente `('dist/index.html', 'dist')` y `('dist/assets', 'dist/assets')` en lugar de la carpeta raíz `('dist', 'dist')`, suprimiendo la auto-recursión cíclica de PyInstaller hacia `dist/AutoShorts`. En `build_portable.py`, añadir la eliminación previa obligatoria de `dist/AutoShorts` y `build/AutoShorts` y la bandera `--noconfirm` (`-y`).
+- **Motivo:** Evitar que PyInstaller aborte la sobrescritura del ejecutable `AutoShorts.exe` por colisión de directorio no vacío, garantizando que cada compilación reemplace íntegramente los binarios en `dist/` y en la distribución de escritorio.
+
 

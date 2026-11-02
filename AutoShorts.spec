@@ -7,7 +7,8 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules, coll
 block_cipher = None
 
 datas = [
-    ('dist', 'dist'),
+    ('dist/index.html', 'dist'),
+    ('dist/assets', 'dist/assets'),
     ('icon.ico', '.'),
     ('icon.png', '.'),
     ('public', 'public'),

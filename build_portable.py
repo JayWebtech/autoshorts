@@ -43,8 +43,21 @@ def main():
     # 1. Compilar frontend de React con pnpm
     run_command("pnpm.cmd run build", "Compilando frontend de producción con pnpm")
 
-    # 2. Compilar con PyInstaller en modo onedir
-    run_command("pyinstaller --clean AutoShorts.spec", "Compilando backend ejecutable con PyInstaller (onedir)")
+    # 2. Purgar compilación previa y compilar con PyInstaller en modo onedir
+    output_dir = PROJECT_ROOT / "dist" / "AutoShorts"
+    build_dir = PROJECT_ROOT / "build" / "AutoShorts"
+    if output_dir.exists():
+        try:
+            shutil.rmtree(output_dir)
+        except Exception as e:
+            print(f"[!] Aviso al limpiar dist/AutoShorts: {e}")
+    if build_dir.exists():
+        try:
+            shutil.rmtree(build_dir)
+        except Exception as e:
+            print(f"[!] Aviso al limpiar build/AutoShorts: {e}")
+
+    run_command("pyinstaller -y --clean AutoShorts.spec", "Compilando backend ejecutable con PyInstaller (onedir)")
 
     output_dir = PROJECT_ROOT / "dist" / "AutoShorts"
     if not output_dir.exists() or not (output_dir / "AutoShorts.exe").exists():
