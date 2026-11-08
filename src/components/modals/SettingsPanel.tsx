@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Bot, Download, Mic, RefreshCw, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import {
   DEFAULT_WHISPER_MODELS,
@@ -28,8 +28,6 @@ interface SettingsPanelProps {
   setLlmEngine: (engine: LlmEngine) => void;
   localLlmModel: string;
   setLocalLlmModel: (model: string) => void;
-  enableThinking: boolean;
-  setEnableThinking: (val: boolean) => void;
   environment: EnvironmentStatus | null;
   onRefreshEnv: () => Promise<void>;
   pullInputModel: string;
@@ -60,8 +58,6 @@ export function SettingsPanel({
   setLlmEngine,
   localLlmModel,
   setLocalLlmModel,
-  enableThinking,
-  setEnableThinking,
   environment,
   onRefreshEnv,
   pullInputModel,
@@ -80,6 +76,7 @@ export function SettingsPanel({
   syncConfig,
   onResetConfig,
 }: SettingsPanelProps) {
+  const [confirmReset, setConfirmReset] = useState(false);
   const effectiveWhisperModels = useMemo(() => {
     return whisperModelsList && whisperModelsList.length > 0
       ? whisperModelsList
@@ -647,25 +644,57 @@ export function SettingsPanel({
             background: "#16161a",
           }}
         >
-          <button
-            type="button"
-            className="btn-cancel"
-            style={{
-              background: "rgba(239, 68, 68, 0.05)",
-              borderColor: "rgba(239, 68, 68, 0.25)",
-              color: "#f87171",
-              padding: "0 14px",
-              height: "32px",
-              fontSize: "0.78rem",
-            }}
-            onClick={() => {
-              if (window.confirm("¿Seguro que deseas restablecer la configuración por defecto?")) {
-                onResetConfig();
-              }
-            }}
-          >
-            Restablecer valores por defecto
-          </button>
+          {confirmReset ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                type="button"
+                className="btn-cancel"
+                style={{
+                  background: "rgba(239, 68, 68, 0.15)",
+                  borderColor: "rgba(239, 68, 68, 0.4)",
+                  color: "#f87171",
+                  padding: "0 12px",
+                  height: "32px",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                }}
+                onClick={() => {
+                  setConfirmReset(false);
+                  onResetConfig();
+                }}
+              >
+                ¿Confirmar restablecer?
+              </button>
+              <button
+                type="button"
+                className="btn-cancel"
+                style={{
+                  padding: "0 10px",
+                  height: "32px",
+                  fontSize: "0.75rem",
+                }}
+                onClick={() => setConfirmReset(false)}
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn-cancel"
+              style={{
+                background: "rgba(239, 68, 68, 0.05)",
+                borderColor: "rgba(239, 68, 68, 0.25)",
+                color: "#f87171",
+                padding: "0 14px",
+                height: "32px",
+                fontSize: "0.78rem",
+              }}
+              onClick={() => setConfirmReset(true)}
+            >
+              Restablecer valores por defecto
+            </button>
+          )}
 
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <span style={{ fontSize: "0.74rem", color: "#71717a" }}>

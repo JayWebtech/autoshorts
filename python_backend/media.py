@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 import wave
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -68,6 +69,23 @@ def probe_media(path: str) -> Dict[str, Any]:
             except Exception:
                 pass
 
+    aspect_ratio = None
+    if video and "width" in video and "height" in video and video["width"] and video["height"]:
+        w = int(video["width"])
+        h = int(video["height"])
+        if h > 0:
+            ratio = round(w / h, 2)
+            if abs(ratio - 1.78) < 0.05 or abs(ratio - (16 / 9)) < 0.05:
+                aspect_ratio = "16:9"
+            elif abs(ratio - 0.56) < 0.05 or abs(ratio - (9 / 16)) < 0.05:
+                aspect_ratio = "9:16"
+            elif abs(ratio - 1.33) < 0.05 or abs(ratio - (4 / 3)) < 0.05:
+                aspect_ratio = "4:3"
+            elif abs(ratio - 1.0) < 0.05:
+                aspect_ratio = "1:1"
+            else:
+                aspect_ratio = f"{w}:{h}"
+
     return {
         "durationSec": duration_sec,
         "hasVideo": video is not None,
@@ -76,7 +94,17 @@ def probe_media(path: str) -> Dict[str, Any]:
         "videoCodec": video.get("codec_name") if video else None,
         "audioCodec": audio.get("codec_name") if audio else None,
         "fps": fps,
+        "aspect_ratio": aspect_ratio,
     }
+
+
+@lru_cache(maxsize=64)
+def probe_media_cached(path: str) -> Dict[str, Any]:
+    """
+    Cached wrapper for probe_media to prevent repetitive and expensive ffprobe subprocess invocations.
+    """
+    return probe_media(path)
+
 
 
 def extract_audio(

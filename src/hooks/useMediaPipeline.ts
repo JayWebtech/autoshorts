@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { invoke, listen } from "../apiBridge";
 import type {
   Candidate,
@@ -48,7 +48,6 @@ interface UseMediaPipelineOptions {
   llmEngine: string;
   localLlmModel: string;
   lmstudioModel: string;
-  enableThinking: boolean;
   customMomentsPrompt: string;
   customOutputDir: string;
   selectedContentType: ContentType;
@@ -70,7 +69,6 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
     llmEngine,
     localLlmModel,
     lmstudioModel,
-    enableThinking,
     customMomentsPrompt,
     customOutputDir,
     selectedContentType,
@@ -79,13 +77,25 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
     pullModelDirectly,
   } = options;
 
+  const cancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (cancelTimerRef.current) {
+        clearTimeout(cancelTimerRef.current);
+      }
+    };
+  }, []);
+
   const [candidateProgress, setCandidateProgress] = useState<{ message: string; current: number; total: number } | null>(null);
   const [transcriptionProgress, setTranscriptionProgress] = useState<{ percentage: number; message: string } | null>(null);
   const [isRefiningTranscript, setIsRefiningTranscript] = useState<boolean>(false);
   const [isDetectingActionCues, setIsDetectingActionCues] = useState<boolean>(false);
   const [renderingCandidateId, setRenderingCandidateId] = useState<string | null>(null);
   const [clipAspectRatio, setClipAspectRatio] = useState<"original" | "16:9" | "9:16">(() => {
-    return (localStorage.getItem("autoshorts_clip_aspect_ratio") as any) || "original";
+    const saved = localStorage.getItem("autoshorts_clip_aspect_ratio");
+    if (saved === "16:9" || saved === "9:16") return saved;
+    return "original";
   });
 
   // Candidate trim preview
@@ -113,22 +123,31 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
     }
   }, [detail?.transcript]);
 
-  const selectedCount = detail?.candidates.filter((candidate) => candidate.selected).length ?? 0;
+  const selectedCount = useMemo(() => {
+    return detail?.candidates.filter((candidate) => candidate.selected).length ?? 0;
+  }, [detail?.candidates]);
+
   const clipByCandidate = useMemo(() => {
     return new Map(detail?.clips.map((clip) => [clip.candidateId, clip]) ?? []);
   }, [detail?.clips]);
+
   const selectedCandidates = useMemo(() => {
     return detail?.candidates.filter((candidate) => candidate.selected) ?? [];
   }, [detail?.candidates]);
 
-  const selectedCutCount = selectedCandidates.filter((candidate) => {
-    const clip = clipByCandidate.get(candidate.id);
-    return clip?.status === "done" && Boolean(clip.outputPath);
-  }).length;
-  const selectedCaptionsCount = selectedCandidates.filter((candidate) => {
-    const clip = clipByCandidate.get(candidate.id);
-    return clip?.status === "done" && Boolean(clip.captionAssPath);
-  }).length;
+  const selectedCutCount = useMemo(() => {
+    return selectedCandidates.filter((candidate) => {
+      const clip = clipByCandidate.get(candidate.id);
+      return clip?.status === "done" && Boolean(clip.outputPath);
+    }).length;
+  }, [selectedCandidates, clipByCandidate]);
+
+  const selectedCaptionsCount = useMemo(() => {
+    return selectedCandidates.filter((candidate) => {
+      const clip = clipByCandidate.get(candidate.id);
+      return clip?.status === "done" && Boolean(clip.captionAssPath);
+    }).length;
+  }, [selectedCandidates, clipByCandidate]);
 
   // Listeners for progress
   useEffect(() => {
@@ -178,7 +197,6 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
         llmEngine,
         llmModel: activeLlmModel,
         llmApiKey: activeLlmKey || null,
-        enableThinking,
       });
       await refresh(detail.project.id);
     } catch (err) {
@@ -193,7 +211,6 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
     transcriptionEngine,
     whisperModel,
     llmEngine,
-    enableThinking,
     refresh,
     setError,
     setBusy,
@@ -203,7 +220,8 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
     try {
       await invoke("cancel_transcription");
       setTranscriptionProgress({ percentage: 0, message: "Cancelando transcripción..." });
-      setTimeout(() => {
+      if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current);
+      cancelTimerRef.current = setTimeout(() => {
         setBusy("idle");
         setTranscriptionProgress(null);
         if (detail) {
@@ -228,7 +246,6 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
         provider: llmEngine,
         modelName: activeLlmModel,
         apiKey: activeLlmKey || null,
-        enableThinking,
       });
       await refresh(detail.project.id);
     } catch (err) {
@@ -237,7 +254,7 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
       setIsRefiningTranscript(false);
       setCandidateProgress(null);
     }
-  }, [detail, getActiveLlmConfig, llmEngine, enableThinking, refresh, setError]);
+  }, [detail, getActiveLlmConfig, llmEngine, refresh, setError]);
 
   const detectActionCues = useCallback(async () => {
     if (!detail?.transcript) return;
@@ -259,7 +276,8 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
     try {
       await invoke("cancel_candidate_generation");
       setCandidateProgress({ message: "Cancelando y liberando VRAM...", current: 0, total: 1 });
-      setTimeout(() => {
+      if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current);
+      cancelTimerRef.current = setTimeout(() => {
         setBusy("idle");
         setCandidateProgress(null);
         if (detail) {
@@ -290,7 +308,6 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           contentType: selectedContentType,
           targetDuration,
           allowDemo,
-          enableThinking,
           customPrompt: customMomentsPrompt.trim() || null,
           gamingSubgenre,
           gameContext,
@@ -319,7 +336,6 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
       llmEngine,
       selectedContentType,
       targetDuration,
-      enableThinking,
       customMomentsPrompt,
       localLlmModel,
       pullModelDirectly,
@@ -360,7 +376,6 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           llmEngine,
           llmModel: activeLlmModel,
           llmApiKey: activeLlmKey || null,
-          enableThinking,
         });
         await refresh(projectId);
       } catch (err) {
@@ -406,7 +421,6 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           contentType,
           targetDuration: durationTarget,
           allowDemo: false,
-          enableThinking,
           customPrompt: customMomentsPrompt.trim() || null,
           gamingSubgenre,
           gameContext,
@@ -436,7 +450,6 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
       llmEngine,
       getActiveLlmConfig,
       whisperModel,
-      enableThinking,
       autoDetectMoments,
       customMomentsPrompt,
       localLlmModel,
@@ -656,17 +669,16 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           provider: llmEngine,
           modelName: activeLlmModel,
           apiKey: activeLlmKey || null,
-          enableThinking,
           extraContext: (extraContextOverride !== undefined ? extraContextOverride : copyExtraContext).trim() || null,
         });
         setCopyResult(res);
-      } catch (err: any) {
+      } catch (err: unknown) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setIsGeneratingCopy(false);
       }
     },
-    [detail, getActiveLlmConfig, llmEngine, enableThinking, copyExtraContext, setError]
+    [detail, getActiveLlmConfig, llmEngine, copyExtraContext, setError]
   );
 
   const copyTextToClipboard = useCallback((key: string, text: string) => {
@@ -699,16 +711,15 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           provider: llmEngine,
           modelName: activeLlmModel,
           apiKey: activeLlmKey || null,
-          enableThinking,
         });
         await refresh(detail.project.id);
-      } catch (err: any) {
+      } catch (err: unknown) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setRegeneratingCopyCandidateId(null);
       }
     },
-    [detail, getActiveLlmConfig, llmEngine, enableThinking, refresh, setError]
+    [detail, getActiveLlmConfig, llmEngine, refresh, setError]
   );
 
   return {

@@ -309,3 +309,29 @@ def locate_moment_active_window(
         sub_start = max(c_start, sub_end - target_dur)
 
     return round(sub_start, 2), round(sub_end, 2)
+
+
+def classify_hook_type(hook_txt: str, rationale_txt: str = "", existing_type: Optional[str] = None) -> str:
+    """
+    Classifies a moment into standard high-retention categories:
+    reacción, destacado, clutch, anécdota, fail, tutorial, pregunta.
+    """
+    valid_types = {"reacción", "destacado", "clutch", "anécdota", "fail", "tutorial", "pregunta"}
+    if existing_type and str(existing_type).strip().lower() in valid_types:
+        return str(existing_type).strip().lower()
+
+    text = f"{hook_txt} {rationale_txt}".lower()
+    if any(k in text for k in ["clutch", "1v", "kill", "headshot", "jugada", "pro play", "maniobra", "habilidad", "aim"]):
+        return "clutch"
+    if any(k in text for k in ["fail", "mori", "muerte", "rage", "troleo", "bug", "perdi", "cague", "falle", "fumble"]):
+        return "fail"
+    if any(k in text for k in ["tutorial", "tip", "truco", "como hacer", "guia", "consejo", "secreto", "aprende"]):
+        return "tutorial"
+    if any(k in text for k in ["historia", "anecdota", "cuento", "recuerdo", "lore", "episodio", "capitulo"]):
+        return "anécdota"
+    if "?" in hook_txt or "¿" in hook_txt or any(k in text for k in ["sabias", "dilema", "por que", "cual"]):
+        return "pregunta"
+    if "!" in hook_txt or any(k in text for k in ["grito", "risa", "wtf", "omg", "dios", "no me jodas", "locura", "reaccion"]):
+        return "reacción"
+    return "destacado"
+

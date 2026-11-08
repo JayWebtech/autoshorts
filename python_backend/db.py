@@ -1,51 +1,67 @@
 import os
 import json
+import threading
 from pathlib import Path
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from python_backend.llm_prompts import classify_hook_type
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _infer_hook_type(hook_txt: str, rationale_txt: str = "", existing_type: Optional[str] = None) -> str:
-    valid_types = {"reacción", "destacado", "clutch", "anécdota", "fail", "tutorial", "pregunta"}
-    if existing_type and str(existing_type).strip().lower() in valid_types:
-        return str(existing_type).strip().lower()
-    text = f"{hook_txt} {rationale_txt}".lower()
-    if any(k in text for k in ["clutch", "1v", "kill", "headshot", "jugada", "pro play", "maniobra", "habilidad"]):
-        return "clutch"
-    if any(k in text for k in ["fail", "mori", "muerte", "rage", "troleo", "bug", "perdi", "cague", "falle"]):
-        return "fail"
-    if any(k in text for k in ["tutorial", "tip", "truco", "como hacer", "guia", "consejo"]):
-        return "tutorial"
-    if any(k in text for k in ["historia", "anecdota", "cuento", "lore", "recuerdo"]):
-        return "anécdota"
-    if "?" in hook_txt or "¿" in hook_txt or any(k in text for k in ["sabias", "dilema"]):
-        return "pregunta"
-    if "!" in hook_txt or any(k in text for k in ["grito", "risa", "wtf", "omg", "dios", "reaccion"]):
-        return "reacción"
-    return "destacado"
+# Canonical classification shared with LLM candidate parser
+_infer_hook_type = classify_hook_type
+
+
+SCHEMA_MIGRATIONS = [
+    (1, "ALTER TABLE candidates ADD COLUMN description TEXT;"),
+    (2, "ALTER TABLE candidates ADD COLUMN hook_title TEXT;"),
+    (3, "ALTER TABLE candidates ADD COLUMN virality_json TEXT;"),
+    (4, "ALTER TABLE candidates ADD COLUMN dismissed INTEGER DEFAULT 0;"),
+    (5, "ALTER TABLE projects ADD COLUMN project_dir TEXT;"),
+    (6, "ALTER TABLE projects ADD COLUMN workflow_goal TEXT DEFAULT 'clips';"),
+]
 
 
 class Database:
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self._local = threading.local()
         os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
         self.migrate()
 
     def get_conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON;")
+            conn.execute("PRAGMA journal_mode = WAL;")
+            self._local.conn = conn
         return conn
+
+    def close(self):
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            self._local.conn = None
 
     def migrate(self):
         with self.get_conn() as conn:
             conn.executescript("""
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 name TEXT,
@@ -124,43 +140,30 @@ class Database:
             );
             """)
 
-            try:
-                conn.execute("ALTER TABLE candidates ADD COLUMN description TEXT;")
-            except Exception:
-                pass
+            row = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
+            current_ver = row[0] if (row and row[0] is not None) else 0
 
-            try:
-                conn.execute("ALTER TABLE candidates ADD COLUMN hook_title TEXT;")
-            except Exception:
-                pass
+            for ver, sql in SCHEMA_MIGRATIONS:
+                if ver > current_ver:
+                    try:
+                        conn.execute(sql)
+                    except sqlite3.OperationalError as e:
+                        if "duplicate column name" in str(e).lower():
+                            pass
+                        else:
+                            raise
+                    conn.execute("INSERT OR REPLACE INTO schema_version (version, applied_at) VALUES (?, ?)", (ver, utc_now_iso()))
 
-            try:
-                conn.execute("ALTER TABLE candidates ADD COLUMN virality_json TEXT;")
-            except Exception:
-                pass
+            if current_ver < 7:
+                try:
+                    rows = conn.execute("SELECT id, source_path, name FROM projects WHERE name IS NULL OR name = ''").fetchall()
+                    for r in rows:
+                        stem = Path(r["source_path"]).stem
+                        conn.execute("UPDATE projects SET name = ? WHERE id = ?", (stem, r["id"]))
+                    conn.execute("INSERT OR REPLACE INTO schema_version (version, applied_at) VALUES (7, ?)", (utc_now_iso(),))
+                except Exception:
+                    pass
 
-            try:
-                conn.execute("ALTER TABLE candidates ADD COLUMN dismissed INTEGER DEFAULT 0;")
-            except Exception:
-                pass
-
-            try:
-                conn.execute("ALTER TABLE projects ADD COLUMN project_dir TEXT;")
-            except Exception:
-                pass
-
-            try:
-                conn.execute("ALTER TABLE projects ADD COLUMN workflow_goal TEXT DEFAULT 'clips';")
-            except Exception:
-                pass
-
-            try:
-                rows = conn.execute("SELECT id, source_path, name FROM projects WHERE name IS NULL OR name = ''").fetchall()
-                for r in rows:
-                    stem = Path(r["source_path"]).stem
-                    conn.execute("UPDATE projects SET name = ? WHERE id = ?", (stem, r["id"]))
-            except Exception:
-                pass
 
     def create_project(self, source_path: str, transcription_mode: str = "local", caption_style: str = "modern-box", source_duration: Optional[float] = None, project_dir: Optional[str] = None, workflow_goal: str = "clips") -> Dict[str, Any]:
         proj_id = str(uuid.uuid4())
@@ -358,7 +361,7 @@ class Database:
                     score_val = float(draft.get("score", 0.85))
                     total_score = max(50, min(99, int(round(score_val * 100 if score_val <= 1.0 else score_val))))
                     hook_txt = draft.get("hook", "")
-                    hook_type = _infer_hook_type(hook_txt, draft.get("rationale", ""))
+                    hook_type = classify_hook_type(hook_txt, draft.get("rationale", ""))
                     virality = {
                         "hook_score": max(12, min(25, int(round((total_score / 100.0) * 25)))),
                         "engagement_score": max(12, min(25, int(round((total_score / 100.0) * 24)))),
@@ -368,7 +371,7 @@ class Database:
                         "hook_type": hook_type
                     }
                 else:
-                    virality["hook_type"] = _infer_hook_type(draft.get("hook", ""), draft.get("rationale", ""), virality.get("hook_type"))
+                    virality["hook_type"] = classify_hook_type(draft.get("hook", ""), draft.get("rationale", ""), virality.get("hook_type"))
                 virality_json = json.dumps(virality, ensure_ascii=False)
 
                 conn.execute(
@@ -430,7 +433,7 @@ class Database:
                     score_val = float(r["score"] or 0.85)
                     total_score = max(50, min(99, int(round(score_val * 100 if score_val <= 1.0 else score_val))))
                     hook_txt = r["hook"] or ""
-                    hook_type = _infer_hook_type(hook_txt, r["rationale"] or "")
+                    hook_type = classify_hook_type(hook_txt, r["rationale"] or "")
                     v_obj = {
                         "hook_score": max(12, min(25, int(round((total_score / 100.0) * 25)))),
                         "engagement_score": max(12, min(25, int(round((total_score / 100.0) * 24)))),
@@ -440,7 +443,7 @@ class Database:
                         "hook_type": hook_type
                     }
                 else:
-                    v_obj["hook_type"] = _infer_hook_type(r["hook"] or "", r["rationale"] or "", v_obj.get("hook_type"))
+                    v_obj["hook_type"] = classify_hook_type(r["hook"] or "", r["rationale"] or "", v_obj.get("hook_type"))
                 result.append({
                     "id": r["id"],
                     "projectId": r["project_id"],

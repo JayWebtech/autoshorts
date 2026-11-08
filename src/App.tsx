@@ -60,7 +60,6 @@ export function App() {
     llmEngine: settings.llmEngine,
     localLlmModel: settings.localLlmModel,
     lmstudioModel: settings.lmstudioModel,
-    enableThinking: settings.enableThinking,
     customMomentsPrompt: settings.customMomentsPrompt,
     customOutputDir: settings.customOutputDir,
     selectedContentType: projectActions.selectedContentType,
@@ -93,8 +92,6 @@ export function App() {
       setLmstudioModel={settings.setLmstudioModel}
       lmstudioBaseUrl={settings.lmstudioBaseUrl}
       setLmstudioBaseUrl={settings.setLmstudioBaseUrl}
-      enableThinking={settings.enableThinking}
-      setEnableThinking={settings.setEnableThinking}
       environment={settings.environment}
       onRefreshEnv={() => projectActions.refresh(projectActions.detail?.project.id)}
       pullInputModel={settings.pullInputModel}
@@ -143,9 +140,6 @@ export function App() {
                 openProjectFolder={projectActions.openProjectFolder}
                 moveProjectFolder={projectActions.moveProjectFolder}
                 error={projectActions.error}
-                selectedCount={mediaPipeline.selectedCount}
-                selectedCutCount={mediaPipeline.selectedCutCount}
-                selectedCaptionsCount={mediaPipeline.selectedCaptionsCount}
                 activeView={activeView}
                 onChangeView={setActiveView}
               />
@@ -179,8 +173,6 @@ export function App() {
                     canUseActiveLlm={settings.canUseActiveLlm}
                     targetDuration={projectActions.targetDuration}
                     setTargetDuration={projectActions.setTargetDuration}
-                    enableThinking={settings.enableThinking}
-                    setEnableThinking={settings.setEnableThinking}
                     cutSelected={mediaPipeline.cutSelected}
                     cancelMoments={mediaPipeline.cancelMoments}
                     moments={mediaPipeline.moments}
@@ -256,8 +248,6 @@ export function App() {
         setLmstudioModel={settings.setLmstudioModel}
         lmstudioBaseUrl={settings.lmstudioBaseUrl}
         setLmstudioBaseUrl={settings.setLmstudioBaseUrl}
-        enableThinking={settings.enableThinking}
-        setEnableThinking={settings.setEnableThinking}
         environment={settings.environment}
         onRefreshEnv={() => projectActions.refresh(projectActions.detail?.project.id)}
         pullInputModel={settings.pullInputModel}

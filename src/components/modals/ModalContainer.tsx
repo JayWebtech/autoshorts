@@ -38,8 +38,6 @@ export interface ModalContainerProps {
   setLmstudioModel: (model: string) => void;
   lmstudioBaseUrl: string;
   setLmstudioBaseUrl: (url: string) => void;
-  enableThinking: boolean;
-  setEnableThinking: (val: boolean | ((prev: boolean) => boolean)) => void;
   environment: EnvironmentStatus | null;
   onRefreshEnv: () => Promise<void>;
   pullInputModel: string;
@@ -132,8 +130,6 @@ export function ModalContainer(props: ModalContainerProps) {
         setLmstudioModel={props.setLmstudioModel}
         lmstudioBaseUrl={props.lmstudioBaseUrl}
         setLmstudioBaseUrl={props.setLmstudioBaseUrl}
-        enableThinking={props.enableThinking}
-        setEnableThinking={props.setEnableThinking}
         environment={props.environment}
         onRefreshEnv={props.onRefreshEnv}
         pullInputModel={props.pullInputModel}
@@ -181,8 +177,6 @@ export function ModalContainer(props: ModalContainerProps) {
         setRefineTranscriptWithLlm={props.setRefineTranscriptWithLlm}
         autoDetectMoments={props.autoDetectMoments}
         setAutoDetectMoments={props.setAutoDetectMoments}
-        enableThinking={props.enableThinking}
-        setEnableThinking={props.setEnableThinking}
         customProjectDir={props.customProjectDir}
         onSelectProjectDir={props.onSelectProjectDir}
         moveSourceVideo={props.moveSourceVideo}
@@ -215,7 +209,6 @@ export function ModalContainer(props: ModalContainerProps) {
         llmEngine={props.llmEngine}
         localLlmModel={props.localLlmModel}
         lmstudioModel={props.lmstudioModel}
-        enableThinking={props.enableThinking}
       />
 
       <CandidatePreviewModal

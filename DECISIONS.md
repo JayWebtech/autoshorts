@@ -222,6 +222,30 @@
      - Resaltar en la UI de importación el funcionamiento del analizador acústico RMS (`inject_acoustic_cues_into_transcript`), el cual detecta combates, disparos y jugadas tensas en segundo plano aunque el creador guarde silencio.
 - **Motivo:** Garantizar coherencia estricta en las duraciones solicitadas, proporcionar copys atractivos y limpios sin redundancias, ofrecer una interfaz profesional de grado industrial libre de emojis genéricos y simplificar el uso eliminando controles innecesarios de razonamiento.
 
+## D-029: Auditoría Senior — Optimizaciones de Arquitectura, Concurrencia, Rendimiento y Calidad de Código
+- **Decisión:**
+  1. **Pool de Conexión SQLite y Concurrencia WAL (`python_backend/db.py`):**
+     - Sustituir la apertura repetitiva de conexiones en cada query por un pool por hilo utilizando `threading.local()`.
+     - Habilitar `PRAGMA journal_mode = WAL;` para garantizar lecturas y escrituras no bloqueantes en Windows bajo concurrencia de transcripción y API.
+     - Implementar versionado formal de esquema con tabla `schema_version` y migraciones secuenciales idempotentes.
+     - Centralizar `classify_hook_type` en `llm_prompts.py` y proveer método de cierre explícito `db.close()`.
+  2. **Unificación de Lógica de Duración y Resiliencia en LLM (`python_backend/llm.py`):**
+     - Unificar `expand_short_candidate` y `clamp_candidate_duration` en una sola función lineal $O(n)$: `normalize_candidate_duration`.
+     - Implementar `_call_with_retry` con backoff exponencial para llamadas HTTP a Ollama y LM Studio ante caídas o timeouts transitorios.
+     - Incorporar telemetría de niveles de reparación JSON en `parse_candidate_json` y advertencias explícitas en logs ante candidatos malformados.
+  3. **Seguridad y Trazabilidad en API y Multimedia (`python_backend/api.py`, `media.py`):**
+     - Erradicar la evaluación de JavaScript con f-strings crudos en `refine_project_transcript`, reemplazándola por `self.emit()` seguro con serialización JSON.
+     - Implementar `_validate_safe_path` para bloquear ataques de path traversal hacia directorios del sistema en `open_folder` y `move_project_folder`.
+     - Introducir `probe_media_cached` con `@lru_cache` para evitar subprocesos redundantes de ffprobe sobre el mismo archivo multimedia.
+  4. **Purga Integral de Dead Props y Memoización en Frontend (React / TypeScript):**
+     - Retirar definitivamente `enableThinking` y `setEnableThinking` de la cadena completa de props (`useAppSettings.ts`, `App.tsx`, `useMediaPipeline.ts`, `CandidatePanel.tsx`, `StyleModal.tsx`, `SettingsPanel.tsx`, `QuickCopyModal.tsx`, `ModalContainer.tsx`).
+     - Eliminar props muertas en `WorkspaceHeader` (`selectedCount`, `selectedCutCount`, `selectedCaptionsCount`).
+     - Envolver en `useMemo` los filtros y ordenamiento de candidatos en `CandidatePanel.tsx` y los contadores en `useMediaPipeline.ts`.
+     - Limpiar timers de `setTimeout` con `useRef` para evitar memory leaks y advertencias de desmontaje.
+     - Reemplazar `window.confirm` bloqueante por confirmación reactiva en `SettingsPanel.tsx`.
+- **Motivo:** Elevar el software a estándares de ingeniería senior de producción: cero fugas de memoria, mayor rendimiento en UI y base de datos, protección contra errores transitorios de red/LLM y eliminación total de código muerto.
+
+
 
 
 

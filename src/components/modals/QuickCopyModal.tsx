@@ -9,7 +9,6 @@ interface QuickCopyModalProps {
   llmEngine: string;
   localLlmModel: string;
   lmstudioModel?: string;
-  enableThinking: boolean;
 }
 
 function cleanSrtClientText(content: string): string {
@@ -34,7 +33,6 @@ export function QuickCopyModal({
   llmEngine,
   localLlmModel,
   lmstudioModel = "",
-  enableThinking,
 }: QuickCopyModalProps) {
   const [activeTab, setActiveTab] = useState<"srt" | "text" | "media">("srt");
   const [srtFile, setSrtFile] = useState<{ name: string; path?: string; text: string; wordsCount: number } | null>(null);
@@ -153,7 +151,6 @@ export function QuickCopyModal({
         provider: llmEngine,
         modelName: activeLlmModel,
         apiKey: null,
-        enableThinking,
       });
       setCopyResult(result);
     } catch (err) {

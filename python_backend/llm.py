@@ -14,6 +14,7 @@ from python_backend.llm_prompts import (
     build_system_prompt,
     strip_emojis_from_text,
     locate_moment_active_window,
+    classify_hook_type,
 )
 
 
@@ -342,29 +343,83 @@ def macro_compact_segments(
     return "\n\n".join(blocks)
 
 
-def classify_hook_type(hook_txt: str, rationale_txt: str = "", existing_type: Optional[str] = None) -> str:
+def _call_with_retry(
+    fn: Callable[[], requests.Response],
+    max_retries: int = 1,
+    base_delay: float = 3.0
+) -> requests.Response:
     """
-    Classifies a moment into standard high-retention categories:
-    reacción, destacado, clutch, anécdota, fail, tutorial, pregunta.
+    Retry transient LLM HTTP timeouts and connection drops with backoff.
+    Fails immediately on 4xx/5xx responses to avoid hiding model errors.
     """
-    valid_types = {"reacción", "destacado", "clutch", "anécdota", "fail", "tutorial", "pregunta"}
-    if existing_type and str(existing_type).strip().lower() in valid_types:
-        return str(existing_type).strip().lower()
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            if attempt >= max_retries:
+                raise
+            delay = base_delay * (2 ** attempt)
+            log_buffer.push(
+                f"[LLM] Timeout o desconexión en llamada local (intento {attempt + 1}/{max_retries + 1}). "
+                f"Reintentando en {delay:.0f}s..."
+            )
+            time.sleep(delay)
+    raise RuntimeError("Bucle de reintentos finalizado sin respuesta válida")
 
-    text = f"{hook_txt} {rationale_txt}".lower()
-    if any(k in text for k in ["clutch", "1v", "kill", "headshot", "jugada", "pro play", "maniobra", "habilidad", "aim"]):
-        return "clutch"
-    if any(k in text for k in ["fail", "mori", "muerte", "rage", "troleo", "bug", "perdi", "cague", "falle", "fumble"]):
-        return "fail"
-    if any(k in text for k in ["tutorial", "tip", "truco", "como hacer", "guia", "consejo", "secreto", "aprende"]):
-        return "tutorial"
-    if any(k in text for k in ["historia", "anecdota", "cuento", "recuerdo", "lore", "episodio", "capitulo"]):
-        return "anécdota"
-    if "?" in hook_txt or "¿" in hook_txt or any(k in text for k in ["sabias", "dilema", "por que", "cual"]):
-        return "pregunta"
-    if "!" in hook_txt or any(k in text for k in ["grito", "risa", "wtf", "omg", "dios", "no me jodas", "locura", "reaccion"]):
-        return "reacción"
-    return "destacado"
+
+def normalize_candidate_duration(
+    start: float,
+    end: float,
+    segments: Optional[List[Dict[str, Any]]],
+    target_min: float = 45.0,
+    target_max: float = 75.0
+) -> Tuple[float, float]:
+    """
+    Normalización de duración de clip en una sola pasada.
+    - Si el clip es demasiado corto (< target_min), lo expande hacia adelante sobre segmentos hablados.
+    - Si el clip excede target_max * 1.10, lo recorta al límite de frase más cercano dentro de [start + target_min, start + target_max].
+    """
+    dur = end - start
+    if dur >= target_min and dur <= (target_max * 1.10):
+        return start, end
+
+    if not segments:
+        if dur < target_min:
+            return start, start + target_min
+        return start, round(min(end, start + target_max), 2)
+
+    target_ideal = (target_min + target_max) / 2.0
+
+    # Localizar segmento inicial
+    start_idx = 0
+    for i, s in enumerate(segments):
+        if s["start"] <= start <= s["end"] or abs(s["start"] - start) < 2.0:
+            start_idx = i
+            break
+
+    if dur < target_min:
+        new_end = end
+        for s in segments[start_idx:]:
+            new_end = max(new_end, s["end"])
+            if (new_end - start) >= target_ideal:
+                break
+        if (new_end - start) < target_min:
+            new_end = start + target_min
+        return start, round(min(new_end, start + target_max), 2)
+
+    # Si excede el máximo permitido
+    best_end = start + target_max
+    for s in segments[start_idx:]:
+        s_end = float(s.get("end", 0.0))
+        if s_end < start:
+            continue
+        seg_dur = s_end - start
+        if target_min <= seg_dur <= target_max:
+            best_end = s_end
+        elif seg_dur > target_max:
+            break
+
+    return start, round(best_end, 2)
 
 
 def expand_short_candidate(
@@ -374,36 +429,7 @@ def expand_short_candidate(
     target_min: float = 30.0,
     target_max: float = 60.0
 ) -> tuple[float, float]:
-    """
-    If the LLM selected only a short hook sentence, this expands the clip forward
-    across subsequent speech segments so the viewer gets the full context or play.
-    """
-    dur = end - start
-    if not segments:
-        if dur < target_min:
-            return start, start + target_min
-        return start, min(end, start + target_max)
-
-    target_ideal = (target_min + target_max) / 2.0
-    if dur >= target_min:
-        return start, min(end, start + target_max)
-
-    start_idx = 0
-    for i, s in enumerate(segments):
-        if s["start"] <= start <= s["end"] or abs(s["start"] - start) < 2.0:
-            start_idx = i
-            break
-
-    new_end = end
-    for s in segments[start_idx:]:
-        new_end = max(new_end, s["end"])
-        if (new_end - start) >= target_ideal:
-            break
-
-    if (new_end - start) < target_min:
-        new_end = start + target_min
-
-    return start, min(new_end, start + target_max)
+    return normalize_candidate_duration(start, end, segments, target_min=target_min, target_max=target_max)
 
 
 def clamp_candidate_duration(
@@ -413,31 +439,8 @@ def clamp_candidate_duration(
     target_min: float = 45.0,
     target_max: float = 75.0
 ) -> Tuple[float, float]:
-    """
-    If the LLM selected a candidate that exceeds the maximum target duration,
-    this trims the candidate towards the nearest sentence/speech boundary
-    within [start + target_min, start + target_max].
-    If no speech boundary exists in that window, it clamps strictly to start + target_max.
-    """
-    dur = end - start
-    max_ceiling = target_max * 1.10
-    if dur <= max_ceiling:
-        return start, end
+    return normalize_candidate_duration(start, end, segments, target_min=target_min, target_max=target_max)
 
-    if not segments:
-        return start, start + target_max
-
-    best_end = start + target_max
-    for s in segments:
-        s_end = float(s.get("end", 0.0))
-        if s_end < start:
-            continue
-        if (s_end - start) >= target_min and (s_end - start) <= target_max:
-            best_end = s_end
-        elif (s_end - start) > target_max:
-            break
-
-    return start, round(best_end, 2)
 
 
 def _coerce_candidate_timestamp(val: Any) -> float:
@@ -465,6 +468,7 @@ def parse_candidate_json(
     clean = re.sub(r"^```\s*", "", clean)
 
     val = None
+    repair_level = 0
     start_brace = clean.find('{')
     if start_brace != -1:
         try:
@@ -473,6 +477,7 @@ def parse_candidate_json(
             pass
 
     if val is None:
+        repair_level = 1
         start_bracket = clean.find('[')
         if start_bracket != -1:
             try:
@@ -481,6 +486,7 @@ def parse_candidate_json(
                 pass
 
     if val is None:
+        repair_level = 2
         match = re.search(r"(\{.*\})", clean, re.DOTALL)
         if match:
             try:
@@ -489,6 +495,7 @@ def parse_candidate_json(
                 pass
 
     if val is None:
+        repair_level = 3
         start_pos = clean.find('{')
         if start_pos != -1:
             trimmed = clean[start_pos:].strip()
@@ -511,10 +518,14 @@ def parse_candidate_json(
                     pass
 
     if val is None:
+        repair_level = 4
         try:
             val = json.loads(clean)
         except Exception:
             val = None
+
+    if val is not None and repair_level > 0:
+        log_buffer.push(f"[LLM] JSON recuperado exitosamente usando reparación nivel {repair_level}.")
 
     candidates_arr = None
     if isinstance(val, list):
@@ -564,15 +575,8 @@ def parse_candidate_json(
                 description = f"{hook}. ¿Qué opinas? Déjalo en comentarios. #shorts #viral #gaming"
 
             dur = end - start
-            if dur < target_min:
-                start, end = expand_short_candidate(
-                    start, end, segments,
-                    target_min=target_min,
-                    target_max=target_max
-                )
-            dur = end - start
-            if dur > (target_max * 1.10):
-                start, end = clamp_candidate_duration(
+            if dur < target_min or dur > (target_max * 1.10):
+                start, end = normalize_candidate_duration(
                     start, end, segments,
                     target_min=target_min,
                     target_max=target_max
@@ -613,7 +617,8 @@ def parse_candidate_json(
                     "rationale": rationale,
                     "description": description
                 })
-        except Exception:
+        except Exception as e:
+            log_buffer.push(f"[LLM] Candidato descartado por error de parseo: {e}")
             continue
 
     return drafts
@@ -727,10 +732,15 @@ def call_ollama(
     else:
         payload["think"] = True
 
-    resp = requests.post(url, json=payload, timeout=300)
-    if not resp.ok and "format" in payload:
-        payload.pop("format", None)
-        resp = requests.post(url, json=payload, timeout=300)
+    def _do_ollama_call() -> requests.Response:
+        r = requests.post(url, json=payload, timeout=300)
+        if not r.ok and "format" in payload:
+            p_fallback = dict(payload)
+            p_fallback.pop("format", None)
+            r = requests.post(url, json=p_fallback, timeout=300)
+        return r
+
+    resp = _call_with_retry(_do_ollama_call, max_retries=1, base_delay=3.0)
 
     if not resp.ok:
         raise RuntimeError(f"Ollama call failed ({resp.status_code}): {resp.text}")
@@ -793,7 +803,7 @@ def call_lmstudio(
         payload["reasoning_effort"] = "none"
 
     try:
-        resp = requests.post(url, json=payload, timeout=240)
+        resp = _call_with_retry(lambda: requests.post(url, json=payload, timeout=240), max_retries=1, base_delay=3.0)
     except requests.exceptions.ConnectionError as e:
         raise ModelFatalError(f"No se pudo conectar a LM Studio en {url}. ¿Está iniciado el servidor local en LM Studio?")
     except Exception as e:

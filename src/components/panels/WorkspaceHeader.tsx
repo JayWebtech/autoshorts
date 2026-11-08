@@ -28,9 +28,6 @@ interface WorkspaceHeaderProps {
   openProjectFolder: (projectId: string) => void;
   moveProjectFolder: (projectId: string) => void;
   error: string | null;
-  selectedCount?: number;
-  selectedCutCount?: number;
-  selectedCaptionsCount?: number;
   activeView?: "transcript" | "moments";
   onChangeView?: (view: "transcript" | "moments") => void;
 }

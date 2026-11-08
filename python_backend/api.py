@@ -20,6 +20,7 @@ from .media import (
     generate_cta_badge_image,
     build_drawtext_filters,
     probe_media,
+    probe_media_cached,
     render_flat_clip,
     inject_acoustic_cues_into_transcript,
 )
@@ -278,7 +279,7 @@ class Api:
             detail["project"]["sourceExists"] = os.path.exists(sp) if sp else False
             if detail["project"]["sourceExists"]:
                 try:
-                    probe = probe_media(sp)
+                    probe = probe_media_cached(sp)
                     detail["project"]["sourceWidth"] = probe.get("width")
                     detail["project"]["sourceHeight"] = probe.get("height")
                     detail["project"]["nativeAspectRatio"] = probe.get("aspect_ratio")
@@ -355,7 +356,7 @@ class Api:
 
         duration = None
         try:
-            probe = probe_media(source_path)
+            probe = probe_media_cached(source_path)
             duration = probe.get("durationSec")
         except Exception:
             pass
@@ -379,7 +380,7 @@ class Api:
     def probe_project(self, args: Any) -> Dict[str, Any]:
         project_id = args.get("projectId") if isinstance(args, dict) else args
         project = self.db.get_project(project_id)
-        probe = probe_media(project["sourcePath"])
+        probe = probe_media_cached(project["sourcePath"])
         self.db.update_project_status(project_id, "ingest", probe.get("durationSec"))
         return probe
 
@@ -594,8 +595,7 @@ class Api:
 
         self._cancel_candidates_flag = False
         def on_refine_progress(msg, cur, tot):
-            if self._window:
-                self._window.evaluate_js(f"window.__emitEvent && window.__emitEvent('candidate-progress', {{ message: '{msg}', current: {cur}, total: {tot} }})")
+            self.emit("candidate-progress", {"message": msg, "current": cur, "total": tot})
 
         refined_segments = refine_transcript_with_llm(
             segments,
@@ -1290,13 +1290,28 @@ class Api:
     def install_ollama(self, _args: Any = None):
         raise RuntimeError("Descarga e instala Ollama desde https://ollama.com")
 
+    def _validate_safe_path(self, requested_path: Optional[str]) -> Path:
+        """
+        Valida que la ruta solicitada no acceda a ubicaciones restringidas del sistema.
+        Previene vulnerabilidades de path traversal.
+        """
+        if not requested_path or not str(requested_path).strip():
+            raise ValueError("Ruta no especificada")
+        p = Path(requested_path).resolve()
+        str_p = str(p).lower()
+        forbidden_prefixes = ["c:\\windows", "c:\\program files", "/etc", "/bin", "/usr", "/sys"]
+        if any(str_p.startswith(fp) for fp in forbidden_prefixes):
+            raise PermissionError(f"Acceso denegado a ruta restringida del sistema: {requested_path}")
+        return p
+
     def open_media_file(self, args: Any) -> bool:
         path = args.get("path") if isinstance(args, dict) else args
         return open_media_file(path)
 
     def open_folder(self, args: Any):
         path = args.get("path") if isinstance(args, dict) else args
-        return open_folder(path)
+        safe_path = self._validate_safe_path(path)
+        return open_folder(str(safe_path))
 
     def open_project_folder(self, args: Any) -> Dict[str, Any]:
         project_id = args.get("projectId") if isinstance(args, dict) else args
@@ -1313,6 +1328,8 @@ class Api:
     def move_project_folder(self, args: Any) -> Dict[str, Any]:
         project_id = args.get("projectId")
         new_parent_dir = args.get("newParentDir")
+        if new_parent_dir:
+            self._validate_safe_path(new_parent_dir)
         return move_project_folder_action(self.db, project_id, new_parent_dir, self.get_project_dir)
 
     def get_system_logs(self, args: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:

@@ -58,9 +58,6 @@ export function useAppSettings() {
   });
   const [defaultMomentsPrompt, setDefaultMomentsPrompt] = useState<string>(DEFAULT_MOMENTS_PROMPT);
 
-  const [enableThinking, setEnableThinking] = useState<boolean>(() => {
-    return localStorage.getItem("autoshorts_enable_thinking") === "true";
-  });
   const [customOutputDir, setCustomOutputDir] = useState<string>(
     () => localStorage.getItem("autoshorts_output_dir") || ""
   );
@@ -358,10 +355,6 @@ export function useAppSettings() {
     localStorage.setItem("autoshorts_output_dir", customOutputDir);
   }, [customOutputDir]);
 
-  useEffect(() => {
-    localStorage.setItem("autoshorts_enable_thinking", enableThinking ? "true" : "false");
-  }, [enableThinking]);
-
   return {
     environment,
     setEnvironment,
@@ -383,8 +376,6 @@ export function useAppSettings() {
     customMomentsPrompt,
     setCustomMomentsPrompt,
     defaultMomentsPrompt,
-    enableThinking,
-    setEnableThinking,
     customOutputDir,
     setCustomOutputDir,
     autoTranscribeOnImport,

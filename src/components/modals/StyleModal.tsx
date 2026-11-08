@@ -48,8 +48,6 @@ interface StyleModalProps {
   setRefineTranscriptWithLlm: (val: boolean) => void;
   autoDetectMoments: boolean;
   setAutoDetectMoments: (val: boolean) => void;
-  enableThinking: boolean;
-  setEnableThinking: (val: boolean) => void;
   customProjectDir: string;
   onSelectProjectDir: () => void;
   moveSourceVideo: boolean;
@@ -88,8 +86,6 @@ export function StyleModal({
   setRefineTranscriptWithLlm,
   autoDetectMoments,
   setAutoDetectMoments,
-  enableThinking,
-  setEnableThinking,
   customProjectDir,
   onSelectProjectDir,
   moveSourceVideo,
@@ -429,7 +425,7 @@ export function StyleModal({
                       className="form-select"
                       value={llmEngine}
                       onChange={(e) => {
-                        const eng = e.target.value as any;
+                        const eng = e.target.value as LlmEngine;
                         setLlmEngine(eng);
                         localStorage.setItem("autoshorts_llm_engine", eng);
                       }}

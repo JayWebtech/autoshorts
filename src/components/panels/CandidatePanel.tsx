@@ -41,8 +41,6 @@ interface CandidatePanelProps {
   setTargetDuration: (dur: TargetDuration) => void;
   aspectRatio: AspectRatioOption;
   setAspectRatio: (val: AspectRatioOption) => void;
-  enableThinking: boolean;
-  setEnableThinking: (val: boolean) => void;
   cutSelected: () => void;
   cancelMoments: () => void;
   moments: (force?: boolean) => void;
@@ -65,6 +63,17 @@ interface CandidatePanelProps {
   isMemoryActionBusy?: boolean;
 }
 
+const HOOK_TYPE_OPTIONS = [
+  { id: "todos", label: "Todos" },
+  { id: "reacción", label: "Reacción" },
+  { id: "destacado", label: "Destacado" },
+  { id: "clutch", label: "Clutch" },
+  { id: "anécdota", label: "Anécdota" },
+  { id: "fail", label: "Fail" },
+  { id: "tutorial", label: "Tutorial" },
+  { id: "pregunta", label: "Pregunta" },
+];
+
 export const CandidatePanel: React.FC<CandidatePanelProps> = ({
   detail,
   selectedCount,
@@ -77,8 +86,6 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
   setTargetDuration,
   aspectRatio,
   setAspectRatio,
-  enableThinking,
-  setEnableThinking,
   cutSelected,
   cancelMoments,
   moments,
@@ -107,10 +114,15 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
   const hoverTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
 
+  const copyTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   React.useEffect(() => {
     return () => {
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
+      }
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
       }
     };
   }, []);
@@ -137,7 +149,9 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
   }, [filterTab]);
 
   const [sortBy, setSortBy] = useState<"match" | "chrono" | "duration">(() => {
-    return (localStorage.getItem("autoshorts_sort_candidates") as any) || "match";
+    const saved = localStorage.getItem("autoshorts_sort_candidates");
+    if (saved === "chrono" || saved === "duration") return saved;
+    return "match";
   });
   const [selectedHookType, setSelectedHookType] = useState<string>("todos");
 
@@ -145,30 +159,39 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
     localStorage.setItem("autoshorts_sort_candidates", sortBy);
   }, [sortBy]);
 
-  const dismissedCandidates = detail.candidates.filter((c) => Boolean(c.dismissed));
+  const dismissedCandidates = React.useMemo(() => {
+    return detail.candidates.filter((c) => Boolean(c.dismissed));
+  }, [detail.candidates]);
 
-  const exportedCandidates = detail.candidates.filter((c) => {
-    if (c.dismissed) return false;
-    const clip = clipByCandidate.get(c.id);
-    return clip?.status === "done" && Boolean(clip.outputPath);
-  });
+  const exportedCandidates = React.useMemo(() => {
+    return detail.candidates.filter((c) => {
+      if (c.dismissed) return false;
+      const clip = clipByCandidate.get(c.id);
+      return clip?.status === "done" && Boolean(clip.outputPath);
+    });
+  }, [detail.candidates, clipByCandidate]);
 
-  const pendingCandidates = detail.candidates.filter((c) => {
-    if (c.dismissed) return false;
-    const clip = clipByCandidate.get(c.id);
-    return !(clip?.status === "done" && Boolean(clip.outputPath));
-  });
+  const pendingCandidates = React.useMemo(() => {
+    return detail.candidates.filter((c) => {
+      if (c.dismissed) return false;
+      const clip = clipByCandidate.get(c.id);
+      return !(clip?.status === "done" && Boolean(clip.outputPath));
+    });
+  }, [detail.candidates, clipByCandidate]);
 
-  const activeCandidates = detail.candidates.filter((c) => !c.dismissed);
+  const activeCandidates = React.useMemo(() => {
+    return detail.candidates.filter((c) => !c.dismissed);
+  }, [detail.candidates]);
 
-  const baseFiltered =
-    filterTab === "exported"
+  const baseFiltered = React.useMemo(() => {
+    return filterTab === "exported"
       ? exportedCandidates
       : filterTab === "pending"
       ? pendingCandidates
       : filterTab === "dismissed"
       ? dismissedCandidates
       : activeCandidates;
+  }, [filterTab, exportedCandidates, pendingCandidates, dismissedCandidates, activeCandidates]);
 
   const availableHookTypes = React.useMemo(() => {
     const counts: Record<string, number> = {};
@@ -179,38 +202,32 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
     return counts;
   }, [baseFiltered]);
 
-  const hookTypeOptions = [
-    { id: "todos", label: "Todos" },
-    { id: "reacción", label: "Reacción" },
-    { id: "destacado", label: "Destacado" },
-    { id: "clutch", label: "Clutch" },
-    { id: "anécdota", label: "Anécdota" },
-    { id: "fail", label: "Fail" },
-    { id: "tutorial", label: "Tutorial" },
-    { id: "pregunta", label: "Pregunta" },
-  ];
+  const typeFiltered = React.useMemo(() => {
+    return selectedHookType === "todos"
+      ? baseFiltered
+      : baseFiltered.filter((c) => {
+          const t = (c.virality?.hook_type || "destacado").toLowerCase();
+          return t === selectedHookType.toLowerCase();
+        });
+  }, [baseFiltered, selectedHookType]);
 
-  const typeFiltered = selectedHookType === "todos"
-    ? baseFiltered
-    : baseFiltered.filter((c) => {
-        const t = (c.virality?.hook_type || "destacado").toLowerCase();
-        return t === selectedHookType.toLowerCase();
-      });
-
-  const displayedCandidates = [...typeFiltered].sort((a, b) => {
-    if (sortBy === "chrono") {
-      return a.startSec - b.startSec;
-    }
-    if (sortBy === "duration") {
-      return (b.endSec - b.startSec) - (a.endSec - a.startSec);
-    }
-    return (b.virality?.total_score ?? b.score * 100) - (a.virality?.total_score ?? a.score * 100);
-  });
+  const displayedCandidates = React.useMemo(() => {
+    return [...typeFiltered].sort((a, b) => {
+      if (sortBy === "chrono") {
+        return a.startSec - b.startSec;
+      }
+      if (sortBy === "duration") {
+        return (b.endSec - b.startSec) - (a.endSec - a.startSec);
+      }
+      return (b.virality?.total_score ?? b.score * 100) - (a.virality?.total_score ?? a.score * 100);
+    });
+  }, [typeFiltered, sortBy]);
 
   const handleCopyPath = (candidateId: string, path: string) => {
     void navigator.clipboard.writeText(path);
     setCopiedClipPathId(candidateId);
-    setTimeout(() => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => {
       setCopiedClipPathId((curr) => (curr === candidateId ? null : curr));
     }, 2000);
   };
@@ -218,7 +235,8 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
   const handleCopyHook = (candidateId: string, hookText: string) => {
     void navigator.clipboard.writeText(hookText);
     setCopiedHookId(candidateId);
-    setTimeout(() => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => {
       setCopiedHookId((curr) => (curr === candidateId ? null : curr));
     }, 2000);
   };
@@ -711,7 +729,7 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                 <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginRight: "2px", fontWeight: 600 }}>
                   Tipo:
                 </span>
-                {hookTypeOptions.map((opt) => {
+                {HOOK_TYPE_OPTIONS.map((opt) => {
                   const count = opt.id === "todos" ? baseFiltered.length : availableHookTypes[opt.id] || 0;
                   if (opt.id !== "todos" && count === 0) return null;
                   const active = selectedHookType === opt.id;
