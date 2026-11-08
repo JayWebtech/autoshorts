@@ -456,25 +456,6 @@ export function SettingsPanel({
                   </div>
                 )}
 
-                {/* Checkbox de modo razonamiento (Thinking) */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.75rem", padding: "0.55rem 0.75rem", background: "rgba(255, 255, 255, 0.02)", borderRadius: "6px", border: "1px solid #27272a" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.8rem" }}>
-                    <input
-                      type="checkbox"
-                      checked={enableThinking}
-                      onChange={(e) => {
-                        setEnableThinking(e.target.checked);
-                        localStorage.setItem("autoshorts_enable_thinking", String(e.target.checked));
-                      }}
-                      style={{ cursor: "pointer", width: "15px", height: "15px", accentColor: "#a78bfa" }}
-                    />
-                    <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>Activar modo razonamiento (Thinking / CoT)</span>
-                  </label>
-                  <span style={{ fontSize: "0.7rem", color: enableThinking ? "#e4e4e7" : "#71717a", fontFamily: "var(--font-mono, monospace)" }}>
-                    {enableThinking ? "Análisis exhaustivo" : "Respuesta rápida"}
-                  </span>
-                </div>
-
                 {/* Descarga opcional de modelos Ollama */}
                 <div style={{ marginTop: "0.75rem", paddingTop: "0.65rem", borderTop: "1px solid #27272a" }}>
                   <span style={{ fontSize: "0.74rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.35rem" }}>

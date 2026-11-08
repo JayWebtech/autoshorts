@@ -181,13 +181,13 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
 
   const hookTypeOptions = [
     { id: "todos", label: "Todos" },
-    { id: "reacción", label: "⚡ Reacción" },
-    { id: "destacado", label: "⭐ Destacado" },
-    { id: "clutch", label: "💥 Clutch" },
-    { id: "anécdota", label: "📖 Anécdota" },
-    { id: "fail", label: "💀 Fail" },
-    { id: "tutorial", label: "💡 Tutorial" },
-    { id: "pregunta", label: "❓ Pregunta" },
+    { id: "reacción", label: "Reacción" },
+    { id: "destacado", label: "Destacado" },
+    { id: "clutch", label: "Clutch" },
+    { id: "anécdota", label: "Anécdota" },
+    { id: "fail", label: "Fail" },
+    { id: "tutorial", label: "Tutorial" },
+    { id: "pregunta", label: "Pregunta" },
   ];
 
   const typeFiltered = selectedHookType === "todos"
@@ -422,44 +422,25 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
           </div>
         </div>
 
-        {/* Modo Thinking */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          <label
-            style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.74rem" }}
-            title="Desactívalo para análisis ultrarrápido sin razonamiento extendido"
-          >
-            <input
-              type="checkbox"
-              checked={enableThinking}
-              onChange={(e) => {
-                setEnableThinking(e.target.checked);
-                localStorage.setItem("autoshorts_enable_thinking", String(e.target.checked));
-              }}
-              style={{ cursor: "pointer", width: "13px", height: "13px", accentColor: "#fafafa" }}
-            />
-            <span style={{ color: enableThinking ? "#f59e0b" : "var(--text-secondary)", fontWeight: enableThinking ? 600 : 400 }}>
-              {enableThinking ? "Thinking CoT (Lento)" : "Modo Rápido"}
-            </span>
-          </label>
-
-          {/* Modo Ráfaga & Control de VRAM para Copys */}
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", borderLeft: "1px solid var(--border-default)", paddingLeft: "10px" }}>
-            {toggleKeepModelLoaded && (
-              <label
-                style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.74rem" }}
-                title="Mantiene el modelo en VRAM/RAM entre copys para generarlos en 1-2 segundos sin recargar cada vez"
-              >
-                <input
-                  type="checkbox"
-                  checked={keepModelLoaded}
-                  onChange={(e) => void toggleKeepModelLoaded(e.target.checked)}
-                  style={{ cursor: "pointer", width: "13px", height: "13px", accentColor: "#10b981" }}
-                />
-                <span style={{ color: keepModelLoaded ? "#34d399" : "var(--text-secondary)", fontWeight: keepModelLoaded ? 600 : 400 }}>
-                  ⚡ Modo Ráfaga (Mantener en memoria)
-                </span>
-              </label>
-            )}
+        {/* Modo Ráfaga & Control de VRAM para Copys */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginLeft: "auto" }}>
+          {toggleKeepModelLoaded && (
+            <label
+              style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.74rem" }}
+              title="Mantiene el modelo en VRAM/RAM entre copys para generarlos en 1-2 segundos sin recargar cada vez"
+            >
+              <input
+                type="checkbox"
+                checked={keepModelLoaded}
+                onChange={(e) => void toggleKeepModelLoaded(e.target.checked)}
+                style={{ cursor: "pointer", width: "13px", height: "13px", accentColor: "#10b981" }}
+              />
+              <span style={{ color: keepModelLoaded ? "#34d399" : "var(--text-secondary)", fontWeight: keepModelLoaded ? 600 : 400, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <Zap size={11} />
+                <span>Modo Ráfaga (Mantener en memoria)</span>
+              </span>
+            </label>
+          )}
 
             {llmMemoryStatus?.isLoaded && unloadActiveModel ? (
               <button
@@ -510,7 +491,6 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
             ) : null}
           </div>
         </div>
-      </div>
 
       {busy === "moments" && (
         <div style={{ padding: "0.6rem 1rem", background: "var(--bg-surface-raised)", borderBottom: "1px solid var(--border-default)" }}>
@@ -786,7 +766,7 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                     }}
                     title="Ordena por puntuación de virilidad (de mayor a menor match)"
                   >
-                    ⭐ Match
+                    Match
                   </button>
                   <button
                     type="button"
@@ -803,7 +783,7 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                     }}
                     title="Ordena cronológicamente según la línea de tiempo del video"
                   >
-                    ⏱️ Cronología
+                    Cronología
                   </button>
                   <button
                     type="button"
@@ -820,7 +800,7 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                     }}
                     title="Ordena por duración del clip"
                   >
-                    ⏳ Duración
+                    Duración
                   </button>
                 </div>
               </div>
@@ -1024,39 +1004,39 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                     }}
                     title="Desglose analítico de potencial viral calculado por IA"
                   >
-                    <span style={{ fontWeight: 700, color: "#fafafa", display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                      ⚡ Viral {candidate.virality.total_score}/100:
+                    <span style={{ fontWeight: 700, color: "#fafafa", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      Viral {candidate.virality.total_score}/100:
                     </span>
                     <span
-                      style={{ color: "#38bdf8", background: "rgba(56, 189, 248, 0.1)", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(56, 189, 248, 0.25)" }}
+                      style={{ color: "#38bdf8", background: "rgba(56, 189, 248, 0.08)", padding: "1px 6px", borderRadius: "3px", border: "1px solid rgba(56, 189, 248, 0.2)" }}
                       title="Hook (0-25): Fuerza del primer impacto"
                     >
-                      🪝 Hook: {candidate.virality.hook_score}/25
+                      Hook: {candidate.virality.hook_score}/25
                     </span>
                     <span
-                      style={{ color: "#c084fc", background: "rgba(192, 132, 252, 0.1)", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(192, 132, 252, 0.25)" }}
+                      style={{ color: "#c084fc", background: "rgba(192, 132, 252, 0.08)", padding: "1px 6px", borderRadius: "3px", border: "1px solid rgba(192, 132, 252, 0.2)" }}
                       title="Engagement (0-25): Retención y emoción"
                     >
-                      🔥 Engag: {candidate.virality.engagement_score}/25
+                      Retención: {candidate.virality.engagement_score}/25
                     </span>
                     <span
-                      style={{ color: "#4ade80", background: "rgba(74, 222, 128, 0.1)", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(74, 222, 128, 0.25)" }}
+                      style={{ color: "#4ade80", background: "rgba(74, 222, 128, 0.08)", padding: "1px 6px", borderRadius: "3px", border: "1px solid rgba(74, 222, 128, 0.2)" }}
                       title="Valor (0-25): Interés y utilidad del clip"
                     >
-                      💡 Valor: {candidate.virality.value_score}/25
+                      Valor: {candidate.virality.value_score}/25
                     </span>
                     <span
-                      style={{ color: "#fb923c", background: "rgba(251, 146, 60, 0.1)", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(251, 146, 60, 0.25)" }}
+                      style={{ color: "#fb923c", background: "rgba(251, 146, 60, 0.08)", padding: "1px 6px", borderRadius: "3px", border: "1px solid rgba(251, 146, 60, 0.2)" }}
                       title="Compartir (0-25): Potencial de reenvío a amigos"
                     >
-                      🚀 Share: {candidate.virality.shareability_score}/25
+                      Compartir: {candidate.virality.shareability_score}/25
                     </span>
                     {candidate.virality.hook_type && (
                       <span
-                        style={{ color: "#e4e4e7", background: "rgba(255, 255, 255, 0.06)", padding: "1px 5px", borderRadius: "3px", marginLeft: "auto", textTransform: "capitalize" }}
-                        title="Tipo de gancho"
+                        style={{ color: "#e4e4e7", background: "rgba(255, 255, 255, 0.06)", padding: "1px 6px", borderRadius: "3px", marginLeft: "auto", textTransform: "capitalize", fontSize: "0.68rem" }}
+                        title="Tipo de momento clasificado por IA"
                       >
-                        Tipo: {candidate.virality.hook_type}
+                        {candidate.virality.hook_type}
                       </span>
                     )}
                   </div>

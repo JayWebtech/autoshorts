@@ -205,6 +205,24 @@
      - Remover el reintento que purgaba los filtros de subtítulos y CTA ante errores. Si ocurre un fallo en FFmpeg, se registra el `stderr` en el buffer de logs y se lanza una excepción explícita para máxima transparencia y trazabilidad técnica.
 - **Motivo:** Garantizar que los subtítulos dinámicos y la insignia CTA personalizada se quemen visualmente en los clips exportados con FFmpeg sobre cualquier resolución y formato de video, comprobado al 100% mediante análisis de píxeles en hardware real.
 
+## D-028: Antislop en UI, Control Estricto de Duración y Limpieza de Prompts de Copy y Thinking
+- **Decisión:**
+  1. **Control Estricto de Duraciones Máximas (`python_backend/llm.py`, `llm_prompts.py`):**
+     - Implementar `clamp_candidate_duration`: restringe cualquier momento propuesto por el LLM que exceda el techo máximo (`target_max * 1.10`, ej. 75s-82s para 1m) recortando hacia el corte de frase/segmento de voz más cercano dentro de la ventana objetivo, eliminando clips desbordados de 3 a 5 minutos cuando se solicita 1 minuto.
+  2. **Refactorización de "Rehacer Copy" y Desacoplamiento de Titulares:**
+     - En `python_backend/api.py` (`regenerate_social_copy`), inyectar contexto temático sin forzar la repetición del titular.
+     - En `python_backend/llm.py` (`generate_social_copy_with_llm`, `_normalize_social_copy_dict`), prohibir explícitamente anteponer el título o titular en el cuerpo de la descripción, erradicar emojis de alarma (`🚨`, `⚠️`) y generar descripciones naturales y vendedoras idénticas en estilo a las iniciales.
+  3. **Purgado de "Thinking / Modo Razonamiento / CoT":**
+     - Retirar definitivamente todos los checkboxes, textos y advertencias de "Thinking / CoT en Ollama" y "Modo Rápido" en `CandidatePanel.tsx`, `StyleModal.tsx` y `SettingsPanel.tsx`. Fijar internamente `enableThinking = false` para respuestas JSON ultrarrápidas y directas sin saturar la UI.
+  4. **Antislop en UI (Erradicación de Emojis Decorativos No Profesionales):**
+     - Siguiendo `antislop-ui` (R-04, R-16) y `antislop-copywriting`, purgar todos los emojis en métricas de candidatos (`Viral /100`, `Hook:`, `Retención:`, `Valor:`, `Compartir:`), chips de filtro por tipo, botones de ordenamiento, selectores de subgénero y botones de importación.
+     - Sustituirlos por diseño sobrio y profesional estilo suite NLE con iconos Lucide pertinentes o texto directo.
+     - Purgar emojis en hooks acústicos (`💥 Jugada...` -> `Jugada...`) y aplicar `strip_emojis_from_text` sobre títulos generados.
+  5. **Detección Acústica en Gameplay Silencioso:**
+     - Resaltar en la UI de importación el funcionamiento del analizador acústico RMS (`inject_acoustic_cues_into_transcript`), el cual detecta combates, disparos y jugadas tensas en segundo plano aunque el creador guarde silencio.
+- **Motivo:** Garantizar coherencia estricta en las duraciones solicitadas, proporcionar copys atractivos y limpios sin redundancias, ofrecer una interfaz profesional de grado industrial libre de emojis genéricos y simplificar el uso eliminando controles innecesarios de razonamiento.
+
+
 
 
 

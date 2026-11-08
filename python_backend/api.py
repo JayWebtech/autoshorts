@@ -32,7 +32,8 @@ from .llm import (
     preload_local_model,
     refine_transcript_with_llm,
     DEFAULT_MOMENTS_PROMPT,
-    generate_social_copy_with_llm
+    generate_social_copy_with_llm,
+    strip_emojis_from_text,
 )
 from .telemetry import get_hardware_telemetry
 from .services.project_service import (
@@ -867,13 +868,14 @@ class Api:
             except Exception:
                 pass
 
+        clean_theme = strip_emojis_from_text(candidate.get("hook", "")).strip()
         copy_data = generate_social_copy_with_llm(
             transcript_text=raw_text,
             model_name=model_name or "qwen2.5:7b",
             provider=provider,
             api_key=api_key,
-            enable_thinking=enable_thinking,
-            extra_context=f"Título actual del clip (mantener este mismo concepto sin cambiarlo): {candidate['hook']}",
+            enable_thinking=False,
+            extra_context=f"Contexto temático del clip: {clean_theme}. Redacta una descripción atractiva para redes sociales basada en la transcripción. PROHIBIDO repetir o anteponer el título o titular del clip en el texto. Comienza directamente con la intriga o la acción.",
             keep_loaded=keep_loaded
         )
 

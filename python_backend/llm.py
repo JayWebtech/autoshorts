@@ -406,6 +406,40 @@ def expand_short_candidate(
     return start, min(new_end, start + target_max)
 
 
+def clamp_candidate_duration(
+    start: float,
+    end: float,
+    segments: Optional[List[Dict[str, Any]]],
+    target_min: float = 45.0,
+    target_max: float = 75.0
+) -> Tuple[float, float]:
+    """
+    If the LLM selected a candidate that exceeds the maximum target duration,
+    this trims the candidate towards the nearest sentence/speech boundary
+    within [start + target_min, start + target_max].
+    If no speech boundary exists in that window, it clamps strictly to start + target_max.
+    """
+    dur = end - start
+    max_ceiling = target_max * 1.10
+    if dur <= max_ceiling:
+        return start, end
+
+    if not segments:
+        return start, start + target_max
+
+    best_end = start + target_max
+    for s in segments:
+        s_end = float(s.get("end", 0.0))
+        if s_end < start:
+            continue
+        if (s_end - start) >= target_min and (s_end - start) <= target_max:
+            best_end = s_end
+        elif (s_end - start) > target_max:
+            break
+
+    return start, round(best_end, 2)
+
+
 def _coerce_candidate_timestamp(val: Any) -> float:
     """Safely converts float, int or string timestamps (e.g. '00:01:23.450' or '83.45') to seconds float."""
     if isinstance(val, (int, float)):
@@ -537,6 +571,13 @@ def parse_candidate_json(
                     target_max=target_max
                 )
             dur = end - start
+            if dur > (target_max * 1.10):
+                start, end = clamp_candidate_duration(
+                    start, end, segments,
+                    target_min=target_min,
+                    target_max=target_max
+                )
+            dur = end - start
             min_floor = 25.0 if target_duration == "30s" else 30.0
             if dur < min_floor:
                 end = start + max(min_floor, target_min)
@@ -544,12 +585,14 @@ def parse_candidate_json(
 
             effective_min = min_floor if target_duration == "30s" else max(30.0, target_min * 0.6)
             if dur >= effective_min and hook:
-                hook_title = str(item.get("hook_title") or item.get("hookTitle") or item.get("viral_hook_text") or hook).strip()
+                raw_hook_title = str(item.get("hook_title") or item.get("hookTitle") or item.get("viral_hook_text") or hook).strip()
+                clean_hook = strip_emojis_from_text(hook) or hook
+                clean_hook_title = strip_emojis_from_text(raw_hook_title) or raw_hook_title
                 virality = item.get("virality")
                 if not isinstance(virality, dict):
                     score_val = max(0.0, min(1.0, score))
                     total_s = max(50, min(99, int(round(score_val * 100))))
-                    hook_type = classify_hook_type(hook, rationale)
+                    hook_type = classify_hook_type(clean_hook, rationale)
                     virality = {
                         "hook_score": max(12, min(25, int(round((total_s / 100.0) * 25)))),
                         "engagement_score": max(12, min(25, int(round((total_s / 100.0) * 24)))),
@@ -559,13 +602,13 @@ def parse_candidate_json(
                         "hook_type": hook_type
                     }
                 else:
-                    virality["hook_type"] = classify_hook_type(hook, rationale, virality.get("hook_type"))
+                    virality["hook_type"] = classify_hook_type(clean_hook, rationale, virality.get("hook_type"))
                 drafts.append({
                     "start": round(start, 2),
                     "end": round(end, 2),
                     "score": max(0.0, min(1.0, score)),
-                    "hook": hook,
-                    "hook_title": hook_title,
+                    "hook": clean_hook,
+                    "hook_title": clean_hook_title,
                     "virality": virality,
                     "rationale": rationale,
                     "description": description
@@ -1095,7 +1138,7 @@ def detect_candidates_pipeline(
                         "start": round(clutch_start, 2),
                         "end": round(clutch_end, 2),
                         "score": 0.92,
-                        "hook": "💥 Jugada Clutch y Acción Intensa",
+                        "hook": "Jugada Clutch y Acción Intensa",
                         "hook_title": "Jugada Épica",
                         "rationale": "Pico acústico intenso con concentración del streamer.",
                         "description": "¡Momento de máxima tensión y jugada épica! #gaming #clutch #shorts"
@@ -1237,8 +1280,10 @@ Tu objetivo es analizar minuciosamente la transcripción del clip y redactar un 
 REGLAS ESTRICTAS DE CONTENIDO:
 1. BASA TODO el texto EXCLUSIVAMENTE en lo que realmente ocurre o se dice en la transcripción. Cero invenciones o datos falsos.
 2. CERO RELLENO O FRASES CLICHÉ: Prohibido usar vocabulario genérico inflado ("sumérgete", "un viaje", "eleva tu nivel"). Habla en tono directo, conversacional y humano.
-3. CONCISIÓN OBLIGATORIA (MÁXIMO 2-3 LÍNEAS): En TikTok y Reels el texto largo tapa el video y molesta al espectador. La descripción debe ser breve y directa al grano.
-4. LÍMITE ESTRICTO DE HASHTAGS: Exactamente entre 3 y 5 hashtags relevantes (específicos del juego o tema + 1 de formato). Prohibido hacer listas largas de hashtags.
+3. REGLA NEGATIVA ESTRICTA: PROHIBIDO incluir o repetir el título o titular del clip en el texto. Comienza directamente con una frase intrigante o de curiosidad sobre la jugada o situación.
+4. CERO EMOJIS DE ALARMA: Prohibido usar emojis de advertencia como 🚨 o ⚠️ al inicio de la descripción.
+5. CONCISIÓN OBLIGATORIA (MÁXIMO 2-3 LÍNEAS): En TikTok y Reels el texto largo tapa el video y molesta al espectador. La descripción debe ser breve y directa al grano.
+6. LÍMITE ESTRICTO DE HASHTAGS: Exactamente entre 3 y 5 hashtags relevantes (específicos del juego o tema + 1 de formato). Prohibido hacer listas largas de hashtags.
 
 Responde estrictamente en formato JSON con la siguiente estructura:
 {
@@ -1247,10 +1292,10 @@ Responde estrictamente en formato JSON con la siguiente estructura:
     "Gancho 2: Reacción a la jugada o momento clave",
     "Gancho 3: Frase directa con llamado de atención"
   ],
-  "caption": "1 o 2 oraciones breves de contexto o intriga sin spoiler.",
+  "caption": "1 o 2 oraciones breves de contexto o intriga sobre lo que pasa en el video (sin repetir el título).",
   "cta": "¿Qué habrías hecho tú? Déjalo en comentarios.",
   "hashtags": ["#tema_especifico", "#gaming", "#shorts", "#viral"],
-  "full_copy": "Gancho punchy\\n1 o 2 oraciones breves de contexto.\\n¿Qué opinas? Déjalo en comentarios.\\n#tema #shorts #viral"
+  "full_copy": "1 o 2 oraciones breves de contexto o intriga.\\n¿Qué opinas? Déjalo en comentarios.\\n#tema #shorts #viral"
 }
 
 Escribe en Español natural, directo y sin guiones largos (em dashes)."""
@@ -1398,18 +1443,41 @@ def _normalize_social_copy_dict(data: Dict[str, Any]) -> Dict[str, Any]:
 
     full_copy = str(data.get("full_copy") or "").strip().replace("—", "-")
     if not full_copy:
-        primary_hook = cleaned_hooks[0] if cleaned_hooks else "¡Momento destacado!"
-        parts = [primary_hook]
+        parts = []
         if caption:
             parts.append(caption)
         if cta:
             parts.append(cta)
         if hashtags:
             parts.append(" ".join(hashtags))
-        full_copy = "\n".join(parts)
+        full_copy = "\n".join(parts) if parts else (caption or (cleaned_hooks[0] if cleaned_hooks else "Momento destacado del stream."))
     else:
-        # If full_copy was provided, ensure it includes clean hashtags if none were present
-        if not any(h in full_copy for h in hashtags) and hashtags:
+        # If full_copy was provided, check if it awkwardly prepends the hook title
+        # e.g. "🚨 Titulo Un tiro..." or "Titulo Un tiro..."
+        if cleaned_hooks:
+            for h in cleaned_hooks:
+                h_clean = strip_emojis_from_text(h).strip()
+                if h_clean and full_copy.startswith(h_clean):
+                    full_copy = full_copy[len(h_clean):].strip()
+                elif h and full_copy.startswith(h):
+                    full_copy = full_copy[len(h):].strip()
+
+        # Clean any leading alarm or decorative emojis
+        full_copy = re.sub(r"^[🚨⚠️💥⚡🔥✨]+\s*", "", full_copy).strip()
+
+        # If full_copy was stripped down to nothing or just hashtags, fallback to caption
+        if not full_copy or full_copy.startswith("#"):
+            parts = []
+            if caption:
+                parts.append(caption)
+            if cta:
+                parts.append(cta)
+            if hashtags:
+                parts.append(" ".join(hashtags))
+            full_copy = "\n".join(parts) if parts else full_copy
+
+        # Ensure hashtags are included if none were present
+        if not any(h.lower() in full_copy.lower() for h in hashtags) and hashtags:
             full_copy += f"\n{' '.join(hashtags)}"
 
     return {

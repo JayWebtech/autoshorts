@@ -306,13 +306,13 @@ export function StyleModal({
                   </label>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.4rem", marginBottom: "0.75rem" }}>
                     {[
-                      { id: "competitive", label: "🏆 Competitivo", desc: "Clutches, kills, torneos" },
-                      { id: "campaign", label: "📖 Campaña / Lore", desc: "Historia, cinemáticas" },
-                      { id: "souls_rage", label: "💀 Souls / Desafío", desc: "Jefes, rage, victoria" },
-                      { id: "rhythmic", label: "⚡ Rítmico / Precisión", desc: "Concentración, fails 99%" },
-                      { id: "horror", label: "👻 Terror / Sustos", desc: "Jumpscares, pánico" },
-                      { id: "sandbox", label: "🛠️ Sandbox / Rol", desc: "Creatividad, bugs, humor" },
-                      { id: "general_gaming", label: "🎮 Gaming Variado", desc: "Equilibrado / General" },
+                      { id: "competitive", label: "Competitivo", desc: "Clutches, kills, torneos" },
+                      { id: "campaign", label: "Campaña / Lore", desc: "Historia, cinemáticas" },
+                      { id: "souls_rage", label: "Souls / Desafío", desc: "Jefes, rage, victoria" },
+                      { id: "rhythmic", label: "Rítmico / Precisión", desc: "Concentración, precisión" },
+                      { id: "horror", label: "Terror / Sustos", desc: "Jumpscares, pánico" },
+                      { id: "sandbox", label: "Sandbox / Rol", desc: "Creatividad, bugs, humor" },
+                      { id: "general_gaming", label: "Gaming Variado", desc: "Equilibrado / General" },
                     ].map((sub) => {
                       const active = gamingSubgenre === sub.id;
                       return (
@@ -360,6 +360,10 @@ export function StyleModal({
                       La IA identificará las misiones, personajes o desafíos específicos de este título.
                     </span>
                   </div>
+
+                  <div style={{ marginTop: "0.6rem", padding: "0.4rem 0.6rem", borderRadius: "4px", background: "rgba(56, 189, 248, 0.06)", border: "1px solid rgba(56, 189, 248, 0.2)", fontSize: "0.72rem", color: "#38bdf8", lineHeight: "1.4" }}>
+                    Detección acústica activa: Analiza disparos, combate y jugadas tensas en segundo plano, capturando momentos clave automáticamente aunque el streamer guarde silencio.
+                  </div>
                 </div>
               )}
 
@@ -371,9 +375,9 @@ export function StyleModal({
                 </label>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
                   {[
-                    { id: "original", label: "🎞️ Nativo / Original", desc: "Conserva resolución original (1080p, 1440p, 4K, 21:9)" },
-                    { id: "16:9", label: "🖥️ Horizontal 16:9", desc: "YouTube Estándar (1920x1080)" },
-                    { id: "9:16", label: "📱 Vertical 9:16", desc: "Shorts, Reels, TikTok (1080x1920 con auto-crop)" },
+                    { id: "original", label: "Nativo / Original", desc: "Conserva resolución original (1080p, 1440p, 4K, 21:9)" },
+                    { id: "16:9", label: "Horizontal 16:9", desc: "YouTube Estándar (1920x1080)" },
+                    { id: "9:16", label: "Vertical 9:16", desc: "Shorts, Reels, TikTok (1080x1920 con auto-crop)" },
                   ].map((ar) => {
                     const active = clipAspectRatio === ar.id;
                     return (
@@ -633,7 +637,7 @@ export function StyleModal({
                       Corrige términos técnicos, jerga gamer y tildes preservando los timestamps exactos de cada palabra.
                     </span>
                     <span style={{ fontSize: "0.73rem", color: "#38bdf8", display: "block", marginTop: "4px", lineHeight: "1.4" }}>
-                      Nota de velocidad: En modo rápido añade solo unos segundos por minuto de audio. Si activas el modo razonamiento (thinking) tardará varios minutos adicionales. Desactívalo si buscas transcripción inmediata.
+                      Nota de velocidad: Añade solo unos segundos por minuto de audio preservando la sincronización exacta de cada palabra.
                     </span>
                   </div>
                 </div>
@@ -655,57 +659,6 @@ export function StyleModal({
                   <span style={{ fontSize: "0.75rem", opacity: 0.75, display: "block", marginTop: "2px" }}>
                     Desmárcalo para dejar enfriar la GPU entre pasos o revisar la transcripción antes de procesar candidatos.
                   </span>
-                </div>
-              </div>
-
-              {/* Modo Razonamiento (Thinking / CoT en Ollama) */}
-              <div style={{
-                padding: "1rem",
-                borderRadius: "10px",
-                background: enableThinking ? "rgba(245, 158, 11, 0.05)" : "rgba(16, 185, 129, 0.05)",
-                border: enableThinking ? "1px solid rgba(245, 158, 11, 0.3)" : "1px solid rgba(16, 185, 129, 0.3)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.6rem"
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <label htmlFor="enableThinkingImport" style={{ fontSize: "0.86rem", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    <input
-                      type="checkbox"
-                      id="enableThinkingImport"
-                      checked={enableThinking}
-                      onChange={(e) => {
-                        setEnableThinking(e.target.checked);
-                        localStorage.setItem("autoshorts_enable_thinking", String(e.target.checked));
-                      }}
-                      style={{ cursor: "pointer", width: "17px", height: "17px", accentColor: "var(--accent-primary)" }}
-                    />
-                    <span>Modo Razonamiento (Thinking / CoT en Ollama)</span>
-                  </label>
-                  <span style={{
-                    fontSize: "0.72rem",
-                    fontWeight: 600,
-                    padding: "0.2rem 0.6rem",
-                    borderRadius: "4px",
-                    background: "var(--bg-surface)",
-                    color: enableThinking ? "#f59e0b" : "var(--text-secondary)",
-                    border: "1px solid var(--border-default)",
-                    fontFamily: "var(--font-mono)"
-                  }}>
-                    {enableThinking ? "Modo Razonamiento Profundo" : "Modo Rápido"}
-                  </span>
-                </div>
-
-                <div style={{ fontSize: "0.78rem", lineHeight: "1.45", color: "var(--text-secondary)", paddingLeft: "1.7rem" }}>
-                  {enableThinking ? (
-                    <div>
-                      <strong style={{ color: "#fafafa" }}>Activado:</strong> La IA genera una cadena de pensamiento antes de dar la respuesta. Proporciona mayor análisis contextual pero incrementa el tiempo y el uso de VRAM.
-                    </div>
-                  ) : (
-                    <div>
-                      <strong style={{ color: "#fafafa" }}>Desactivado (Recomendado):</strong> La IA responde de forma directa sin cadena de razonamiento previa. {telemetry?.hasGpu ? `Recomendado para tu ${telemetry.gpuName} con procesamiento hasta 30 veces más ágil.` : "Recomendado para procesamiento directo hasta 30 veces más ágil."}
-                    </div>
-                  )}
                 </div>
               </div>
             </>
@@ -797,7 +750,7 @@ export function StyleModal({
               className="btn-confirm"
               onClick={onConfirm}
             >
-              📱 Importar y Buscar Clips
+              Importar y Buscar Clips
             </button>
           </div>
         </div>

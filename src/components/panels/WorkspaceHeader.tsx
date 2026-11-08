@@ -137,7 +137,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                   gap: "4px",
                 }}
               >
-                <span>📱 Shorts & Clips</span>
+                <span>Shorts & Clips</span>
               </span>
             </div>
             <h2>{detail.project.name || fileName(detail.project.sourcePath)}</h2>
