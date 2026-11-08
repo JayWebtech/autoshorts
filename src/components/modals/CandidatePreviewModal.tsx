@@ -118,19 +118,55 @@ export function CandidatePreviewModal({
     return localStorage.getItem("autoshorts_cta_animation") || "bounce-land";
   });
 
-  // Coordenadas absolutas exactas (Lienzo 1080x1920 nativo estilo Premiere Pro / OBS)
+  const [exportAspectRatio, setExportAspectRatio] = useState<"original" | "16:9" | "9:16">(() => {
+    return (localStorage.getItem("autoshorts_clip_aspect_ratio") as any) || "original";
+  });
+
+  const isSourceVertical = (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0);
+  const isEffectiveVertical = exportAspectRatio === "9:16" || (exportAspectRatio === "original" && isSourceVertical);
+  const canvasWidth = isEffectiveVertical ? 1080 : 1920;
+  const canvasHeight = isEffectiveVertical ? 1920 : 1080;
+
+  // Presets adaptativos según lienzo activo (1920x1080 horizontal vs 1080x1920 vertical)
+  const presetTopY = isEffectiveVertical ? 280 : 100;
+  const presetCenterY = isEffectiveVertical ? 960 : 540;
+  const presetBottomY = isEffectiveVertical ? 1680 : 920;
+  const presetStreamerY = isEffectiveVertical ? 1420 : 780;
+  const presetCenterX = isEffectiveVertical ? 540 : 960;
+
+  const presetCtaTopY = isEffectiveVertical ? 240 : 90;
+  const presetCtaCenterY = isEffectiveVertical ? 960 : 540;
+  const presetCtaBottomY = isEffectiveVertical ? 1550 : 920;
+  const presetCtaCenterX = isEffectiveVertical ? 540 : 960;
+
+  // Coordenadas absolutas exactas (Lienzo 1080x1920 vertical o 1920x1080 horizontal estilo NLE)
   const [captionX, setCaptionX] = useState<number>(() => {
-    const saved = localStorage.getItem("autoshorts_caption_x");
-    return saved !== null ? Number(saved) : 540;
-  });
-  const [captionY, setCaptionY] = useState<number>(() => {
-    const saved = localStorage.getItem("autoshorts_caption_y");
+    const isVert = exportAspectRatio === "9:16" || (exportAspectRatio === "original" && (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0));
+    const suffix = isVert ? "_v" : "_h";
+    const saved = localStorage.getItem(`autoshorts_caption_x${suffix}`);
     if (saved !== null) return Number(saved);
-    const pos = localStorage.getItem("autoshorts_caption_position");
-    if (pos === "top") return 280;
-    if (pos === "center") return 960;
-    return 1680;
+    const savedGen = localStorage.getItem("autoshorts_caption_x");
+    if (savedGen !== null) {
+      const val = Number(savedGen);
+      return isVert ? Math.min(1080, val) : (val === 540 ? 960 : Math.min(1920, val));
+    }
+    return isVert ? 540 : 960;
   });
+
+  const [captionY, setCaptionY] = useState<number>(() => {
+    const isVert = exportAspectRatio === "9:16" || (exportAspectRatio === "original" && (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0));
+    const suffix = isVert ? "_v" : "_h";
+    const saved = localStorage.getItem(`autoshorts_caption_y${suffix}`);
+    if (saved !== null) return Number(saved);
+    const savedGen = localStorage.getItem("autoshorts_caption_y");
+    if (savedGen !== null) {
+      const val = Number(savedGen);
+      if (!isVert && val > 1080) return 920;
+      return val;
+    }
+    return isVert ? 1680 : 920;
+  });
+
   const [captionFontSize, setCaptionFontSize] = useState<number>(() => {
     const saved = localStorage.getItem("autoshorts_caption_font_size");
     return saved !== null ? Number(saved) : 62;
@@ -140,29 +176,79 @@ export function CandidatePreviewModal({
   });
 
   const [ctaX, setCtaX] = useState<number>(() => {
-    const saved = localStorage.getItem("autoshorts_cta_x");
-    return saved !== null ? Number(saved) : 540;
-  });
-  const [ctaY, setCtaY] = useState<number>(() => {
-    const saved = localStorage.getItem("autoshorts_cta_y");
+    const isVert = exportAspectRatio === "9:16" || (exportAspectRatio === "original" && (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0));
+    const suffix = isVert ? "_v" : "_h";
+    const saved = localStorage.getItem(`autoshorts_cta_x${suffix}`);
     if (saved !== null) return Number(saved);
-    const pos = localStorage.getItem("autoshorts_cta_position");
-    if (pos === "center") return 960;
-    if (pos === "bottom") return 1550;
-    return 240;
+    const savedGen = localStorage.getItem("autoshorts_cta_x");
+    if (savedGen !== null) {
+      const val = Number(savedGen);
+      return isVert ? Math.min(1080, val) : (val === 540 ? 960 : Math.min(1920, val));
+    }
+    return isVert ? 540 : 960;
   });
+
+  const [ctaY, setCtaY] = useState<number>(() => {
+    const isVert = exportAspectRatio === "9:16" || (exportAspectRatio === "original" && (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0));
+    const suffix = isVert ? "_v" : "_h";
+    const saved = localStorage.getItem(`autoshorts_cta_y${suffix}`);
+    if (saved !== null) return Number(saved);
+    const savedGen = localStorage.getItem("autoshorts_cta_y");
+    if (savedGen !== null) {
+      const val = Number(savedGen);
+      if (!isVert && val > 1080) return 920;
+      return val;
+    }
+    return isVert ? 1550 : 920;
+  });
+
   const [ctaScale, setCtaScale] = useState<number>(() => {
     const saved = localStorage.getItem("autoshorts_cta_scale");
     return saved !== null ? Number(saved) : 100;
   });
 
+  // Conmutador adaptativo y defensivo al cambiar entre modo Horizontal y Vertical
+  const prevIsVertRef = React.useRef(isEffectiveVertical);
   useEffect(() => {
-    localStorage.setItem("autoshorts_caption_x", String(captionX));
-  }, [captionX]);
+    if (prevIsVertRef.current !== isEffectiveVertical) {
+      if (!isEffectiveVertical) {
+        // Conmutó a Horizontal (1920x1080)
+        const savedYH = localStorage.getItem("autoshorts_caption_y_h");
+        setCaptionY(savedYH !== null ? Number(savedYH) : (captionY > 1080 ? Math.round((captionY / 1920) * 1080) : captionY));
+        const savedXH = localStorage.getItem("autoshorts_caption_x_h");
+        setCaptionX(savedXH !== null ? Number(savedXH) : (captionX === 540 ? 960 : captionX));
+
+        const savedCtaYH = localStorage.getItem("autoshorts_cta_y_h");
+        setCtaY(savedCtaYH !== null ? Number(savedCtaYH) : (ctaY > 1080 ? Math.round((ctaY / 1920) * 1080) : ctaY));
+        const savedCtaXH = localStorage.getItem("autoshorts_cta_x_h");
+        setCtaX(savedCtaXH !== null ? Number(savedCtaXH) : (ctaX === 540 ? 960 : ctaX));
+      } else {
+        // Conmutó a Vertical (1080x1920)
+        const savedYV = localStorage.getItem("autoshorts_caption_y_v");
+        setCaptionY(savedYV !== null ? Number(savedYV) : Math.min(1920, Math.round((captionY / 1080) * 1920)));
+        const savedXV = localStorage.getItem("autoshorts_caption_x_v");
+        setCaptionX(savedXV !== null ? Number(savedXV) : (captionX === 960 ? 540 : captionX));
+
+        const savedCtaYV = localStorage.getItem("autoshorts_cta_y_v");
+        setCtaY(savedCtaYV !== null ? Number(savedCtaYV) : Math.min(1920, Math.round((ctaY / 1080) * 1920)));
+        const savedCtaXV = localStorage.getItem("autoshorts_cta_x_v");
+        setCtaX(savedCtaXV !== null ? Number(savedCtaXV) : (ctaX === 960 ? 540 : ctaX));
+      }
+      prevIsVertRef.current = isEffectiveVertical;
+    }
+  }, [isEffectiveVertical]);
 
   useEffect(() => {
+    localStorage.setItem("autoshorts_clip_aspect_ratio", exportAspectRatio);
+  }, [exportAspectRatio]);
+
+  useEffect(() => {
+    const suffix = isEffectiveVertical ? "_v" : "_h";
+    localStorage.setItem(`autoshorts_caption_x${suffix}`, String(captionX));
+    localStorage.setItem(`autoshorts_caption_y${suffix}`, String(captionY));
+    localStorage.setItem("autoshorts_caption_x", String(captionX));
     localStorage.setItem("autoshorts_caption_y", String(captionY));
-  }, [captionY]);
+  }, [captionX, captionY, isEffectiveVertical]);
 
   useEffect(() => {
     localStorage.setItem("autoshorts_caption_font_size", String(captionFontSize));
@@ -173,12 +259,12 @@ export function CandidatePreviewModal({
   }, [captionAlignH]);
 
   useEffect(() => {
+    const suffix = isEffectiveVertical ? "_v" : "_h";
+    localStorage.setItem(`autoshorts_cta_x${suffix}`, String(ctaX));
+    localStorage.setItem(`autoshorts_cta_y${suffix}`, String(ctaY));
     localStorage.setItem("autoshorts_cta_x", String(ctaX));
-  }, [ctaX]);
-
-  useEffect(() => {
     localStorage.setItem("autoshorts_cta_y", String(ctaY));
-  }, [ctaY]);
+  }, [ctaX, ctaY, isEffectiveVertical]);
 
   useEffect(() => {
     localStorage.setItem("autoshorts_cta_scale", String(ctaScale));
@@ -242,18 +328,6 @@ export function CandidatePreviewModal({
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [saveFeedback, setSaveFeedback] = useState<boolean>(false);
-  const [exportAspectRatio, setExportAspectRatio] = useState<"original" | "16:9" | "9:16">(() => {
-    return (localStorage.getItem("autoshorts_clip_aspect_ratio") as any) || "original";
-  });
-
-  const isSourceVertical = (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0);
-  const isEffectiveVertical = exportAspectRatio === "9:16" || (exportAspectRatio === "original" && isSourceVertical);
-  const canvasWidth = isEffectiveVertical ? 1080 : 1920;
-  const canvasHeight = isEffectiveVertical ? 1920 : 1080;
-
-  useEffect(() => {
-    localStorage.setItem("autoshorts_clip_aspect_ratio", exportAspectRatio);
-  }, [exportAspectRatio]);
 
   useEffect(() => {
     try {
@@ -1475,18 +1549,18 @@ export function CandidatePreviewModal({
                             type="button"
                             onClick={() => {
                               setCaptionPosition("top");
-                              setCaptionY(280);
+                              setCaptionY(presetTopY);
                             }}
-                            title="Arriba (Y=280)"
+                            title={`Arriba (Y=${presetTopY})`}
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: captionY <= 400 ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: captionY <= 400 ? "#fafafa" : "var(--bg-surface)",
-                              color: captionY <= 400 ? "#09090b" : "var(--text-secondary)",
+                              border: captionY <= (isEffectiveVertical ? 400 : 200) ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: captionY <= (isEffectiveVertical ? 400 : 200) ? "#fafafa" : "var(--bg-surface)",
+                              color: captionY <= (isEffectiveVertical ? 400 : 200) ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: captionY <= 400 ? 700 : 500,
+                              fontWeight: captionY <= (isEffectiveVertical ? 400 : 200) ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -1502,18 +1576,18 @@ export function CandidatePreviewModal({
                             type="button"
                             onClick={() => {
                               setCaptionPosition("center");
-                              setCaptionY(960);
+                              setCaptionY(presetCenterY);
                             }}
-                            title="Centro (Y=960)"
+                            title={`Centro (Y=${presetCenterY})`}
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: captionY > 400 && captionY < 1300 ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: captionY > 400 && captionY < 1300 ? "#fafafa" : "var(--bg-surface)",
-                              color: captionY > 400 && captionY < 1300 ? "#09090b" : "var(--text-secondary)",
+                              border: captionY > (isEffectiveVertical ? 400 : 200) && captionY < (isEffectiveVertical ? 1300 : 750) ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: captionY > (isEffectiveVertical ? 400 : 200) && captionY < (isEffectiveVertical ? 1300 : 750) ? "#fafafa" : "var(--bg-surface)",
+                              color: captionY > (isEffectiveVertical ? 400 : 200) && captionY < (isEffectiveVertical ? 1300 : 750) ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: captionY > 400 && captionY < 1300 ? 700 : 500,
+                              fontWeight: captionY > (isEffectiveVertical ? 400 : 200) && captionY < (isEffectiveVertical ? 1300 : 750) ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -1529,18 +1603,18 @@ export function CandidatePreviewModal({
                             type="button"
                             onClick={() => {
                               setCaptionPosition("bottom");
-                              setCaptionY(1680);
+                              setCaptionY(presetBottomY);
                             }}
-                            title="Abajo (Y=1680)"
+                            title={`Abajo (Y=${presetBottomY})`}
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: captionY >= 1300 ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: captionY >= 1300 ? "#fafafa" : "var(--bg-surface)",
-                              color: captionY >= 1300 ? "#09090b" : "var(--text-secondary)",
+                              border: captionY >= (isEffectiveVertical ? 1300 : 750) ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: captionY >= (isEffectiveVertical ? 1300 : 750) ? "#fafafa" : "var(--bg-surface)",
+                              color: captionY >= (isEffectiveVertical ? 1300 : 750) ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: captionY >= 1300 ? 700 : 500,
+                              fontWeight: captionY >= (isEffectiveVertical ? 1300 : 750) ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -1580,20 +1654,20 @@ export function CandidatePreviewModal({
                             style={{ height: "24px", minHeight: "24px", padding: "0 8px", fontSize: "0.7rem" }}
                             onClick={() => {
                               setCaptionPosition("bottom");
-                              setCaptionY(isEffectiveVertical ? 1420 : 820);
+                              setCaptionY(presetStreamerY);
                             }}
                             title="Posiciona los subtítulos arriba de los overlays/HUDs de la parte inferior"
                           >
-                            Streamer Elevado ({isEffectiveVertical ? "1420" : "820"})
+                            Streamer Elevado ({presetStreamerY})
                           </button>
                           <button
                             type="button"
                             className="btn-cancel"
                             style={{ height: "24px", minHeight: "24px", padding: "0 8px", fontSize: "0.7rem" }}
-                            onClick={() => setCaptionX(Math.round(canvasWidth / 2))}
-                            title={`Centra los subtítulos horizontalmente en X=${Math.round(canvasWidth / 2)}`}
+                            onClick={() => setCaptionX(presetCenterX)}
+                            title={`Centra los subtítulos horizontalmente en X=${presetCenterX}`}
                           >
-                            Centrar X
+                            Centrar X ({presetCenterX})
                           </button>
                         </div>
                       </div>
@@ -2104,18 +2178,18 @@ export function CandidatePreviewModal({
                             type="button"
                             onClick={() => {
                               setCtaPosition("top");
-                              setCtaY(240);
+                              setCtaY(presetCtaTopY);
                             }}
-                            title="Arriba (Y=240)"
+                            title={`Arriba (Y=${presetCtaTopY})`}
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: ctaY <= 400 ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: ctaY <= 400 ? "#fafafa" : "var(--bg-surface)",
-                              color: ctaY <= 400 ? "#09090b" : "var(--text-secondary)",
+                              border: ctaY <= (isEffectiveVertical ? 400 : 200) ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: ctaY <= (isEffectiveVertical ? 400 : 200) ? "#fafafa" : "var(--bg-surface)",
+                              color: ctaY <= (isEffectiveVertical ? 400 : 200) ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: ctaY <= 400 ? 700 : 500,
+                              fontWeight: ctaY <= (isEffectiveVertical ? 400 : 200) ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -2131,18 +2205,18 @@ export function CandidatePreviewModal({
                             type="button"
                             onClick={() => {
                               setCtaPosition("center");
-                              setCtaY(960);
+                              setCtaY(presetCtaCenterY);
                             }}
-                            title="Medio (Y=960)"
+                            title={`Medio (Y=${presetCtaCenterY})`}
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: ctaY > 400 && ctaY < 1300 ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: ctaY > 400 && ctaY < 1300 ? "#fafafa" : "var(--bg-surface)",
-                              color: ctaY > 400 && ctaY < 1300 ? "#09090b" : "var(--text-secondary)",
+                              border: ctaY > (isEffectiveVertical ? 400 : 200) && ctaY < (isEffectiveVertical ? 1300 : 750) ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: ctaY > (isEffectiveVertical ? 400 : 200) && ctaY < (isEffectiveVertical ? 1300 : 750) ? "#fafafa" : "var(--bg-surface)",
+                              color: ctaY > (isEffectiveVertical ? 400 : 200) && ctaY < (isEffectiveVertical ? 1300 : 750) ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: ctaY > 400 && ctaY < 1300 ? 700 : 500,
+                              fontWeight: ctaY > (isEffectiveVertical ? 400 : 200) && ctaY < (isEffectiveVertical ? 1300 : 750) ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -2158,18 +2232,18 @@ export function CandidatePreviewModal({
                             type="button"
                             onClick={() => {
                               setCtaPosition("bottom");
-                              setCtaY(1550);
+                              setCtaY(presetCtaBottomY);
                             }}
-                            title="Abajo (Y=1550)"
+                            title={`Abajo (Y=${presetCtaBottomY})`}
                             style={{
                               flex: 1,
                               padding: "0.42rem 0.2rem",
                               borderRadius: "5px",
-                              border: ctaY >= 1300 ? "1px solid #fafafa" : "1px solid var(--border-default)",
-                              background: ctaY >= 1300 ? "#fafafa" : "var(--bg-surface)",
-                              color: ctaY >= 1300 ? "#09090b" : "var(--text-secondary)",
+                              border: ctaY >= (isEffectiveVertical ? 1300 : 750) ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                              background: ctaY >= (isEffectiveVertical ? 1300 : 750) ? "#fafafa" : "var(--bg-surface)",
+                              color: ctaY >= (isEffectiveVertical ? 1300 : 750) ? "#09090b" : "var(--text-secondary)",
                               fontSize: "0.72rem",
-                              fontWeight: ctaY >= 1300 ? 700 : 500,
+                              fontWeight: ctaY >= (isEffectiveVertical ? 1300 : 750) ? 700 : 500,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -2207,10 +2281,10 @@ export function CandidatePreviewModal({
                             type="button"
                             className="btn-cancel"
                             style={{ height: "24px", minHeight: "24px", padding: "0 8px", fontSize: "0.7rem" }}
-                            onClick={() => setCtaX(Math.round(canvasWidth / 2))}
-                            title={`Centra la insignia horizontalmente en X=${Math.round(canvasWidth / 2)}`}
+                            onClick={() => setCtaX(presetCtaCenterX)}
+                            title={`Centra la insignia horizontalmente en X=${presetCtaCenterX}`}
                           >
-                            Centrar X
+                            Centrar X ({presetCtaCenterX})
                           </button>
                           <button
                             type="button"

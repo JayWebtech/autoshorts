@@ -64,6 +64,14 @@ export function useAppSettings() {
   const [customOutputDir, setCustomOutputDir] = useState<string>(
     () => localStorage.getItem("autoshorts_output_dir") || ""
   );
+  const [autoTranscribeOnImport, setAutoTranscribeOnImport] = useState<boolean>(() => {
+    const saved = localStorage.getItem("autoshorts_auto_transcribe_on_import");
+    return saved !== null ? saved === "true" : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_auto_transcribe_on_import", String(autoTranscribeOnImport));
+  }, [autoTranscribeOnImport]);
 
   const [pullInputModel, setPullInputModel] = useState("");
   const [downloadingModelName, setDownloadingModelName] = useState<string | null>(null);
@@ -379,6 +387,8 @@ export function useAppSettings() {
     setEnableThinking,
     customOutputDir,
     setCustomOutputDir,
+    autoTranscribeOnImport,
+    setAutoTranscribeOnImport,
     pullInputModel,
     setPullInputModel,
     downloadingModelName,

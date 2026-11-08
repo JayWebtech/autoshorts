@@ -174,5 +174,23 @@
      - En el reproductor de previsualización (`CandidatePreviewModal.tsx`, `modals.css`), adaptar dinámicamente la ventana de previsualización (`.stage-horizontal` 16:9 vs `.stage-vertical` 9:16) y la proyección porcentual de subtítulos y stickers CTA a la geometría activa.
 - **Motivo:** Permitir a los creadores de contenido de videojuegos analizar partidas de cualquier género con instrucciones precisas para la IA, generar videos largos o episodios completos de hasta 15 minutos, y procesar y exportar videos en formato horizontal 16:9 nativo o en cualquier resolución sin distorsión ni errores de codificación.
 
+## D-026: Macro-Agrupación para 4GB VRAM, Coordenadas Adaptativas NLE, Filtro/Orden de Clips y Desacoplamiento de Whisper
+- **Decisión:**
+  1. **Macro-Agrupación y Protección de Contexto para 4GB VRAM (`python_backend/llm.py`):**
+     - Implementar `macro_compact_segments` con agrupamiento por bloques temporales (`block_sec=30s-60s`) y límite estricto de palabras por bloque (`max_words_per_block=25`), reduciendo el consumo de tokens en un 75% (~2,000 tokens para 30 minutos de stream).
+     - Añadir protección de bisección mínima (`can_bisect`): un bloque nunca se subdivide si su mitad es menor que la duración mínima del clip solicitado (`dur_info['min']`), permitiendo a tarjetas de 4GB con ventanas de 4k tokens extraer clips de 10m y 15m sin desbordamiento de contexto.
+  2. **Coordenadas y Presets NLE Adaptativos (`CandidatePreviewModal.tsx`):**
+     - Establecer presets y rangos independientes por orientación: horizontal 1920x1080 (Arriba: 100, Centro: 540, Abajo: 920, Streamer Elevado: 780, Centro X: 960) vs vertical 1080x1920 (Arriba: 280, Centro: 960, Abajo: 1680, Streamer Elevado: 1420, Centro X: 540).
+     - Implementar almacenamiento independiente por relación de aspecto (`autoshorts_caption_y_h`, `autoshorts_caption_y_v`, etc.) y auto-reescalado proporcional defensivo al conmutar formatos para prevenir que las coordenadas superen la altura visible (1080px).
+  3. **Selector de Duraciones Completo, Orden Cronológico y Filtro por Tipo (`CandidatePanel.tsx`):**
+     - Añadir opciones de 10m y 15m al selector de duración en el panel principal.
+     - Incorporar selector de ordenación: Por Match / Virilidad (defecto), Cronológico (por `startSec` en línea de tiempo) y por Duración.
+     - Incorporar barra de pastillas interactivas con conteo dinámico para filtrar por `hook_type` (Todos, Reacción, Destacado, Clutch / Jugada, Anécdota, Fail / Rage, Tutorial / Tip, Pregunta).
+  4. **Desacoplamiento de Whisper y Fix de Auto-Transcripción al Importar:**
+     - En `useMediaPipeline.ts`, trasladar las comprobaciones de Ollama / LM Studio para que ocurran exclusivamente dentro de `autoDetectMoments`. La transcripción con Whisper opera 100% independiente de CTranslate2 sin requerir servidores LLM activos.
+     - Persistir `autoTranscribeOnImport` en `localStorage` (por defecto `true`) y validar la existencia real de transcripción (`rawJson.length > 5`).
+- **Motivo:** Permitir que usuarios con hardware modesto (4GB VRAM) procesen videos de larga duración con IA local, garantizar una experiencia de edición NLE libre de coordenadas huérfanas en videos horizontales, facilitar la navegación y ordenación de momentos por línea de tiempo y asegurar que la importación siempre transcriba sin fricción.
+
+
 
 

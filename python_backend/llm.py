@@ -291,6 +291,82 @@ def compact_segments(segments: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def macro_compact_segments(
+    segments: List[Dict[str, Any]],
+    block_sec: float = 30.0,
+    max_words_per_block: int = 25
+) -> str:
+    """
+    Groups individual speech segments into macro chronological paragraphs.
+    Caps words per block to guarantee that even extremely dense 30-minute streams
+    remain strictly under ~1500-2000 tokens, enabling 4GB VRAM hardware to process
+    long-form (10m, 15m) candidate selection in a single prompt without context overflow.
+    """
+    if not segments:
+        return ""
+
+    blocks = []
+    current_block_start = segments[0]["start"]
+    current_block_texts = []
+
+    for s in segments:
+        text = str(s.get("text", "")).strip()
+        if not text:
+            continue
+
+        if s["end"] - current_block_start >= block_sec and current_block_texts:
+            b_start_fmt = f"{int(current_block_start // 60):02d}:{int(current_block_start % 60):02d}"
+            b_end_fmt = f"{int(s['start'] // 60):02d}:{int(s['start'] % 60):02d}"
+            words = (" ".join(current_block_texts)).split()
+            if len(words) > max_words_per_block:
+                combined = " ".join(words[:max_words_per_block]) + "..."
+            else:
+                combined = " ".join(words)
+            blocks.append(f"[{b_start_fmt} - {b_end_fmt}] {combined}")
+            current_block_start = s["start"]
+            current_block_texts = [text]
+        else:
+            current_block_texts.append(text)
+
+    if current_block_texts:
+        b_start_fmt = f"{int(current_block_start // 60):02d}:{int(current_block_start % 60):02d}"
+        last_end = segments[-1]["end"]
+        b_end_fmt = f"{int(last_end // 60):02d}:{int(last_end % 60):02d}"
+        words = (" ".join(current_block_texts)).split()
+        if len(words) > max_words_per_block:
+            combined = " ".join(words[:max_words_per_block]) + "..."
+        else:
+            combined = " ".join(words)
+        blocks.append(f"[{b_start_fmt} - {b_end_fmt}] {combined}")
+
+    return "\n\n".join(blocks)
+
+
+def classify_hook_type(hook_txt: str, rationale_txt: str = "", existing_type: Optional[str] = None) -> str:
+    """
+    Classifies a moment into standard high-retention categories:
+    reacción, destacado, clutch, anécdota, fail, tutorial, pregunta.
+    """
+    valid_types = {"reacción", "destacado", "clutch", "anécdota", "fail", "tutorial", "pregunta"}
+    if existing_type and str(existing_type).strip().lower() in valid_types:
+        return str(existing_type).strip().lower()
+
+    text = f"{hook_txt} {rationale_txt}".lower()
+    if any(k in text for k in ["clutch", "1v", "kill", "headshot", "jugada", "pro play", "maniobra", "habilidad", "aim"]):
+        return "clutch"
+    if any(k in text for k in ["fail", "mori", "muerte", "rage", "troleo", "bug", "perdi", "cague", "falle", "fumble"]):
+        return "fail"
+    if any(k in text for k in ["tutorial", "tip", "truco", "como hacer", "guia", "consejo", "secreto", "aprende"]):
+        return "tutorial"
+    if any(k in text for k in ["historia", "anecdota", "cuento", "recuerdo", "lore", "episodio", "capitulo"]):
+        return "anécdota"
+    if "?" in hook_txt or "¿" in hook_txt or any(k in text for k in ["sabias", "dilema", "por que", "cual"]):
+        return "pregunta"
+    if "!" in hook_txt or any(k in text for k in ["grito", "risa", "wtf", "omg", "dios", "no me jodas", "locura", "reaccion"]):
+        return "reacción"
+    return "destacado"
+
+
 def expand_short_candidate(
     start: float,
     end: float,
@@ -473,7 +549,7 @@ def parse_candidate_json(
                 if not isinstance(virality, dict):
                     score_val = max(0.0, min(1.0, score))
                     total_s = max(50, min(99, int(round(score_val * 100))))
-                    hook_type = "pregunta" if "?" in hook else "reacción" if "!" in hook else "destacado"
+                    hook_type = classify_hook_type(hook, rationale)
                     virality = {
                         "hook_score": max(12, min(25, int(round((total_s / 100.0) * 25)))),
                         "engagement_score": max(12, min(25, int(round((total_s / 100.0) * 24)))),
@@ -482,6 +558,8 @@ def parse_candidate_json(
                         "total_score": total_s,
                         "hook_type": hook_type
                     }
+                else:
+                    virality["hook_type"] = classify_hook_type(hook, rationale, virality.get("hook_type"))
                 drafts.append({
                     "start": round(start, 2),
                     "end": round(end, 2),
@@ -814,18 +892,33 @@ def _analyze_chunk_adaptively(
         peak_cues = "\n\nZonas de alta acción/disparos detectadas acústicamente:\n" + "\n".join(cue_lines)
 
     dur_info = DURATION_SPECS.get(target_duration, DURATION_SPECS["60s"])
+    min_clip_dur = dur_info["min"]
+    chunk_span = chunk_end - chunk_start
+
+    # Use macro compacting for long-form clips or low context models (<= 4k tokens)
+    # This compresses 30 minutes of speech into ~1200 tokens so 4GB VRAM hardware doesn't overflow
+    if target_duration in ["10m", "15m"] or context_limit <= 4096:
+        transcript_body = macro_compact_segments(
+            chunk,
+            block_sec=60.0 if target_duration in ["10m", "15m"] else 30.0,
+            max_words_per_block=25
+        )
+    else:
+        transcript_body = compact_segments(chunk)
+
     instruction_text = (
         f"\n\nINSTRUCCIÓN:\n"
         f"Analiza la transcripción anterior y extrae entre 1 y 5 momentos virales ({dur_info['instruction']}).\n"
         f"Responde estrictamente en formato JSON así:\n"
-        f'{{"candidates": [{{"start": 0.0, "end": 0.0, "score": 0.95, "hook": "Título Gancho", "rationale": "Por qué es viral", "description": "Texto llamativo para redes con hashtags"}}]}}'
+        f'{{"candidates": [{{"start": 0.0, "end": 0.0, "score": 0.95, "hook": "Título Gancho", "hook_title": "Titular", "rationale": "Por qué es viral", "virality": {{"hook_score": 24, "engagement_score": 23, "value_score": 22, "shareability_score": 24, "hook_type": "clutch"}}, "description": "Texto llamativo para redes con hashtags"}}]}}'
     )
-    prompt_text = f"Transcripción del segmento [{chunk_start_fmt} a {chunk_end_fmt}]:\n{compact_segments(chunk)}{peak_cues}{instruction_text}"
+    prompt_text = f"Transcripción del segmento [{chunk_start_fmt} a {chunk_end_fmt}]:\n{transcript_body}{peak_cues}{instruction_text}"
 
     est_tokens = estimate_prompt_tokens(prompt_text)
-    safe_token_ceiling = max(1800, int(context_limit * 0.65))
+    safe_token_ceiling = max(1800, int(context_limit * 0.70))
 
-    if est_tokens > safe_token_ceiling and len(chunk) > 3 and depth < 3:
+    can_bisect = len(chunk) > 3 and depth < 3 and (chunk_span / 2.0) >= min_clip_dur
+    if est_tokens > safe_token_ceiling and can_bisect:
         print(f"[ADAPTIVE] Bloque [{chunk_start_fmt} - {chunk_end_fmt}] tiene ~{est_tokens} tokens (limite seguro {safe_token_ceiling}). Subdividiendo preventivamente...")
         mid = len(chunk) // 2
         left_chunk = chunk[:mid + 1]
@@ -868,7 +961,8 @@ def _analyze_chunk_adaptively(
 
     except ContextExceededError as e:
         new_ctx = e.max_ctx or context_limit
-        if len(chunk) > 3 and depth < 3:
+        can_bisect_err = len(chunk) > 3 and depth < 3 and (chunk_span / 2.0) >= min_clip_dur
+        if can_bisect_err:
             print(f"[ALERTA] Contexto excedido en bloque [{chunk_start_fmt} - {chunk_end_fmt}] ({e.prompt_tokens or est_tokens} > {new_ctx} tokens). Subdividiendo dinamicamente a la mitad...")
             mid = len(chunk) // 2
             left_chunk = chunk[:mid + 1]

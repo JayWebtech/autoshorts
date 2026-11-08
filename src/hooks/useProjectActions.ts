@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke, open } from "../apiBridge";
 import type {
   BusyState,
@@ -37,9 +37,28 @@ export function useProjectActions(options: UseProjectActionsOptions) {
   const [mediaPathToImport, setMediaPathToImport] = useState<string | null>(null);
   const [customProjectDir, setCustomProjectDir] = useState<string>("");
   const [moveSourceVideo, setMoveSourceVideo] = useState<boolean>(false);
-  const [autoTranscribeOnImport, setAutoTranscribeOnImport] = useState<boolean>(true);
-  const [autoDetectMoments, setAutoDetectMoments] = useState<boolean>(false);
-  const [refineTranscriptWithLlm, setRefineTranscriptWithLlm] = useState<boolean>(false);
+  const [autoTranscribeOnImport, setAutoTranscribeOnImport] = useState<boolean>(() => {
+    const saved = localStorage.getItem("autoshorts_auto_transcribe_on_import");
+    return saved !== null ? saved === "true" : true;
+  });
+  const [autoDetectMoments, setAutoDetectMoments] = useState<boolean>(() => {
+    return localStorage.getItem("autoshorts_auto_detect_moments") === "true";
+  });
+  const [refineTranscriptWithLlm, setRefineTranscriptWithLlm] = useState<boolean>(() => {
+    return localStorage.getItem("autoshorts_refine_transcript_llm") === "true";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_auto_transcribe_on_import", String(autoTranscribeOnImport));
+  }, [autoTranscribeOnImport]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_auto_detect_moments", String(autoDetectMoments));
+  }, [autoDetectMoments]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_refine_transcript_llm", String(refineTranscriptWithLlm));
+  }, [refineTranscriptWithLlm]);
   const [importModalTab, setImportModalTab] = useState<"subtitles" | "ai">("subtitles");
 
   const refresh = useCallback(
@@ -289,7 +308,7 @@ export function useProjectActions(options: UseProjectActionsOptions) {
         });
         newProjectId = project.id;
         const projectDetail = await invoke<ProjectDetail>("get_project_detail", { projectId: project.id });
-        if (projectDetail && projectDetail.transcript) {
+        if (projectDetail && projectDetail.transcript && projectDetail.transcript.rawJson && projectDetail.transcript.rawJson.length > 5) {
           alreadyHasTranscript = true;
         }
         await refresh(project.id);

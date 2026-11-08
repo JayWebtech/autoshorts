@@ -347,23 +347,7 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
         }
       }
 
-      if (llmEngine === "local") {
-        if (!env.hasOllama) {
-          setError(
-            "Import successful. Local Ollama server is not running at http://localhost:11434. Please start it to find viral moments."
-          );
-          return;
-        }
-      } else if (llmEngine === "lmstudio") {
-        if (!env.hasLmStudio) {
-          setError(
-            "Import successful. LM Studio is not running at http://127.0.0.1:1234. Please start LM Studio local server to find viral moments."
-          );
-          return;
-        }
-      }
-
-      // 1. Transcription
+      // 1. Transcription (Runs independently with local faster-whisper CTranslate2)
       try {
         setBusy("transcribe");
         const { activeLlmKey, activeLlmModel } = getActiveLlmConfig();
@@ -385,10 +369,28 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
         return;
       }
 
-      // 2. LLM Moments
+      // 2. LLM Moments (Only executed if user requested auto-detection)
       if (!autoDetectMoments) {
         setBusy("idle");
         return;
+      }
+
+      if (llmEngine === "local") {
+        if (!env.hasOllama) {
+          setError(
+            "Transcripción completada. Ollama local no está activo en http://localhost:11434 para buscar momentos."
+          );
+          setBusy("idle");
+          return;
+        }
+      } else if (llmEngine === "lmstudio") {
+        if (!env.hasLmStudio) {
+          setError(
+            "Transcripción completada. LM Studio no está activo en http://127.0.0.1:1234 para buscar momentos."
+          );
+          setBusy("idle");
+          return;
+        }
       }
 
       try {

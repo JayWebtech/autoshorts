@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Scissors,
   Sparkles,
@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Trash2,
   Zap,
+  ArrowUpDown,
 } from "lucide-react";
 import type {
   Candidate,
@@ -135,6 +136,15 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
     }
   }, [filterTab]);
 
+  const [sortBy, setSortBy] = useState<"match" | "chrono" | "duration">(() => {
+    return (localStorage.getItem("autoshorts_sort_candidates") as any) || "match";
+  });
+  const [selectedHookType, setSelectedHookType] = useState<string>("todos");
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_sort_candidates", sortBy);
+  }, [sortBy]);
+
   const dismissedCandidates = detail.candidates.filter((c) => Boolean(c.dismissed));
 
   const exportedCandidates = detail.candidates.filter((c) => {
@@ -151,7 +161,7 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
 
   const activeCandidates = detail.candidates.filter((c) => !c.dismissed);
 
-  const displayedCandidates =
+  const baseFiltered =
     filterTab === "exported"
       ? exportedCandidates
       : filterTab === "pending"
@@ -159,6 +169,43 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
       : filterTab === "dismissed"
       ? dismissedCandidates
       : activeCandidates;
+
+  const availableHookTypes = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const c of baseFiltered) {
+      const t = (c.virality?.hook_type || "destacado").toLowerCase();
+      counts[t] = (counts[t] || 0) + 1;
+    }
+    return counts;
+  }, [baseFiltered]);
+
+  const hookTypeOptions = [
+    { id: "todos", label: "Todos" },
+    { id: "reacción", label: "⚡ Reacción" },
+    { id: "destacado", label: "⭐ Destacado" },
+    { id: "clutch", label: "💥 Clutch" },
+    { id: "anécdota", label: "📖 Anécdota" },
+    { id: "fail", label: "💀 Fail" },
+    { id: "tutorial", label: "💡 Tutorial" },
+    { id: "pregunta", label: "❓ Pregunta" },
+  ];
+
+  const typeFiltered = selectedHookType === "todos"
+    ? baseFiltered
+    : baseFiltered.filter((c) => {
+        const t = (c.virality?.hook_type || "destacado").toLowerCase();
+        return t === selectedHookType.toLowerCase();
+      });
+
+  const displayedCandidates = [...typeFiltered].sort((a, b) => {
+    if (sortBy === "chrono") {
+      return a.startSec - b.startSec;
+    }
+    if (sortBy === "duration") {
+      return (b.endSec - b.startSec) - (a.endSec - a.startSec);
+    }
+    return (b.virality?.total_score ?? b.score * 100) - (a.virality?.total_score ?? a.score * 100);
+  });
 
   const handleCopyPath = (candidateId: string, path: string) => {
     void navigator.clipboard.writeText(path);
@@ -271,7 +318,7 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <span style={{ color: "var(--text-secondary)", fontSize: "0.75rem" }}>Duración:</span>
           <div style={{ display: "flex", gap: "0.25rem" }}>
-            {(["30s", "60s", "2m", "3m", "5m"] as const).map((dur) => {
+            {(["30s", "60s", "2m", "3m", "5m", "10m", "15m"] as const).map((dur) => {
               const active = targetDuration === dur;
               return (
                 <button
@@ -295,7 +342,7 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                     fontVariantNumeric: "tabular-nums",
                   }}
                 >
-                  {dur === "30s" ? "30s" : dur === "60s" ? "1m" : dur === "2m" ? "2m" : dur === "3m" ? "3m" : "5m"}
+                  {dur === "30s" ? "30s" : dur === "60s" ? "1m" : dur === "2m" ? "2m" : dur === "3m" ? "3m" : dur === "5m" ? "5m" : dur === "10m" ? "10m" : "15m"}
                 </button>
               );
             })}
@@ -663,6 +710,122 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
               </div>
             )}
           </div>
+
+          {/* Barra de Filtro por Tipo de Momento y Ordenamiento NLE */}
+          {detail.candidates.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0.45rem 1rem",
+                background: "var(--bg-surface-raised)",
+                borderBottom: "1px solid var(--border-default)",
+                gap: "0.6rem",
+                flexWrap: "wrap",
+                fontSize: "0.75rem",
+              }}
+            >
+              {/* Filtro por Tipo de Momento */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginRight: "2px", fontWeight: 600 }}>
+                  Tipo:
+                </span>
+                {hookTypeOptions.map((opt) => {
+                  const count = opt.id === "todos" ? baseFiltered.length : availableHookTypes[opt.id] || 0;
+                  if (opt.id !== "todos" && count === 0) return null;
+                  const active = selectedHookType === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setSelectedHookType(opt.id)}
+                      style={{
+                        padding: "0.18rem 0.5rem",
+                        borderRadius: "4px",
+                        fontSize: "0.71rem",
+                        fontWeight: active ? 600 : 400,
+                        background: active ? "#fafafa" : "var(--bg-surface)",
+                        color: active ? "#09090b" : "var(--text-secondary)",
+                        border: active ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <span>{opt.label}</span>
+                      <span style={{ fontSize: "0.66rem", opacity: 0.85, fontFamily: "var(--font-mono)" }}>
+                        ({count})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Selector de Ordenamiento */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                  <ArrowUpDown size={12} />
+                  <span>Ordenar:</span>
+                </span>
+                <div style={{ display: "flex", gap: "0.2rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("match")}
+                    style={{
+                      padding: "0.18rem 0.5rem",
+                      borderRadius: "4px",
+                      fontSize: "0.71rem",
+                      fontWeight: sortBy === "match" ? 600 : 400,
+                      background: sortBy === "match" ? "#fafafa" : "var(--bg-surface)",
+                      color: sortBy === "match" ? "#09090b" : "var(--text-secondary)",
+                      border: sortBy === "match" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                      cursor: "pointer",
+                    }}
+                    title="Ordena por puntuación de virilidad (de mayor a menor match)"
+                  >
+                    ⭐ Match
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("chrono")}
+                    style={{
+                      padding: "0.18rem 0.5rem",
+                      borderRadius: "4px",
+                      fontSize: "0.71rem",
+                      fontWeight: sortBy === "chrono" ? 600 : 400,
+                      background: sortBy === "chrono" ? "#fafafa" : "var(--bg-surface)",
+                      color: sortBy === "chrono" ? "#09090b" : "var(--text-secondary)",
+                      border: sortBy === "chrono" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                      cursor: "pointer",
+                    }}
+                    title="Ordena cronológicamente según la línea de tiempo del video"
+                  >
+                    ⏱️ Cronología
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("duration")}
+                    style={{
+                      padding: "0.18rem 0.5rem",
+                      borderRadius: "4px",
+                      fontSize: "0.71rem",
+                      fontWeight: sortBy === "duration" ? 600 : 400,
+                      background: sortBy === "duration" ? "#fafafa" : "var(--bg-surface)",
+                      color: sortBy === "duration" ? "#09090b" : "var(--text-secondary)",
+                      border: sortBy === "duration" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                      cursor: "pointer",
+                    }}
+                    title="Ordena por duración del clip"
+                  >
+                    ⏳ Duración
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 

@@ -11,6 +11,26 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _infer_hook_type(hook_txt: str, rationale_txt: str = "", existing_type: Optional[str] = None) -> str:
+    valid_types = {"reacción", "destacado", "clutch", "anécdota", "fail", "tutorial", "pregunta"}
+    if existing_type and str(existing_type).strip().lower() in valid_types:
+        return str(existing_type).strip().lower()
+    text = f"{hook_txt} {rationale_txt}".lower()
+    if any(k in text for k in ["clutch", "1v", "kill", "headshot", "jugada", "pro play", "maniobra", "habilidad"]):
+        return "clutch"
+    if any(k in text for k in ["fail", "mori", "muerte", "rage", "troleo", "bug", "perdi", "cague", "falle"]):
+        return "fail"
+    if any(k in text for k in ["tutorial", "tip", "truco", "como hacer", "guia", "consejo"]):
+        return "tutorial"
+    if any(k in text for k in ["historia", "anecdota", "cuento", "lore", "recuerdo"]):
+        return "anécdota"
+    if "?" in hook_txt or "¿" in hook_txt or any(k in text for k in ["sabias", "dilema"]):
+        return "pregunta"
+    if "!" in hook_txt or any(k in text for k in ["grito", "risa", "wtf", "omg", "dios", "reaccion"]):
+        return "reacción"
+    return "destacado"
+
+
 class Database:
     def __init__(self, db_path: str):
         self.db_path = db_path
@@ -338,7 +358,7 @@ class Database:
                     score_val = float(draft.get("score", 0.85))
                     total_score = max(50, min(99, int(round(score_val * 100 if score_val <= 1.0 else score_val))))
                     hook_txt = draft.get("hook", "")
-                    hook_type = "pregunta" if "?" in hook_txt else "reacción" if "!" in hook_txt else "destacado"
+                    hook_type = _infer_hook_type(hook_txt, draft.get("rationale", ""))
                     virality = {
                         "hook_score": max(12, min(25, int(round((total_score / 100.0) * 25)))),
                         "engagement_score": max(12, min(25, int(round((total_score / 100.0) * 24)))),
@@ -347,6 +367,8 @@ class Database:
                         "total_score": total_score,
                         "hook_type": hook_type
                     }
+                else:
+                    virality["hook_type"] = _infer_hook_type(draft.get("hook", ""), draft.get("rationale", ""), virality.get("hook_type"))
                 virality_json = json.dumps(virality, ensure_ascii=False)
 
                 conn.execute(
@@ -408,7 +430,7 @@ class Database:
                     score_val = float(r["score"] or 0.85)
                     total_score = max(50, min(99, int(round(score_val * 100 if score_val <= 1.0 else score_val))))
                     hook_txt = r["hook"] or ""
-                    hook_type = "pregunta" if "?" in hook_txt else "reacción" if "!" in hook_txt else "destacado"
+                    hook_type = _infer_hook_type(hook_txt, r["rationale"] or "")
                     v_obj = {
                         "hook_score": max(12, min(25, int(round((total_score / 100.0) * 25)))),
                         "engagement_score": max(12, min(25, int(round((total_score / 100.0) * 24)))),
@@ -417,6 +439,8 @@ class Database:
                         "total_score": total_score,
                         "hook_type": hook_type
                     }
+                else:
+                    v_obj["hook_type"] = _infer_hook_type(r["hook"] or "", r["rationale"] or "", v_obj.get("hook_type"))
                 result.append({
                     "id": r["id"],
                     "projectId": r["project_id"],
