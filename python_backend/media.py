@@ -877,15 +877,31 @@ def generate_ass_subtitles(
     pos_x: Optional[int] = None,
     pos_y: Optional[int] = None,
     font_size_override: Optional[int] = None,
-    align_h: str = "center"
+    align_h: str = "center",
+    source_width: Optional[int] = None,
+    source_height: Optional[int] = None
 ) -> str:
     clip_words, start_sec, end_sec = remap_words_for_sub_ranges(words, sub_ranges, start_sec, end_sec)
     if not clip_words:
         return ""
 
-    is_vertical = (aspect_ratio == "9:16")
-    res_x = 1080 if is_vertical else 1920
-    res_y = 1920 if is_vertical else 1080
+    if aspect_ratio == "9:16":
+        is_vertical = True
+        res_x = 1080
+        res_y = 1920
+    elif aspect_ratio == "16:9":
+        is_vertical = False
+        res_x = 1920
+        res_y = 1080
+    else:  # "original"
+        if source_width and source_height and source_width > 0 and source_height > 0:
+            res_x = source_width
+            res_y = source_height
+            is_vertical = (res_y > res_x)
+        else:
+            is_vertical = False
+            res_x = 1920
+            res_y = 1080
 
     # Alignment and vertical margin
     # ASS alignments: 2 = Bottom Center, 5 = Middle Center, 8 = Top Center
@@ -1148,8 +1164,13 @@ def render_flat_clip(
     has_audio = probe.get("audioCodec") is not None
     vid_w = probe.get("width", 0) or 0
     vid_h = probe.get("height", 0) or 0
-    # Automatically treat video as vertical if explicitly selected OR if source file is portrait/vertical
-    is_vertical = (aspect_ratio == "9:16") or (vid_h > vid_w > 0)
+    # Automatically treat video as vertical if explicitly selected OR if source file is portrait/vertical in original mode
+    if aspect_ratio == "9:16":
+        is_vertical = True
+    elif aspect_ratio == "16:9":
+        is_vertical = False
+    else:  # "original" / "native"
+        is_vertical = (vid_h > vid_w > 0)
 
     cmd = [
         get_ffmpeg_path(),
@@ -1164,8 +1185,10 @@ def render_flat_clip(
     log_buffer.push(f"[FFmpeg] Iniciando renderizado de '{output_path.name}' ({dur_sec:.1f}s)...")
     if is_vertical:
         log_buffer.push("[FFmpeg] Salida vertical 9:16 (1080x1920) | CRF 19 | VBV 10M | AAC 192k")
+    elif aspect_ratio == "16:9":
+        log_buffer.push("[FFmpeg] Salida horizontal 16:9 (1920x1080) | CRF 19 | VBV 10M | AAC 192k")
     else:
-        log_buffer.push("[FFmpeg] Salida nativa | CRF 19 | VBV 10M | AAC 192k")
+        log_buffer.push(f"[FFmpeg] Salida nativa/original ({vid_w}x{vid_h}) | CRF 19 | VBV 10M | AAC 192k")
     if has_multi_segment:
         log_buffer.push(f"[FFmpeg] Aplicando {len(sorted_ranges)} segmentos sincronizados (cortes internos)...")
 
@@ -1210,7 +1233,8 @@ def render_flat_clip(
         return filter_chain, y_part
 
     if has_video:
-        needs_crop = (aspect_ratio == "9:16") and (vid_w >= vid_h > 0)
+        needs_crop = is_vertical and (vid_w >= vid_h > 0)
+        needs_crop_to_16_9 = (aspect_ratio == "16:9") and (vid_h > vid_w > 0)
         has_sub_collision = bool(subtitle_filter and (cta_position == caption_position))
         overlay_x = f"max(0,min(W-w,{int(cta_x)}-w/2))" if cta_x is not None else "(W-w)/2"
         if cta_y is not None:
@@ -1260,10 +1284,14 @@ def render_flat_clip(
 
             if needs_crop:
                 filter_parts.append("[vjoined]crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)',scale=1080:1920:flags=lanczos,setsar=1[vbase]")
+            elif needs_crop_to_16_9:
+                filter_parts.append("[vjoined]crop=w='2*trunc(min(iw,ih*16/9)/2)':h='2*trunc(min(ih,iw*9/16)/2)',scale=1920:1080:flags=lanczos,setsar=1[vbase]")
             elif aspect_ratio == "9:16" and vid_w > 0 and vid_h > 0 and (vid_w != 1080 or vid_h != 1920):
                 filter_parts.append("[vjoined]scale=1080:1920:flags=lanczos,setsar=1[vbase]")
+            elif aspect_ratio == "16:9" and vid_w > 0 and vid_h > 0 and (vid_w != 1920 or vid_h != 1080):
+                filter_parts.append("[vjoined]scale=1920:1080:flags=lanczos,setsar=1[vbase]")
             else:
-                filter_parts.append("[vjoined]null[vbase]")
+                filter_parts.append("[vjoined]scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1[vbase]")
 
             if has_cta:
                 chain1, y1 = build_cta_anim_chain(t1_start, t1_end, base_y)
@@ -1298,7 +1326,16 @@ def render_flat_clip(
 
         elif has_cta:
             cmd.extend(["-loop", "1", "-i", str(cta_badge_path)])
-            crop_prep = "[0:v]crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)',scale=1080:1920:flags=lanczos,setsar=1[vbase]; " if needs_crop else ("[0:v]scale=1080:1920:flags=lanczos,setsar=1[vbase]; " if (aspect_ratio == "9:16" and vid_w > 0 and (vid_w != 1080 or vid_h != 1920)) else "[0:v]null[vbase]; ")
+            if needs_crop:
+                crop_prep = "[0:v]crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)',scale=1080:1920:flags=lanczos,setsar=1[vbase]; "
+            elif needs_crop_to_16_9:
+                crop_prep = "[0:v]crop=w='2*trunc(min(iw,ih*16/9)/2)':h='2*trunc(min(ih,iw*9/16)/2)',scale=1920:1080:flags=lanczos,setsar=1[vbase]; "
+            elif aspect_ratio == "9:16" and vid_w > 0 and (vid_w != 1080 or vid_h != 1920):
+                crop_prep = "[0:v]scale=1080:1920:flags=lanczos,setsar=1[vbase]; "
+            elif aspect_ratio == "16:9" and vid_w > 0 and (vid_w != 1920 or vid_h != 1080):
+                crop_prep = "[0:v]scale=1920:1080:flags=lanczos,setsar=1[vbase]; "
+            else:
+                crop_prep = "[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1[vbase]; "
 
             chain1, y1 = build_cta_anim_chain(t1_start, t1_end, base_y)
             if t2_start is not None and t2_end is not None:
@@ -1337,8 +1374,14 @@ def render_flat_clip(
             filters = []
             if needs_crop:
                 filters.append("crop=w='2*trunc(min(iw,ih*9/16)/2)':h='2*trunc(min(ih,iw*16/9)/2)',scale=1080:1920:flags=lanczos,setsar=1")
+            elif needs_crop_to_16_9:
+                filters.append("crop=w='2*trunc(min(iw,ih*16/9)/2)':h='2*trunc(min(ih,iw*9/16)/2)',scale=1920:1080:flags=lanczos,setsar=1")
             elif aspect_ratio == "9:16" and vid_w > 0 and vid_h > 0 and (vid_w != 1080 or vid_h != 1920):
                 filters.append("scale=1080:1920:flags=lanczos,setsar=1")
+            elif aspect_ratio == "16:9" and vid_w > 0 and vid_h > 0 and (vid_w != 1920 or vid_h != 1080):
+                filters.append("scale=1920:1080:flags=lanczos,setsar=1")
+            else:
+                filters.append("scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1")
 
             if subtitle_filter and subtitle_filter.strip():
                 filters.append(subtitle_filter.strip())

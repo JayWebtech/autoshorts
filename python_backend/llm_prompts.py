@@ -32,6 +32,18 @@ DURATION_SPECS = {
         "min": 270.0,
         "max": 330.0,
     },
+    "10m": {
+        "label": "10 minutos",
+        "instruction": "Cada clip DEBE durar aproximadamente 10 minutos completos (rango permitido: 9 a 11 minutos, es decir entre 540 y 660 segundos completos, ideal para series o episodios).",
+        "min": 540.0,
+        "max": 660.0,
+    },
+    "15m": {
+        "label": "15 minutos",
+        "instruction": "Cada clip DEBE durar aproximadamente 15 minutos completos (rango permitido: 13.5 a 16.5 minutos, es decir entre 810 y 990 segundos completos, ideal para episodios largos de gameplay o resúmenes de misión).",
+        "min": 810.0,
+        "max": 990.0,
+    },
 }
 
 
@@ -106,11 +118,31 @@ Reglas estrictas de segmentación:
 - Exclusiones: Ignora introducciones lentas, transiciones silenciosas, pausas largas de lectura y segmentos puramente promocionales."""
 
 
+SUBGENRE_DIRECTIVES = {
+    "competitive": """ENFOQUE SUBGÉNERO GAMING - COMPETITIVO / RANKED:
+Prioriza momentos de alta tensión táctica: jugadas de clutch (1v2, 1v3, etc.), kills decisivas, aces, remontadas épicas, comunicación rápida de equipo, euforia tras ganar una ronda difícil o frustración competitiva.""",
+    "campaign": """ENFOQUE SUBGÉNERO GAMING - CAMPAÑA / HISTORIA / LORE:
+Prioriza el hilo narrativo del juego: cinemáticas impactantes, diálogos reveladores con personajes, momentos de lore y trama, giros inesperados, avance de misiones principales o decisiones clave con reacciones genuinas del jugador.""",
+    "souls_rage": """ENFOQUE SUBGÉNERO GAMING - SOULS-LIKE / DESAFÍO EXTREMO:
+Prioriza batallas contra jefes (boss fights): la tensión de los múltiples intentos, muertes agónicas, momentos de rage/enfado o desesperación cómica, y el pico de catarsis y celebración eufórica cuando finalmente derrota al jefe o supera el obstáculo.""",
+    "rhythmic": """ENFOQUE SUBGÉNERO GAMING - PRECISIÓN / RÍTMICO:
+Prioriza jugadas de concentración milimétrica (Geometry Dash, Osu, speedruns): momentos de sincronización extrema, silencio tenso con clics rápidos, caídas agónicas en porcentajes finales (90%+) y el desahogo eufórico al completar el nivel.""",
+    "horror": """ENFOQUE SUBGÉNERO GAMING - TERROR / SUSTOS:
+Prioriza la atmósfera y las reacciones viscerales: suspenso y silencio tenso explorando zonas oscuras, jumpscares sorpresivos, gritos auténticos, pánico al ser perseguido por monstruos/enemigos, risa nerviosa y alivio al escapar.""",
+    "sandbox": """ENFOQUE SUBGÉNERO GAMING - SANDBOX / ROL / CAOS:
+Prioriza la creatividad y los momentos emergentes: construcciones épicas, experimentos caóticos que salen mal, bugs o físicas graciosas, roleplay divertido con otros jugadores y muertes absurdas e inesperadas.""",
+    "general_gaming": """ENFOQUE SUBGÉNERO GAMING - GENERAL Y VARIADO:
+Extrae un balance óptimo entre jugadas destacadas de habilidad, momentos cómicos o fails, reacciones espontáneas del streamer y charlas entretenidas durante el gameplay."""
+}
+
+
 def build_system_prompt(
     content_type: str = "gaming",
     target_duration: str = "60s",
     has_thinking: bool = False,
-    custom_prompt: Optional[str] = None
+    custom_prompt: Optional[str] = None,
+    gaming_subgenre: Optional[str] = None,
+    game_context: Optional[str] = None
 ) -> str:
     dur_info = DURATION_SPECS.get(target_duration, DURATION_SPECS["60s"])
     dur_rule = dur_info["instruction"]
@@ -151,6 +183,17 @@ Reglas estrictas de segmentación:
         }
         focus_text = focus_dict.get(content_type, DEFAULT_MOMENTS_PROMPT)
 
+        if content_type == "gaming" and gaming_subgenre and gaming_subgenre in SUBGENRE_DIRECTIVES:
+            focus_text = f"{focus_text}\n\n{SUBGENRE_DIRECTIVES[gaming_subgenre]}"
+
+    context_section = ""
+    if game_context and game_context.strip():
+        clean_ctx = game_context.strip()
+        context_section = f"""\n\nCONTEXTO ESPECÍFICO DEL JUEGO / SERIE:
+- El creador indica que esta grabación corresponde a: "{clean_ctx}".
+- Utiliza este título y contexto para entender misiones, jefes, mecánicas o el hilo conductor de la sesión.
+- En los campos 'hook', 'hook_title' y 'description', haz alusión natural y atractiva a "{clean_ctx}"."""
+
     thinking_guide = ""
     if has_thinking:
         thinking_guide = f"""
@@ -160,7 +203,7 @@ PROCESO DE RAZONAMIENTO (THINKING):
 - Verifica estrictamente que cada momento cumpla con la duración objetivo solicitada ({dur_rule}). Si el gancho inicial dura poco, revisa los segmentos contiguos y extiende 'end' hasta completar la jugada, anécdota o remate cómico.
 - Tras razonar brevemente, produce inmediatamente el objeto JSON final con datos reales (sin puntos suspensivos "..." ni 0.0)."""
 
-    return f"""{focus_text}
+    return f"""{focus_text}{context_section}
 
 REGLAS DE DURACIÓN Y TIMESTAMPS:
 - CRÍTICO: {dur_rule}

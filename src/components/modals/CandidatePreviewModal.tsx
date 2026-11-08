@@ -242,6 +242,18 @@ export function CandidatePreviewModal({
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [saveFeedback, setSaveFeedback] = useState<boolean>(false);
+  const [exportAspectRatio, setExportAspectRatio] = useState<"original" | "16:9" | "9:16">(() => {
+    return (localStorage.getItem("autoshorts_clip_aspect_ratio") as any) || "original";
+  });
+
+  const isSourceVertical = (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0);
+  const isEffectiveVertical = exportAspectRatio === "9:16" || (exportAspectRatio === "original" && isSourceVertical);
+  const canvasWidth = isEffectiveVertical ? 1080 : 1920;
+  const canvasHeight = isEffectiveVertical ? 1920 : 1080;
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_clip_aspect_ratio", exportAspectRatio);
+  }, [exportAspectRatio]);
 
   useEffect(() => {
     try {
@@ -635,8 +647,55 @@ export function CandidatePreviewModal({
               </div>
             )}
 
-            {/* Pantalla Smartphone 9:16 con Reproductor y Overlays en Vivo */}
-            <div className="clip-phone-stage" onClick={togglePlayPause} style={{ cursor: "pointer" }}>
+            {/* Barra de Formato / Aspect Ratio */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem", padding: "0 2px" }}>
+              <div style={{ display: "flex", gap: "3px", background: "var(--bg-surface)", padding: "2px", borderRadius: "6px", border: "1px solid var(--border-default)" }}>
+                {[
+                  { id: "original", label: "🎞️ Original", title: "Mantiene la relación nativa original de la fuente" },
+                  { id: "16:9", label: "🖥️ 16:9", title: "Formato Horizontal YouTube (1920x1080)" },
+                  { id: "9:16", label: "📱 9:16", title: "Formato Vertical Shorts/TikTok (1080x1920 con auto-crop)" },
+                ].map((ar) => {
+                  const active = exportAspectRatio === ar.id;
+                  return (
+                    <button
+                      key={ar.id}
+                      type="button"
+                      onClick={() => setExportAspectRatio(ar.id as any)}
+                      title={ar.title}
+                      style={{
+                        padding: "0.22rem 0.55rem",
+                        fontSize: "0.72rem",
+                        fontWeight: active ? 700 : 500,
+                        borderRadius: "4px",
+                        border: active ? "1px solid #fafafa" : "1px solid transparent",
+                        background: active ? "#fafafa" : "transparent",
+                        color: active ? "#09090b" : "var(--text-secondary)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {ar.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <span style={{ fontSize: "0.68rem", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
+                Lienzo: {canvasWidth}x{canvasHeight}
+              </span>
+            </div>
+
+            {/* Pantalla del Reproductor (Adaptativa Vertical 9:16 u Horizontal 16:9) con Overlays en Vivo */}
+            <div
+              className={`clip-phone-stage ${isEffectiveVertical ? "stage-vertical" : "stage-horizontal"}`}
+              onClick={togglePlayPause}
+              style={{
+                cursor: "pointer",
+                aspectRatio: isEffectiveVertical ? "9 / 16" : "16 / 9",
+                maxHeight: isEffectiveVertical ? "460px" : "360px",
+                maxWidth: isEffectiveVertical ? "260px" : "620px",
+              }}
+            >
               <video
                 ref={videoRef}
                 key={`${candidate.id}_${isExported ? 'exported_' + exportedPath : 'source'}`}
@@ -702,13 +761,13 @@ export function CandidatePreviewModal({
                     overflow: "hidden",
                   }}
                 >
-                  {/* Insignia CTA con coordenadas absolutas exactas (0 a 1080 X, 0 a 1920 Y) */}
+                  {/* Insignia CTA con coordenadas absolutas exactas relativas al lienzo */}
                   {ctaEnabled && (
                     <div
                       style={{
                         position: "absolute",
-                        left: `${(ctaX / 1080) * 100}%`,
-                        top: `${(ctaY / 1920) * 100}%`,
+                        left: `${(ctaX / canvasWidth) * 100}%`,
+                        top: `${(ctaY / canvasHeight) * 100}%`,
                         transform: `translate(-50%, -50%) scale(${(ctaScale / 100).toFixed(2)})`,
                         transformOrigin: "center center",
                         pointerEvents: "none",
@@ -725,8 +784,8 @@ export function CandidatePreviewModal({
                     <div
                       style={{
                         position: "absolute",
-                        left: `${(captionX / 1080) * 100}%`,
-                        top: `${(captionY / 1920) * 100}%`,
+                        left: `${(captionX / canvasWidth) * 100}%`,
+                        top: `${(captionY / canvasHeight) * 100}%`,
                         transform:
                           captionAlignH === "left"
                             ? "translate(0, -50%)"
@@ -739,7 +798,7 @@ export function CandidatePreviewModal({
                         pointerEvents: "none",
                         textAlign: captionAlignH,
                         zIndex: 3,
-                        zoom: Number((captionFontSize / 62).toFixed(2)),
+                        zoom: Number((captionFontSize / (isEffectiveVertical ? 62 : 50)).toFixed(2)),
                       }}
                     >
                       {renderCaptionPreview()}
@@ -1512,7 +1571,7 @@ export function CandidatePreviewModal({
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontSize: "0.78rem", color: "var(--text-primary)", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
                           <Move size={13} style={{ color: "var(--accent-primary, #6366f1)" }} />
-                          Posición Exacta y Transformación (Lienzo 1080x1920)
+                          Posición Exacta y Transformación (Lienzo {canvasWidth}x{canvasHeight})
                         </span>
                         <div style={{ display: "flex", gap: "4px" }}>
                           <button
@@ -1521,18 +1580,18 @@ export function CandidatePreviewModal({
                             style={{ height: "24px", minHeight: "24px", padding: "0 8px", fontSize: "0.7rem" }}
                             onClick={() => {
                               setCaptionPosition("bottom");
-                              setCaptionY(1420);
+                              setCaptionY(isEffectiveVertical ? 1420 : 820);
                             }}
                             title="Posiciona los subtítulos arriba de los overlays/HUDs de la parte inferior"
                           >
-                            Streamer Elevado (1420)
+                            Streamer Elevado ({isEffectiveVertical ? "1420" : "820"})
                           </button>
                           <button
                             type="button"
                             className="btn-cancel"
                             style={{ height: "24px", minHeight: "24px", padding: "0 8px", fontSize: "0.7rem" }}
-                            onClick={() => setCaptionX(540)}
-                            title="Centra los subtítulos horizontalmente en X=540"
+                            onClick={() => setCaptionX(Math.round(canvasWidth / 2))}
+                            title={`Centra los subtítulos horizontalmente en X=${Math.round(canvasWidth / 2)}`}
                           >
                             Centrar X
                           </button>
@@ -1544,14 +1603,14 @@ export function CandidatePreviewModal({
                         {/* Coordenada X */}
                         <div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición X (0-1080):</span>
+                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición X (0-{canvasWidth}):</span>
                             <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontWeight: 700 }}>{captionX}px</span>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <input
                               type="range"
-                              min={50}
-                              max={1030}
+                              min={10}
+                              max={canvasWidth - 10}
                               step={5}
                               value={captionX}
                               onChange={(e) => setCaptionX(Number(e.target.value))}
@@ -1560,9 +1619,9 @@ export function CandidatePreviewModal({
                             <input
                               type="number"
                               min={0}
-                              max={1080}
+                              max={canvasWidth}
                               value={captionX}
-                              onChange={(e) => setCaptionX(Math.max(0, Math.min(1080, Number(e.target.value))))}
+                              onChange={(e) => setCaptionX(Math.max(0, Math.min(canvasWidth, Number(e.target.value))))}
                               style={{
                                 width: "54px",
                                 padding: "2px 4px",
@@ -1581,14 +1640,14 @@ export function CandidatePreviewModal({
                         {/* Coordenada Y */}
                         <div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición Y (0-1920):</span>
+                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición Y (0-{canvasHeight}):</span>
                             <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontWeight: 700 }}>{captionY}px</span>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <input
                               type="range"
-                              min={100}
-                              max={1850}
+                              min={20}
+                              max={canvasHeight - 20}
                               step={10}
                               value={captionY}
                               onChange={(e) => setCaptionY(Number(e.target.value))}
@@ -1597,9 +1656,9 @@ export function CandidatePreviewModal({
                             <input
                               type="number"
                               min={0}
-                              max={1920}
+                              max={canvasHeight}
                               value={captionY}
-                              onChange={(e) => setCaptionY(Math.max(0, Math.min(1920, Number(e.target.value))))}
+                              onChange={(e) => setCaptionY(Math.max(0, Math.min(canvasHeight, Number(e.target.value))))}
                               style={{
                                 width: "54px",
                                 padding: "2px 4px",
@@ -2141,15 +2200,15 @@ export function CandidatePreviewModal({
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontSize: "0.78rem", color: "var(--text-primary)", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
                           <Move size={13} style={{ color: "#f43f5e" }} />
-                          Posición Exacta y Escala de Insignia (Lienzo 1080x1920)
+                          Posición Exacta y Escala de Insignia (Lienzo {canvasWidth}x{canvasHeight})
                         </span>
                         <div style={{ display: "flex", gap: "4px" }}>
                           <button
                             type="button"
                             className="btn-cancel"
                             style={{ height: "24px", minHeight: "24px", padding: "0 8px", fontSize: "0.7rem" }}
-                            onClick={() => setCtaX(540)}
-                            title="Centra la insignia horizontalmente en X=540"
+                            onClick={() => setCtaX(Math.round(canvasWidth / 2))}
+                            title={`Centra la insignia horizontalmente en X=${Math.round(canvasWidth / 2)}`}
                           >
                             Centrar X
                           </button>
@@ -2170,14 +2229,14 @@ export function CandidatePreviewModal({
                         {/* Coordenada X */}
                         <div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición X (0-1080):</span>
+                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición X (0-{canvasWidth}):</span>
                             <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontWeight: 700 }}>{ctaX}px</span>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <input
                               type="range"
-                              min={50}
-                              max={1030}
+                              min={10}
+                              max={canvasWidth - 10}
                               step={5}
                               value={ctaX}
                               onChange={(e) => setCtaX(Number(e.target.value))}
@@ -2186,9 +2245,9 @@ export function CandidatePreviewModal({
                             <input
                               type="number"
                               min={0}
-                              max={1080}
+                              max={canvasWidth}
                               value={ctaX}
-                              onChange={(e) => setCtaX(Math.max(0, Math.min(1080, Number(e.target.value))))}
+                              onChange={(e) => setCtaX(Math.max(0, Math.min(canvasWidth, Number(e.target.value))))}
                               style={{
                                 width: "54px",
                                 padding: "2px 4px",
@@ -2207,14 +2266,14 @@ export function CandidatePreviewModal({
                         {/* Coordenada Y */}
                         <div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición Y (0-1920):</span>
+                            <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", fontWeight: 600 }}>Posición Y (0-{canvasHeight}):</span>
                             <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontWeight: 700 }}>{ctaY}px</span>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <input
                               type="range"
-                              min={80}
-                              max={1850}
+                              min={10}
+                              max={canvasHeight - 10}
                               step={10}
                               value={ctaY}
                               onChange={(e) => setCtaY(Number(e.target.value))}
@@ -2223,9 +2282,9 @@ export function CandidatePreviewModal({
                             <input
                               type="number"
                               min={0}
-                              max={1920}
+                              max={canvasHeight}
                               value={ctaY}
-                              onChange={(e) => setCtaY(Math.max(0, Math.min(1920, Number(e.target.value))))}
+                              onChange={(e) => setCtaY(Math.max(0, Math.min(canvasHeight, Number(e.target.value))))}
                               style={{
                                 width: "54px",
                                 padding: "2px 4px",
@@ -2433,7 +2492,7 @@ export function CandidatePreviewModal({
                     ctaX,
                     ctaY,
                     ctaScale: ctaScale / 100,
-                    aspectRatio: (localStorage.getItem("autoshorts_clip_aspect_ratio") as "original" | "9:16") || "original",
+                    aspectRatio: exportAspectRatio,
                     startSec: activeSubRanges[0]?.start ?? trimStart,
                     endSec: activeSubRanges[activeSubRanges.length - 1]?.end ?? trimEnd,
                     subRanges: activeSubRanges.length > 1 ? activeSubRanges : undefined,

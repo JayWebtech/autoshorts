@@ -1593,8 +1593,6 @@
 .clip-phone-stage {
   position: relative;
   width: 100%;
-  aspect-ratio: 9 / 16;
-  max-height: 460px;
   background: #000;
   border-radius: 8px;
   overflow: hidden;
@@ -1604,6 +1602,18 @@
   align-items: center;
   justify-content: center;
   margin: 0 auto;
+}
+
+.clip-phone-stage.stage-vertical {
+  aspect-ratio: 9 / 16;
+  max-height: 460px;
+  max-width: 260px;
+}
+
+.clip-phone-stage.stage-horizontal {
+  aspect-ratio: 16 / 9;
+  max-height: 360px;
+  max-width: 620px;
 }
 
 .clip-phone-overlay-container {

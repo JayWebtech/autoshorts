@@ -89,6 +89,9 @@ export type Project = {
   captionStyle?: string | null;
   aspectRatio?: string | null;
   sourceExists?: boolean;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  nativeAspectRatio?: string;
   projectDir?: string | null;
   workflowGoal?: "clips";
   createdAt: string;
@@ -168,7 +171,18 @@ export type BusyState =
   | "clipCount"
   | "cut";
 
-export type TargetDuration = "30s" | "60s" | "2m" | "3m" | "5m";
+export type TargetDuration = "30s" | "60s" | "2m" | "3m" | "5m" | "10m" | "15m";
+
+export type GamingSubgenre =
+  | "competitive"
+  | "campaign"
+  | "souls_rage"
+  | "rhythmic"
+  | "horror"
+  | "sandbox"
+  | "general_gaming";
+
+export type AspectRatioOption = "original" | "16:9" | "9:16";
 
 export type ContentType = "gaming" | "tutorial" | "podcast" | "general";
 

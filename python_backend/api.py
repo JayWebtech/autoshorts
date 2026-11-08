@@ -275,6 +275,14 @@ class Api:
         if detail and "project" in detail:
             sp = detail["project"].get("sourcePath")
             detail["project"]["sourceExists"] = os.path.exists(sp) if sp else False
+            if detail["project"]["sourceExists"]:
+                try:
+                    probe = probe_media(sp)
+                    detail["project"]["sourceWidth"] = probe.get("width")
+                    detail["project"]["sourceHeight"] = probe.get("height")
+                    detail["project"]["nativeAspectRatio"] = probe.get("aspect_ratio")
+                except Exception:
+                    pass
         return detail
 
     def get_default_project_dir(self, args: Any) -> str:
@@ -889,6 +897,8 @@ class Api:
             target_duration = args.get("targetDuration", "60s")
             enable_thinking = bool(args.get("enableThinking", False))
             custom_prompt = args.get("customPrompt")
+            gaming_subgenre = args.get("gamingSubgenre")
+            game_context = args.get("gameContext")
         else:
             project_id = args
             api_key = None
@@ -898,6 +908,8 @@ class Api:
             target_duration = "60s"
             enable_thinking = False
             custom_prompt = None
+            gaming_subgenre = None
+            game_context = None
 
         self._cancel_candidates_flag = False
 
@@ -952,7 +964,9 @@ class Api:
             on_progress=on_chunk_progress,
             is_cancelled=lambda: self._cancel_candidates_flag,
             audio_path=audio_path if os.path.exists(audio_path) else None,
-            custom_prompt=custom_prompt
+            custom_prompt=custom_prompt,
+            gaming_subgenre=gaming_subgenre,
+            game_context=game_context
         )
 
         if self._cancel_candidates_flag:
@@ -1069,12 +1083,19 @@ class Api:
             out_dir = proj_dir / "clips"
         os.makedirs(out_dir, exist_ok=True)
 
-        # Detect if source video is portrait/vertical to ensure subs and CTA are framed for vertical even if aspect_ratio is 'original'
+        # Detect geometry of source video to ensure subs, CTA and crop match requested aspect_ratio
         source_probe = probe_media(project["sourcePath"])
         src_w = source_probe.get("width", 0)
         src_h = source_probe.get("height", 0)
-        is_vert_video = (aspect_ratio == "9:16") or (src_h > src_w > 0)
-        ass_aspect_ratio = "9:16" if is_vert_video else "16:9"
+        if aspect_ratio == "9:16":
+            is_vert_video = True
+            ass_aspect_ratio = "9:16"
+        elif aspect_ratio == "16:9":
+            is_vert_video = False
+            ass_aspect_ratio = "16:9"
+        else:  # "original" / "native"
+            is_vert_video = (src_h > src_w > 0)
+            ass_aspect_ratio = "original"
 
         # Sanitize hook for filename: strip all emojis, quotes, and invalid symbols
         raw_hook = candidate.get("hook", "").strip()
@@ -1139,7 +1160,9 @@ class Api:
                         pos_x=caption_x,
                         pos_y=caption_y,
                         font_size_override=caption_font_size,
-                        align_h=caption_align_h
+                        align_h=caption_align_h,
+                        source_width=src_w,
+                        source_height=src_h
                     )
                     if ass_content:
                         exported_ass_path = out_dir / f"{base_name}.ass"

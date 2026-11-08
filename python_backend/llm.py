@@ -568,10 +568,19 @@ def call_ollama(
     content_type: str = "gaming",
     target_duration: str = "60s",
     enable_thinking: bool = False,
-    custom_prompt: Optional[str] = None
+    custom_prompt: Optional[str] = None,
+    gaming_subgenre: Optional[str] = None,
+    game_context: Optional[str] = None
 ) -> str:
     has_thinking = enable_thinking and detect_model_thinking_capability(model_name)
-    system_prompt = build_system_prompt(content_type, target_duration, has_thinking=has_thinking, custom_prompt=custom_prompt)
+    system_prompt = build_system_prompt(
+        content_type,
+        target_duration,
+        has_thinking=has_thinking,
+        custom_prompt=custom_prompt,
+        gaming_subgenre=gaming_subgenre,
+        game_context=game_context
+    )
     url = "http://127.0.0.1:11434/api/chat"
 
     num_ctx_val = 16384 if has_thinking else 8192
@@ -630,10 +639,18 @@ def call_lmstudio(
     target_duration: str = "60s",
     custom_prompt: Optional[str] = None,
     base_url: Optional[str] = None,
-    enable_thinking: bool = False
+    enable_thinking: bool = False,
+    gaming_subgenre: Optional[str] = None,
+    game_context: Optional[str] = None
 ) -> str:
     url = (base_url or os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")).rstrip("/") + "/chat/completions"
-    system_prompt = build_system_prompt(content_type, target_duration, custom_prompt=custom_prompt)
+    system_prompt = build_system_prompt(
+        content_type,
+        target_duration,
+        custom_prompt=custom_prompt,
+        gaming_subgenre=gaming_subgenre,
+        game_context=game_context
+    )
     model = model_name or "local-model"
 
     if not enable_thinking:
@@ -771,7 +788,9 @@ def _analyze_chunk_adaptively(
     enable_thinking: bool,
     action_peaks: List[Dict[str, Any]],
     context_limit: int,
-    depth: int = 0
+    depth: int = 0,
+    gaming_subgenre: Optional[str] = None,
+    game_context: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     if not chunk:
         return []
@@ -811,8 +830,8 @@ def _analyze_chunk_adaptively(
         mid = len(chunk) // 2
         left_chunk = chunk[:mid + 1]
         right_chunk = chunk[max(0, mid - 1):]
-        res_left = _analyze_chunk_adaptively(left_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, context_limit, depth + 1)
-        res_right = _analyze_chunk_adaptively(right_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, context_limit, depth + 1)
+        res_left = _analyze_chunk_adaptively(left_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, context_limit, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context)
+        res_right = _analyze_chunk_adaptively(right_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, context_limit, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context)
         return res_left + res_right
 
     try:
@@ -823,7 +842,9 @@ def _analyze_chunk_adaptively(
                 content_type=content_type,
                 target_duration=target_duration,
                 custom_prompt=custom_prompt,
-                enable_thinking=enable_thinking
+                enable_thinking=enable_thinking,
+                gaming_subgenre=gaming_subgenre,
+                game_context=game_context
             )
         else:
             model = model_name or "qwen2.5:7b"
@@ -833,7 +854,9 @@ def _analyze_chunk_adaptively(
                 content_type=content_type,
                 target_duration=target_duration,
                 enable_thinking=enable_thinking,
-                custom_prompt=custom_prompt
+                custom_prompt=custom_prompt,
+                gaming_subgenre=gaming_subgenre,
+                game_context=game_context
             )
 
         return parse_candidate_json(
@@ -850,8 +873,8 @@ def _analyze_chunk_adaptively(
             mid = len(chunk) // 2
             left_chunk = chunk[:mid + 1]
             right_chunk = chunk[max(0, mid - 1):]
-            res_left = _analyze_chunk_adaptively(left_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, new_ctx, depth + 1)
-            res_right = _analyze_chunk_adaptively(right_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, new_ctx, depth + 1)
+            res_left = _analyze_chunk_adaptively(left_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, new_ctx, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context)
+            res_right = _analyze_chunk_adaptively(right_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, new_ctx, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context)
             return res_left + res_right
         else:
             print(f"[ALERTA] Bloque [{chunk_start_fmt} - {chunk_end_fmt}] excede el contexto ({new_ctx} tokens) y no puede dividirse mas. Omitiendo.")
@@ -876,7 +899,9 @@ def detect_candidates_pipeline(
     on_progress: Optional[Callable[[str, int, int], None]] = None,
     is_cancelled: Optional[Callable[[], bool]] = None,
     audio_path: Optional[str] = None,
-    custom_prompt: Optional[str] = None
+    custom_prompt: Optional[str] = None,
+    gaming_subgenre: Optional[str] = None,
+    game_context: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Main detection pipeline using Adaptive Dynamic Chunking ("Divide y Vencerás").
@@ -903,7 +928,13 @@ def detect_candidates_pipeline(
     # Detect active context size from LM Studio / Ollama
     available_ctx = get_available_context_size(provider=provider, model_name=model_name)
     log_buffer.push(f"[Contexto IA] Contexto detectado: {available_ctx} tokens.")
-    if available_ctx <= 4096:
+    if target_duration == "15m":
+        chunk_dur = 1800.0  # 30 min chunk for 15 min clip target
+        overlap = 240.0     # 4 min overlap
+    elif target_duration == "10m":
+        chunk_dur = 1200.0  # 20 min chunk for 10 min clip target
+        overlap = 180.0     # 3 min overlap
+    elif available_ctx <= 4096:
         chunk_dur = 180.0
         overlap = 30.0
     elif available_ctx <= 8192:
@@ -942,7 +973,9 @@ def detect_candidates_pipeline(
                     custom_prompt=custom_prompt,
                     enable_thinking=enable_thinking,
                     action_peaks=action_peaks,
-                    context_limit=available_ctx
+                    context_limit=available_ctx,
+                    gaming_subgenre=gaming_subgenre,
+                    game_context=game_context
                 )
                 all_drafts.extend(chunk_candidates)
             except ModelFatalError as e:

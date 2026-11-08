@@ -24,6 +24,7 @@ import type {
   TargetDuration,
   EnvironmentStatus,
   LlmMemoryStatus,
+  AspectRatioOption,
 } from "../../types";
 import { formatTime } from "../../utils/format";
 
@@ -37,8 +38,8 @@ interface CandidatePanelProps {
   canUseActiveLlm: boolean;
   targetDuration: TargetDuration;
   setTargetDuration: (dur: TargetDuration) => void;
-  aspectRatio: "original" | "9:16";
-  setAspectRatio: (val: "original" | "9:16") => void;
+  aspectRatio: AspectRatioOption;
+  setAspectRatio: (val: AspectRatioOption) => void;
   enableThinking: boolean;
   setEnableThinking: (val: boolean) => void;
   cutSelected: () => void;
@@ -310,7 +311,10 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
           <div style={{ display: "flex", gap: "0.25rem" }}>
             <button
               type="button"
-              onClick={() => setAspectRatio("original")}
+              onClick={() => {
+                setAspectRatio("original");
+                localStorage.setItem("autoshorts_clip_aspect_ratio", "original");
+              }}
               disabled={busy !== "idle"}
               title="Conserva la relación de aspecto nativa del video (panorámico 16:9, etc.)"
               style={{
@@ -328,7 +332,31 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setAspectRatio("9:16")}
+              onClick={() => {
+                setAspectRatio("16:9");
+                localStorage.setItem("autoshorts_clip_aspect_ratio", "16:9");
+              }}
+              disabled={busy !== "idle"}
+              title="Formato horizontal 16:9 para YouTube tradicional (1920x1080)"
+              style={{
+                padding: "0.2rem 0.55rem",
+                borderRadius: "4px",
+                border: aspectRatio === "16:9" ? "1px solid #fafafa" : "1px solid var(--border-default)",
+                background: aspectRatio === "16:9" ? "#fafafa" : "var(--bg-surface-raised)",
+                color: aspectRatio === "16:9" ? "#09090b" : "var(--text-secondary)",
+                cursor: "pointer",
+                fontSize: "0.72rem",
+                fontWeight: aspectRatio === "16:9" ? 600 : 400,
+              }}
+            >
+              16:9 Horizontal
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAspectRatio("9:16");
+                localStorage.setItem("autoshorts_clip_aspect_ratio", "9:16");
+              }}
               disabled={busy !== "idle"}
               title="Recorte centrado 9:16 vertical para TikTok, Reels o YouTube Shorts"
               style={{

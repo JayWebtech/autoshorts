@@ -158,4 +158,21 @@
 - **Decisión:** En `AutoShorts.spec`, desacoplar la regla `datas` para incluir específicamente `('dist/index.html', 'dist')` y `('dist/assets', 'dist/assets')` en lugar de la carpeta raíz `('dist', 'dist')`, suprimiendo la auto-recursión cíclica de PyInstaller hacia `dist/AutoShorts`. En `build_portable.py`, añadir la eliminación previa obligatoria de `dist/AutoShorts` y `build/AutoShorts` y la bandera `--noconfirm` (`-y`).
 - **Motivo:** Evitar que PyInstaller aborte la sobrescritura del ejecutable `AutoShorts.exe` por colisión de directorio no vacío, garantizando que cada compilación reemplace íntegramente los binarios en `dist/` y en la distribución de escritorio.
 
+## D-025: Release v2.8.0 — Enfoque Híbrido Gaming, Duraciones de 10m y 15m y Soporte Horizontal Nativo
+- **Decisión:**
+  1. **Enfoque Híbrido Gaming (Subgéneros + Contexto Libre):**
+     - En frontend (`StyleModal.tsx`), incorporar 7 pastillas de selección rápida de subgénero de videojuegos (Competitivo, Campaña / Historia, Souls-like / Desafío, Precisión / Rítmico, Terror, Sandbox, General) y un campo de texto libre para contexto de juego o capítulo de serie (e.g., "Campaña de Hollow Knight", "Capítulo 5 de Metro").
+     - En backend (`llm_prompts.py`, `llm.py`, `api.py`), definir directivas heurísticas especializadas (`SUBGENRE_DIRECTIVES`) e inyectarlas dinámicamente en el prompt del sistema al LLM junto con el contexto del juego.
+  2. **Ampliación de Duraciones Objetivo (10m y 15m):**
+     - Añadir objetivos de duración de 10 min (~540s-660s) y 15 min (~810s-990s) para formato serie/episodio en `DURATION_SPECS`, `types.ts` y `StyleModal.tsx`.
+     - Calibrar la partición de transcripción en `detect_candidates_pipeline` con bloques adaptados de 1200s (20m) y 1800s (30m) para análisis sin fragmentación excesiva.
+  3. **Compatibilidad Nativa con Video Horizontal (16:9) y Resoluciones Arbitrarias:**
+     - En `media.py` y `api.py`, detectar dimensiones originales y aspect ratio nativo mediante `probe_media`.
+     - Soportar opciones de aspect ratio (`original`, `16:9`, `9:16`) tanto en importación como en exportación por candidato sin forzar recorte vertical destructivo cuando el video es horizontal.
+     - Adaptar el lienzo de subtítulos ASS (`PlayResX` / `PlayResY`) a 1920x1080 para formato horizontal (o dimensiones nativas para original) con fuentes y márgenes proporcionales.
+     - Blindar FFmpeg con el filtro `scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1` garantizando paridad exacta de píxeles y evitando errores de libx264 ante dimensiones impares.
+     - En el reproductor de previsualización (`CandidatePreviewModal.tsx`, `modals.css`), adaptar dinámicamente la ventana de previsualización (`.stage-horizontal` 16:9 vs `.stage-vertical` 9:16) y la proyección porcentual de subtítulos y stickers CTA a la geometría activa.
+- **Motivo:** Permitir a los creadores de contenido de videojuegos analizar partidas de cualquier género con instrucciones precisas para la IA, generar videos largos o episodios completos de hasta 15 minutos, y procesar y exportar videos en formato horizontal 16:9 nativo o en cualquier resolución sin distorsión ni errores de codificación.
+
+
 

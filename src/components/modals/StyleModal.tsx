@@ -2,8 +2,10 @@ import React from "react";
 import { Captions, Sparkles, X, Folder, FolderOpen } from "lucide-react";
 import {
   DEFAULT_WHISPER_MODELS,
+  AspectRatioOption,
   ContentType,
   EnvironmentStatus,
+  GamingSubgenre,
   HardwareTelemetry,
   LlmEngine,
   TargetDuration,
@@ -105,6 +107,17 @@ export function StyleModal({
   const sortedWhisper = React.useMemo(() => {
     return sortWhisperModels(effectiveWhisperModels, telemetry?.vramTotalMb, telemetry?.hasGpu);
   }, [effectiveWhisperModels, telemetry?.vramTotalMb, telemetry?.hasGpu]);
+
+  const [gamingSubgenre, setGamingSubgenre] = React.useState<GamingSubgenre>(() => {
+    return (localStorage.getItem("autoshorts_gaming_subgenre") as GamingSubgenre) || "competitive";
+  });
+  const [gameContext, setGameContext] = React.useState<string>(() => {
+    return localStorage.getItem("autoshorts_game_context") || "";
+  });
+  const [clipAspectRatio, setClipAspectRatio] = React.useState<AspectRatioOption>(() => {
+    return (localStorage.getItem("autoshorts_clip_aspect_ratio") as AspectRatioOption) || "original";
+  });
+
   if (!isOpen) return null;
 
   return (
@@ -214,8 +227,8 @@ export function StyleModal({
                   <span>Objetivo de Duración de Clips:</span>
                   <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>VRAM constante por fragmentos</span>
                 </label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.4rem" }}>
-                  {(["30s", "60s", "2m", "3m", "5m"] as const).map((dur) => {
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(76px, 1fr))", gap: "0.4rem" }}>
+                  {(["30s", "60s", "2m", "3m", "5m", "10m", "15m"] as const).map((dur) => {
                     const active = targetDuration === dur;
                     return (
                       <button
@@ -226,7 +239,7 @@ export function StyleModal({
                           localStorage.setItem("autoshorts_target_duration", dur);
                         }}
                         style={{
-                          padding: "0.5rem 0.4rem",
+                          padding: "0.5rem 0.35rem",
                           borderRadius: "6px",
                           border: active ? "1px solid #fafafa" : "1px solid var(--border-default)",
                           background: active ? "#fafafa" : "var(--bg-surface)",
@@ -237,10 +250,10 @@ export function StyleModal({
                         }}
                       >
                         <div style={{ fontWeight: 600, fontSize: "0.82rem", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                          {dur === "30s" ? "30 seg" : dur === "60s" ? "1 min" : dur === "2m" ? "2 min" : dur === "3m" ? "3 min" : "5 min"}
+                          {dur === "30s" ? "30 seg" : dur === "60s" ? "1 min" : dur === "2m" ? "2 min" : dur === "3m" ? "3 min" : dur === "5m" ? "5 min" : dur === "10m" ? "10 min" : "15 min"}
                         </div>
-                        <div style={{ fontSize: "0.68rem", opacity: 0.75 }}>
-                          {dur === "60s" ? "Recomendado" : dur === "30s" ? "Rápido" : "Formato Largo"}
+                        <div style={{ fontSize: "0.66rem", opacity: 0.75 }}>
+                          {dur === "60s" ? "Recomendado" : dur === "30s" ? "Rápido" : dur === "10m" ? "Episodio" : dur === "15m" ? "Serie" : "Formato Largo"}
                         </div>
                       </button>
                     );
@@ -279,6 +292,111 @@ export function StyleModal({
                       >
                         <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{ct.label}</div>
                         <div style={{ fontSize: "0.72rem", opacity: 0.75 }}>{ct.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Subgénero Gaming + Contexto Personalizado (Enfoque 3 Híbrido) */}
+              {selectedContentType === "gaming" && (
+                <div style={{ padding: "0.85rem 1rem", borderRadius: "8px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-default)" }}>
+                  <label style={{ fontSize: "0.82rem", fontWeight: 600, display: "block", marginBottom: "0.45rem", color: "var(--text-primary)" }}>
+                    Subgénero Gaming (Especialización del análisis):
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.4rem", marginBottom: "0.75rem" }}>
+                    {[
+                      { id: "competitive", label: "🏆 Competitivo", desc: "Clutches, kills, torneos" },
+                      { id: "campaign", label: "📖 Campaña / Lore", desc: "Historia, cinemáticas" },
+                      { id: "souls_rage", label: "💀 Souls / Desafío", desc: "Jefes, rage, victoria" },
+                      { id: "rhythmic", label: "⚡ Rítmico / Precisión", desc: "Concentración, fails 99%" },
+                      { id: "horror", label: "👻 Terror / Sustos", desc: "Jumpscares, pánico" },
+                      { id: "sandbox", label: "🛠️ Sandbox / Rol", desc: "Creatividad, bugs, humor" },
+                      { id: "general_gaming", label: "🎮 Gaming Variado", desc: "Equilibrado / General" },
+                    ].map((sub) => {
+                      const active = gamingSubgenre === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() => {
+                            setGamingSubgenre(sub.id as GamingSubgenre);
+                            localStorage.setItem("autoshorts_gaming_subgenre", sub.id);
+                          }}
+                          style={{
+                            padding: "0.45rem 0.6rem",
+                            borderRadius: "6px",
+                            border: active ? "1.5px solid #fafafa" : "1px solid var(--border-default)",
+                            background: active ? "var(--bg-surface-hover)" : "var(--bg-surface)",
+                            color: active ? "#fafafa" : "var(--text-secondary)",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: "0.78rem" }}>{sub.label}</div>
+                          <div style={{ fontSize: "0.68rem", opacity: 0.75 }}>{sub.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "0.78rem", fontWeight: 600, display: "block", marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
+                      Contexto o Juego Específico (Opcional):
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={gameContext}
+                      onChange={(e) => {
+                        setGameContext(e.target.value);
+                        localStorage.setItem("autoshorts_game_context", e.target.value);
+                      }}
+                      placeholder="Ej: Campaña de Hollow Knight, Metro Exodus Cap. 5, Dark Souls 3 SL1, Geometry Dash..."
+                      style={{ width: "100%", padding: "0.45rem 0.65rem", fontSize: "0.82rem", borderRadius: "6px" }}
+                    />
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block", marginTop: "0.25rem" }}>
+                      La IA identificará las misiones, personajes o desafíos específicos de este título.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Selector de Formato de Salida / Aspect Ratio */}
+              <div>
+                <label style={{ fontSize: "0.85rem", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem", color: "var(--text-primary)" }}>
+                  <span>Formato de Salida (Aspect Ratio):</span>
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>Geometría del video</span>
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
+                  {[
+                    { id: "original", label: "🎞️ Nativo / Original", desc: "Conserva resolución original (1080p, 1440p, 4K, 21:9)" },
+                    { id: "16:9", label: "🖥️ Horizontal 16:9", desc: "YouTube Estándar (1920x1080)" },
+                    { id: "9:16", label: "📱 Vertical 9:16", desc: "Shorts, Reels, TikTok (1080x1920 con auto-crop)" },
+                  ].map((ar) => {
+                    const active = clipAspectRatio === ar.id;
+                    return (
+                      <button
+                        key={ar.id}
+                        type="button"
+                        onClick={() => {
+                          setClipAspectRatio(ar.id as AspectRatioOption);
+                          localStorage.setItem("autoshorts_clip_aspect_ratio", ar.id);
+                        }}
+                        style={{
+                          padding: "0.55rem 0.65rem",
+                          borderRadius: "6px",
+                          border: active ? "1.5px solid #fafafa" : "1px solid var(--border-default)",
+                          background: active ? "var(--bg-surface-hover)" : "var(--bg-surface)",
+                          color: active ? "#fafafa" : "var(--text-secondary)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, fontSize: "0.82rem" }}>{ar.label}</div>
+                        <div style={{ fontSize: "0.7rem", opacity: 0.75 }}>{ar.desc}</div>
                       </button>
                     );
                   })}

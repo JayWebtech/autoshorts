@@ -28,7 +28,7 @@ export interface CutClipOptions {
   ctaX?: number;
   ctaY?: number;
   ctaScale?: number;
-  aspectRatio?: "original" | "9:16";
+  aspectRatio?: "original" | "16:9" | "9:16";
   startSec?: number;
   endSec?: number;
   subRanges?: Array<{ start: number; end: number }>;
@@ -84,7 +84,9 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
   const [isRefiningTranscript, setIsRefiningTranscript] = useState<boolean>(false);
   const [isDetectingActionCues, setIsDetectingActionCues] = useState<boolean>(false);
   const [renderingCandidateId, setRenderingCandidateId] = useState<string | null>(null);
-  const [clipAspectRatio, setClipAspectRatio] = useState<"original" | "9:16">("original");
+  const [clipAspectRatio, setClipAspectRatio] = useState<"original" | "16:9" | "9:16">(() => {
+    return (localStorage.getItem("autoshorts_clip_aspect_ratio") as any) || "original";
+  });
 
   // Candidate trim preview
   const [previewCandidate, setPreviewCandidate] = useState<Candidate | null>(null);
@@ -278,6 +280,8 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
       setError(null);
       try {
         const { activeLlmKey, activeLlmModel } = getActiveLlmConfig();
+        const gamingSubgenre = localStorage.getItem("autoshorts_gaming_subgenre") || "competitive";
+        const gameContext = localStorage.getItem("autoshorts_game_context") || "";
         await invoke<Candidate[]>("generate_candidates", {
           projectId: detail.project.id,
           apiKey: activeLlmKey || null,
@@ -288,6 +292,8 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           allowDemo,
           enableThinking,
           customPrompt: customMomentsPrompt.trim() || null,
+          gamingSubgenre,
+          gameContext,
         });
         await refresh(detail.project.id);
       } catch (err) {
@@ -388,6 +394,8 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
       try {
         setBusy("moments");
         const { activeLlmKey, activeLlmModel } = getActiveLlmConfig();
+        const gamingSubgenre = localStorage.getItem("autoshorts_gaming_subgenre") || "competitive";
+        const gameContext = localStorage.getItem("autoshorts_game_context") || "";
         await invoke<Candidate[]>("generate_candidates", {
           projectId,
           apiKey: activeLlmKey || null,
@@ -398,6 +406,8 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           allowDemo: false,
           enableThinking,
           customPrompt: customMomentsPrompt.trim() || null,
+          gamingSubgenre,
+          gameContext,
         });
         await refresh(projectId);
       } catch (err) {
