@@ -191,6 +191,20 @@
      - Persistir `autoTranscribeOnImport` en `localStorage` (por defecto `true`) y validar la existencia real de transcripción (`rawJson.length > 5`).
 - **Motivo:** Permitir que usuarios con hardware modesto (4GB VRAM) procesen videos de larga duración con IA local, garantizar una experiencia de edición NLE libre de coordenadas huérfanas en videos horizontales, facilitar la navegación y ordenación de momentos por línea de tiempo y asegurar que la importación siempre transcriba sin fricción.
 
+## D-027: Reparación Definitiva de Renderizado de Subtítulos y CTA en Exportación de Clips (Hardware Real)
+- **Decisión:**
+  1. **Lienzo Canónico Universal en Subtítulos ASS (`python_backend/media.py`):**
+     - Establecer siempre `PlayResX: 1920` y `PlayResY: 1080` (en horizontal) y `1080x1920` (en vertical) en `generate_ass_subtitles`. En el estándar ASS, este encabezado define el lienzo de referencia sobre el cual operan las etiquetas de posición absoluta `\pos(x,y)` de la UI, permitiendo a `libass` proyectar y reescalar con precisión milimétrica los subtítulos sobre cualquier resolución de video nativa (720p, 1080p, 4K), erradicando el bug donde los subtítulos se renderizaban fuera de pantalla en videos 720p.
+  2. **Escalamiento Proporcional y Duración Extendida de Insignia CTA:**
+     - En `render_flat_clip`, proyectar y reescalar matemáticamente las coordenadas $cta_x$ y $cta_y$ al ancho y alto real del video final (`target_w`, `target_h`), corrigiendo el desplazamiento lateral en videos 720p.
+     - Extender la ventana de visibilidad del badge animado a 5 segundos completos ($t = 1.0\text{s}$ a $6.0\text{s}$) al inicio y $4.5\text{s}$ al cierre para garantizar su impacto visual.
+  3. **Saneamiento Defensivo de Coordenadas en Frontend y Propagación en Lote (`CandidatePreviewModal.tsx`, `useMediaPipeline.ts`):**
+     - Clampear defensivamente en React todas las coordenadas ($X, Y$) contra `canvasWidth` y `canvasHeight`, impidiendo que valores desactualizados o provenientes de modo vertical ($Y = 1680$) persistan en modo horizontal.
+     - En `useMediaPipeline.ts`, recuperar y propagar automáticamente las opciones de subtítulos y CTA guardadas en `localStorage` al realizar cortes individuales desde la tarjeta o en lote ("Cortar Seleccionados").
+  4. **Eliminación del Fallback Silencioso en FFmpeg:**
+     - Remover el reintento que purgaba los filtros de subtítulos y CTA ante errores. Si ocurre un fallo en FFmpeg, se registra el `stderr` en el buffer de logs y se lanza una excepción explícita para máxima transparencia y trazabilidad técnica.
+- **Motivo:** Garantizar que los subtítulos dinámicos y la insignia CTA personalizada se quemen visualmente en los clips exportados con FFmpeg sobre cualquier resolución y formato de video, comprobado al 100% mediante análisis de píxeles en hardware real.
+
 
 
 

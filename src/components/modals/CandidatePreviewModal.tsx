@@ -144,11 +144,14 @@ export function CandidatePreviewModal({
     const isVert = exportAspectRatio === "9:16" || (exportAspectRatio === "original" && (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0));
     const suffix = isVert ? "_v" : "_h";
     const saved = localStorage.getItem(`autoshorts_caption_x${suffix}`);
-    if (saved !== null) return Number(saved);
+    if (saved !== null) {
+      const val = Number(saved);
+      return isVert ? Math.min(1080, Math.max(10, val)) : (val === 540 ? 960 : Math.min(1920, Math.max(10, val)));
+    }
     const savedGen = localStorage.getItem("autoshorts_caption_x");
     if (savedGen !== null) {
       const val = Number(savedGen);
-      return isVert ? Math.min(1080, val) : (val === 540 ? 960 : Math.min(1920, val));
+      return isVert ? Math.min(1080, Math.max(10, val)) : (val === 540 ? 960 : Math.min(1920, Math.max(10, val)));
     }
     return isVert ? 540 : 960;
   });
@@ -157,12 +160,16 @@ export function CandidatePreviewModal({
     const isVert = exportAspectRatio === "9:16" || (exportAspectRatio === "original" && (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0));
     const suffix = isVert ? "_v" : "_h";
     const saved = localStorage.getItem(`autoshorts_caption_y${suffix}`);
-    if (saved !== null) return Number(saved);
+    if (saved !== null) {
+      const val = Number(saved);
+      if (!isVert && val > 1080) return 920;
+      return isVert ? Math.min(1920, Math.max(20, val)) : Math.min(1080, Math.max(20, val));
+    }
     const savedGen = localStorage.getItem("autoshorts_caption_y");
     if (savedGen !== null) {
       const val = Number(savedGen);
       if (!isVert && val > 1080) return 920;
-      return val;
+      return isVert ? Math.min(1920, Math.max(20, val)) : Math.min(1080, Math.max(20, val));
     }
     return isVert ? 1680 : 920;
   });
@@ -179,11 +186,14 @@ export function CandidatePreviewModal({
     const isVert = exportAspectRatio === "9:16" || (exportAspectRatio === "original" && (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0));
     const suffix = isVert ? "_v" : "_h";
     const saved = localStorage.getItem(`autoshorts_cta_x${suffix}`);
-    if (saved !== null) return Number(saved);
+    if (saved !== null) {
+      const val = Number(saved);
+      return isVert ? Math.min(1080, Math.max(10, val)) : (val === 540 ? 960 : Math.min(1920, Math.max(10, val)));
+    }
     const savedGen = localStorage.getItem("autoshorts_cta_x");
     if (savedGen !== null) {
       const val = Number(savedGen);
-      return isVert ? Math.min(1080, val) : (val === 540 ? 960 : Math.min(1920, val));
+      return isVert ? Math.min(1080, Math.max(10, val)) : (val === 540 ? 960 : Math.min(1920, Math.max(10, val)));
     }
     return isVert ? 540 : 960;
   });
@@ -192,14 +202,18 @@ export function CandidatePreviewModal({
     const isVert = exportAspectRatio === "9:16" || (exportAspectRatio === "original" && (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0));
     const suffix = isVert ? "_v" : "_h";
     const saved = localStorage.getItem(`autoshorts_cta_y${suffix}`);
-    if (saved !== null) return Number(saved);
+    if (saved !== null) {
+      const val = Number(saved);
+      if (!isVert && val > 1080) return 90;
+      return isVert ? Math.min(1920, Math.max(10, val)) : Math.min(1080, Math.max(10, val));
+    }
     const savedGen = localStorage.getItem("autoshorts_cta_y");
     if (savedGen !== null) {
       const val = Number(savedGen);
-      if (!isVert && val > 1080) return 920;
-      return val;
+      if (!isVert && val > 1080) return 90;
+      return isVert ? Math.min(1920, Math.max(10, val)) : Math.min(1080, Math.max(10, val));
     }
-    return isVert ? 1550 : 920;
+    return isVert ? 1550 : 90;
   });
 
   const [ctaScale, setCtaScale] = useState<number>(() => {
@@ -214,25 +228,37 @@ export function CandidatePreviewModal({
       if (!isEffectiveVertical) {
         // Conmutó a Horizontal (1920x1080)
         const savedYH = localStorage.getItem("autoshorts_caption_y_h");
-        setCaptionY(savedYH !== null ? Number(savedYH) : (captionY > 1080 ? Math.round((captionY / 1920) * 1080) : captionY));
+        const parsedYH = savedYH !== null ? Number(savedYH) : null;
+        setCaptionY(parsedYH !== null && parsedYH <= 1080 ? parsedYH : (captionY > 1080 ? 920 : captionY));
+
         const savedXH = localStorage.getItem("autoshorts_caption_x_h");
-        setCaptionX(savedXH !== null ? Number(savedXH) : (captionX === 540 ? 960 : captionX));
+        const parsedXH = savedXH !== null ? Number(savedXH) : null;
+        setCaptionX(parsedXH !== null && parsedXH <= 1920 ? (parsedXH === 540 ? 960 : parsedXH) : (captionX === 540 ? 960 : captionX));
 
         const savedCtaYH = localStorage.getItem("autoshorts_cta_y_h");
-        setCtaY(savedCtaYH !== null ? Number(savedCtaYH) : (ctaY > 1080 ? Math.round((ctaY / 1920) * 1080) : ctaY));
+        const parsedCtaYH = savedCtaYH !== null ? Number(savedCtaYH) : null;
+        setCtaY(parsedCtaYH !== null && parsedCtaYH <= 1080 ? parsedCtaYH : (ctaY > 1080 ? 90 : ctaY));
+
         const savedCtaXH = localStorage.getItem("autoshorts_cta_x_h");
-        setCtaX(savedCtaXH !== null ? Number(savedCtaXH) : (ctaX === 540 ? 960 : ctaX));
+        const parsedCtaXH = savedCtaXH !== null ? Number(savedCtaXH) : null;
+        setCtaX(parsedCtaXH !== null && parsedCtaXH <= 1920 ? (parsedCtaXH === 540 ? 960 : parsedCtaXH) : (ctaX === 540 ? 960 : ctaX));
       } else {
         // Conmutó a Vertical (1080x1920)
         const savedYV = localStorage.getItem("autoshorts_caption_y_v");
-        setCaptionY(savedYV !== null ? Number(savedYV) : Math.min(1920, Math.round((captionY / 1080) * 1920)));
+        const parsedYV = savedYV !== null ? Number(savedYV) : null;
+        setCaptionY(parsedYV !== null ? parsedYV : Math.min(1920, Math.round((captionY / 1080) * 1920)));
+
         const savedXV = localStorage.getItem("autoshorts_caption_x_v");
-        setCaptionX(savedXV !== null ? Number(savedXV) : (captionX === 960 ? 540 : captionX));
+        const parsedXV = savedXV !== null ? Number(savedXV) : null;
+        setCaptionX(parsedXV !== null ? parsedXV : (captionX === 960 ? 540 : captionX));
 
         const savedCtaYV = localStorage.getItem("autoshorts_cta_y_v");
-        setCtaY(savedCtaYV !== null ? Number(savedCtaYV) : Math.min(1920, Math.round((ctaY / 1080) * 1920)));
+        const parsedCtaYV = savedCtaYV !== null ? Number(savedCtaYV) : null;
+        setCtaY(parsedCtaYV !== null ? parsedCtaYV : Math.min(1920, Math.round((ctaY / 1080) * 1920)));
+
         const savedCtaXV = localStorage.getItem("autoshorts_cta_x_v");
-        setCtaX(savedCtaXV !== null ? Number(savedCtaXV) : (ctaX === 960 ? 540 : ctaX));
+        const parsedCtaXV = savedCtaXV !== null ? Number(savedCtaXV) : null;
+        setCtaX(parsedCtaXV !== null ? parsedCtaXV : (ctaX === 960 ? 540 : ctaX));
       }
       prevIsVertRef.current = isEffectiveVertical;
     }
@@ -244,10 +270,12 @@ export function CandidatePreviewModal({
 
   useEffect(() => {
     const suffix = isEffectiveVertical ? "_v" : "_h";
-    localStorage.setItem(`autoshorts_caption_x${suffix}`, String(captionX));
-    localStorage.setItem(`autoshorts_caption_y${suffix}`, String(captionY));
-    localStorage.setItem("autoshorts_caption_x", String(captionX));
-    localStorage.setItem("autoshorts_caption_y", String(captionY));
+    const clampedY = isEffectiveVertical ? Math.min(1920, captionY) : Math.min(1080, captionY);
+    const clampedX = isEffectiveVertical ? Math.min(1080, captionX) : Math.min(1920, captionX);
+    localStorage.setItem(`autoshorts_caption_x${suffix}`, String(clampedX));
+    localStorage.setItem(`autoshorts_caption_y${suffix}`, String(clampedY));
+    localStorage.setItem("autoshorts_caption_x", String(clampedX));
+    localStorage.setItem("autoshorts_caption_y", String(clampedY));
   }, [captionX, captionY, isEffectiveVertical]);
 
   useEffect(() => {
@@ -260,10 +288,12 @@ export function CandidatePreviewModal({
 
   useEffect(() => {
     const suffix = isEffectiveVertical ? "_v" : "_h";
-    localStorage.setItem(`autoshorts_cta_x${suffix}`, String(ctaX));
-    localStorage.setItem(`autoshorts_cta_y${suffix}`, String(ctaY));
-    localStorage.setItem("autoshorts_cta_x", String(ctaX));
-    localStorage.setItem("autoshorts_cta_y", String(ctaY));
+    const clampedY = isEffectiveVertical ? Math.min(1920, ctaY) : Math.min(1080, ctaY);
+    const clampedX = isEffectiveVertical ? Math.min(1080, ctaX) : Math.min(1920, ctaX);
+    localStorage.setItem(`autoshorts_cta_x${suffix}`, String(clampedX));
+    localStorage.setItem(`autoshorts_cta_y${suffix}`, String(clampedY));
+    localStorage.setItem("autoshorts_cta_x", String(clampedX));
+    localStorage.setItem("autoshorts_cta_y", String(clampedY));
   }, [ctaX, ctaY, isEffectiveVertical]);
 
   useEffect(() => {

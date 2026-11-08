@@ -885,23 +885,28 @@ def generate_ass_subtitles(
     if not clip_words:
         return ""
 
+    # Determine orientation and virtual canvas resolution.
+    # In ASS specifications, PlayResX and PlayResY establish the virtual coordinate space.
+    # Because all pos_x, pos_y, font sizes and offsets from the frontend are authored on
+    # the canonical 1080x1920 (vertical) or 1920x1080 (horizontal) canvas, PlayResX and PlayResY
+    # must match this reference space. libass automatically and losslessly scales this virtual
+    # space onto whatever real video resolution FFmpeg encodes (720p, 1080p, 4K, etc.).
     if aspect_ratio == "9:16":
         is_vertical = True
-        res_x = 1080
-        res_y = 1920
     elif aspect_ratio == "16:9":
         is_vertical = False
-        res_x = 1920
-        res_y = 1080
-    else:  # "original"
+    else:  # "original" / native
         if source_width and source_height and source_width > 0 and source_height > 0:
-            res_x = source_width
-            res_y = source_height
-            is_vertical = (res_y > res_x)
+            is_vertical = (source_height > source_width)
         else:
             is_vertical = False
-            res_x = 1920
-            res_y = 1080
+
+    if is_vertical:
+        res_x = 1080
+        res_y = 1920
+    else:
+        res_x = 1920
+        res_y = 1080
 
     # Alignment and vertical margin
     # ASS alignments: 2 = Bottom Center, 5 = Middle Center, 8 = Top Center
@@ -1235,10 +1240,19 @@ def render_flat_clip(
     if has_video:
         needs_crop = is_vertical and (vid_w >= vid_h > 0)
         needs_crop_to_16_9 = (aspect_ratio == "16:9") and (vid_h > vid_w > 0)
+        ref_w = 1080 if is_vertical else 1920
+        ref_h = 1920 if is_vertical else 1080
+        # Determine target video dimensions for scaling coordinates
+        target_w = 1080 if is_vertical else (1920 if aspect_ratio == "16:9" else (vid_w if vid_w > 0 else ref_w))
+        target_h = 1920 if is_vertical else (1080 if aspect_ratio == "16:9" else (vid_h if vid_h > 0 else ref_h))
+
+        scaled_cta_x = int(int(cta_x) * target_w / ref_w) if cta_x is not None else None
+        scaled_cta_y = int(int(cta_y) * target_h / ref_h) if cta_y is not None else None
+
         has_sub_collision = bool(subtitle_filter and (cta_position == caption_position))
-        overlay_x = f"max(0,min(W-w,{int(cta_x)}-w/2))" if cta_x is not None else "(W-w)/2"
-        if cta_y is not None:
-            base_y = f"max(0,min(H-h,{int(cta_y)}-h/2))"
+        overlay_x = f"max(0,min(W-w,{int(scaled_cta_x)}-w/2))" if scaled_cta_x is not None else "(W-w)/2"
+        if scaled_cta_y is not None:
+            base_y = f"max(0,min(H-h,{int(scaled_cta_y)}-h/2))"
         elif cta_position == "top":
             base_y = "280" if (has_sub_collision and is_vertical) else ("160" if has_sub_collision else ("130" if is_vertical else "65"))
         elif cta_position == "center":
@@ -1249,17 +1263,17 @@ def render_flat_clip(
             base_y = f"H-h-{margin_b}" if has_sub_collision else f"H-h-{normal_b}"
 
         if dur_sec >= 20.0:
-            t1_start, t1_end = 3.0, 5.0
-            t2_start = max(t1_end + 3.0, dur_sec - 3.0)
-            t2_end = dur_sec - 0.8
-        elif dur_sec >= 6.5:
-            t1_start, t1_end = 3.0, 5.0
+            t1_start, t1_end = 1.0, 6.0
+            t2_start = max(t1_end + 4.0, dur_sec - 5.0)
+            t2_end = dur_sec - 0.5
+        elif dur_sec >= 8.0:
+            t1_start, t1_end = 1.0, 6.0
             t2_start = t2_end = None
         elif dur_sec >= 4.0:
-            t1_start, t1_end = 1.2, 3.2
+            t1_start, t1_end = 0.8, min(dur_sec - 0.4, 4.5)
             t2_start = t2_end = None
         else:
-            t1_start, t1_end = 0.5, max(1.2, dur_sec - 0.2)
+            t1_start, t1_end = 0.4, max(1.0, dur_sec - 0.2)
             t2_start = t2_end = None
 
         if has_multi_segment:
@@ -1407,25 +1421,9 @@ def render_flat_clip(
 
     res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", **get_no_window_kwargs())
     if res.returncode != 0:
-        log_buffer.push(f"[FFmpeg AVISO] Intento con filtros falló: {res.stderr.strip()[-250:]}")
-        # Fallback without subtitle/drawtext if filters caused error
-        if subtitle_filter or drawtext_filters or has_cta:
-            log_buffer.push("[FFmpeg] Reintentando renderizado sin filtros adicionales...")
-            return render_flat_clip(
-                source_path=source_path,
-                start_sec=start_sec,
-                end_sec=end_sec,
-                output_path=output_path,
-                drawtext_filters=None,
-                aspect_ratio=aspect_ratio,
-                subtitle_filter=None,
-                cta_badge_path=None,
-                sub_ranges=sub_ranges,
-                transition=transition,
-                target_fps=target_fps
-            )
-        log_buffer.push(f"[FFmpeg ERROR] Error crítico al codificar video: {res.stderr.strip()[-300:]}")
-        raise RuntimeError(f"ffmpeg clip render failed: {res.stderr.strip()}")
+        err_msg = res.stderr.strip()[-400:] if res.stderr else "Error desconocido de FFmpeg"
+        log_buffer.push(f"[FFmpeg ERROR] Error al codificar clip: {err_msg}")
+        raise RuntimeError(f"Error renderizando clip en FFmpeg: {err_msg}")
 
     if output_path.exists():
         size_mb = output_path.stat().st_size / (1024 * 1024)

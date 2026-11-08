@@ -545,6 +545,29 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           options?.ctaAnimation || localStorage.getItem("autoshorts_cta_animation") || "bounce-land";
         const aspectRatio = options?.aspectRatio || clipAspectRatio;
 
+        const isVert =
+          aspectRatio === "9:16" ||
+          (aspectRatio === "original" && (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0));
+        const suffix = isVert ? "_v" : "_h";
+
+        const savedCapX = localStorage.getItem(`autoshorts_caption_x${suffix}`);
+        const savedCapY = localStorage.getItem(`autoshorts_caption_y${suffix}`);
+        const savedCapFS = localStorage.getItem("autoshorts_caption_font_size");
+        const savedCapAlignH = localStorage.getItem("autoshorts_caption_align_h");
+
+        const savedCtaX = localStorage.getItem(`autoshorts_cta_x${suffix}`);
+        const savedCtaY = localStorage.getItem(`autoshorts_cta_y${suffix}`);
+        const savedCtaScale = localStorage.getItem("autoshorts_cta_scale");
+
+        const effCaptionX = options?.captionX !== undefined ? options.captionX : (savedCapX !== null ? Number(savedCapX) : (isVert ? 540 : 960));
+        const effCaptionY = options?.captionY !== undefined ? options.captionY : (savedCapY !== null ? Number(savedCapY) : (isVert ? 1680 : 920));
+        const effCaptionFS = options?.captionFontSize !== undefined ? options.captionFontSize : (savedCapFS !== null ? Number(savedCapFS) : (isVert ? 62 : 50));
+        const effCaptionAlignH = options?.captionAlignH || savedCapAlignH || "center";
+
+        const effCtaX = options?.ctaX !== undefined ? options.ctaX : (savedCtaX !== null ? Number(savedCtaX) : (isVert ? 540 : 960));
+        const effCtaY = options?.ctaY !== undefined ? options.ctaY : (savedCtaY !== null ? Number(savedCtaY) : (isVert ? 1550 : 90));
+        const effCtaScale = options?.ctaScale !== undefined ? options.ctaScale : (savedCtaScale !== null ? Number(savedCtaScale) / 100 : 1.0);
+
         await invoke<string>("render_flat_clip_for_candidate", {
           candidateId,
           outputDir: customOutputDir || null,
@@ -559,13 +582,13 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           ctaText,
           ctaPosition,
           ctaAnimation,
-          ...(options?.captionX !== undefined ? { captionX: options.captionX } : {}),
-          ...(options?.captionY !== undefined ? { captionY: options.captionY } : {}),
-          ...(options?.captionFontSize !== undefined ? { captionFontSize: options.captionFontSize } : {}),
-          ...(options?.captionAlignH !== undefined ? { captionAlignH: options.captionAlignH } : {}),
-          ...(options?.ctaX !== undefined ? { ctaX: options.ctaX } : {}),
-          ...(options?.ctaY !== undefined ? { ctaY: options.ctaY } : {}),
-          ...(options?.ctaScale !== undefined ? { ctaScale: options.ctaScale } : {}),
+          captionX: effCaptionX,
+          captionY: effCaptionY,
+          captionFontSize: effCaptionFS,
+          captionAlignH: effCaptionAlignH,
+          ctaX: effCtaX,
+          ctaY: effCtaY,
+          ctaScale: effCtaScale,
           ...(options?.startSec !== undefined ? { startSec: options.startSec } : {}),
           ...(options?.endSec !== undefined ? { endSec: options.endSec } : {}),
           ...(options?.subRanges ? { subRanges: options.subRanges } : {}),
