@@ -919,23 +919,15 @@ fn format_srt_time(start: f64, end: f64) -> String {
     format!("{} --> {}", format_time(start), format_time(end))
 }
 
-fn build_drawtext_filters(
-    words: &[TranscriptWord],
-    start_sec: f64,
-    end_sec: f64,
-    cropped_width: i64,
-    caption_style: &str,
-) -> String {
-    let candidate_words: Vec<&TranscriptWord> = words
-        .iter()
-        .filter(|w| w.end > start_sec && w.start < end_sec)
-        .collect();
+/// Build the `fontfile='...':` drawtext option for a font path, escaping it
+/// for the FFmpeg filtergraph parser. Drive-letter colons must be written
+/// `C\:` or the filter chain breaks with "No option name near
+/// '/Windows/Fonts/...'" on Windows (issues #48, #41, #10, #34).
+fn build_font_option(found_path: &str) -> String {
+    format!("fontfile='{}':", media::escape_filter_path(found_path))
+}
 
-    if candidate_words.is_empty() {
-        return String::new();
-    }
-
-    // Build font option once for drawtext filter
+fn first_existing_font() -> Option<String> {
     let mut font_paths = vec![
         // macOS
         "/System/Library/Fonts/Supplemental/Futura.ttc".to_string(),
@@ -962,15 +954,32 @@ fn build_drawtext_filters(
         font_paths.push(format!("{}/arial.ttf", windir_fonts));
     }
 
-    let mut font_option = String::new();
-    for path in &font_paths {
-        if std::path::Path::new(path).exists() {
-            let normalized_path = path.replace('\\', "/");
-            let escaped_path = normalized_path.replace('\'', "'\\''");
-            font_option = format!("fontfile='{}':", escaped_path);
-            break;
-        }
+    font_paths
+        .into_iter()
+        .find(|path| std::path::Path::new(path).exists())
+}
+
+fn build_drawtext_filters(
+    words: &[TranscriptWord],
+    start_sec: f64,
+    end_sec: f64,
+    cropped_width: i64,
+    caption_style: &str,
+) -> String {
+    let candidate_words: Vec<&TranscriptWord> = words
+        .iter()
+        .filter(|w| w.end > start_sec && w.start < end_sec)
+        .collect();
+
+    if candidate_words.is_empty() {
+        return String::new();
     }
+
+    // Build font option once for drawtext filter
+    let font_option = first_existing_font()
+        .as_deref()
+        .map(build_font_option)
+        .unwrap_or_default();
 
     let mut drawtext_filters = Vec::new();
 
@@ -1094,7 +1103,34 @@ mod tests {
 
         if result.contains("fontfile=") {
             assert!(result.contains("fontfile='"));
-            assert!(!result.contains("\\:"));
+            // Any drive-letter colon inside the filter must be escaped as
+            // `C\:` — a raw `C:/` would break the FFmpeg filter chain on
+            // Windows (issues #48, #41).
+            assert!(
+                !result.contains("C:/"),
+                "unescaped drive-letter colon in filter: {result}"
+            );
         }
+    }
+
+    #[test]
+    fn test_build_font_option_escapes_windows_drive_colon() {
+        let option = build_font_option("C:/Windows/Fonts/SegoeUIb.ttf");
+        assert_eq!(option, "fontfile='C\\:/Windows/Fonts/SegoeUIb.ttf':");
+
+        let unix = build_font_option("/System/Library/Fonts/Helvetica.ttc");
+        assert_eq!(unix, "fontfile='/System/Library/Fonts/Helvetica.ttc':");
+
+        // Windows backslash paths are normalised to `/` and the colon escaped.
+        let win_backslash = build_font_option("C:\\Windows\\Fonts\\arialbd.ttf");
+        assert_eq!(win_backslash, "fontfile='C\\:/Windows/Fonts/arialbd.ttf':");
+    }
+
+    #[test]
+    fn test_escape_filter_path_leaves_posix_paths_untouched() {
+        assert_eq!(
+            media::escape_filter_path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        );
     }
 }
