@@ -8,8 +8,62 @@ use serde_json::Value;
 
 use crate::models::MediaProbe;
 
+pub fn resolve_binary(name: &str) -> String {
+    // 1. If command exists directly on PATH
+    if Command::new(name).arg("-version").output().is_ok()
+        || Command::new(name).arg("--version").output().is_ok()
+    {
+        return name.to_string();
+    }
+
+    // 2. Check standard system and package manager directories (macOS Homebrew, MacPorts, Linux)
+    let search_paths = [
+        "/opt/homebrew/bin",
+        "/opt/homebrew/sbin",
+        "/usr/local/bin",
+        "/usr/local/sbin",
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin",
+    ];
+
+    for dir in search_paths {
+        let full_path = Path::new(dir).join(name);
+        if full_path.exists() {
+            if Command::new(&full_path).arg("-version").output().is_ok()
+                || Command::new(&full_path).arg("--version").output().is_ok()
+            {
+                return full_path.to_string_lossy().to_string();
+            }
+        }
+    }
+
+    // 3. Check user home directories
+    if let Some(home) = dirs::home_dir() {
+        let user_paths = [
+            home.join(".cargo/bin").join(name),
+            home.join(".local/bin").join(name),
+            home.join("bin").join(name),
+        ];
+        for user_path in user_paths {
+            if user_path.exists() {
+                if Command::new(&user_path).arg("-version").output().is_ok()
+                    || Command::new(&user_path).arg("--version").output().is_ok()
+                {
+                    return user_path.to_string_lossy().to_string();
+                }
+            }
+        }
+    }
+
+    name.to_string()
+}
+
 pub fn command_exists(name: &str) -> bool {
-    Command::new(name).arg("-version").output().is_ok()
+    let bin = resolve_binary(name);
+    Command::new(&bin).arg("-version").output().map(|o| o.status.success() || !o.stdout.is_empty()).unwrap_or(false)
+        || Command::new(&bin).arg("--version").output().map(|o| o.status.success() || !o.stdout.is_empty()).unwrap_or(false)
 }
 
 pub fn probe_media(path: &str) -> Result<MediaProbe> {
@@ -17,7 +71,8 @@ pub fn probe_media(path: &str) -> Result<MediaProbe> {
         return Err(anyhow!("ffprobe is not installed or not available on PATH"));
     }
 
-    let output = Command::new("ffprobe")
+    let ffprobe_bin = resolve_binary("ffprobe");
+    let output = Command::new(&ffprobe_bin)
         .args([
             "-v",
             "error",
@@ -85,7 +140,8 @@ pub fn extract_audio(source_path: &str, project_dir: &Path) -> Result<PathBuf> {
     std::fs::create_dir_all(project_dir)?;
     let output_path = project_dir.join("transcription_audio.wav");
 
-    let output = Command::new("ffmpeg")
+    let ffmpeg_bin = resolve_binary("ffmpeg");
+    let output = Command::new(&ffmpeg_bin)
         .args(["-y", "-i", source_path, "-vn", "-ac", "1", "-ar", "16000"])
         .arg(&output_path)
         .output()
@@ -123,7 +179,8 @@ pub fn render_flat_clip(
     let probe = probe_media(source_path).ok();
     let has_video = probe.map(|p| p.has_video).unwrap_or(false);
 
-    let mut cmd = Command::new("ffmpeg");
+    let ffmpeg_bin = resolve_binary("ffmpeg");
+    let mut cmd = Command::new(&ffmpeg_bin);
     cmd.args(["-y", "-ss", &start, "-i", source_path, "-t", &duration]);
 
     if has_video {

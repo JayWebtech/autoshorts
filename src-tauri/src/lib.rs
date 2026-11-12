@@ -659,7 +659,129 @@ fn rename_project(
     state.db.rename_project(&project_id, &name).map_err(to_command_error)
 }
 
+fn fix_path_environment() {
+    let mut dirs_to_add: Vec<PathBuf> = vec![
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/opt/homebrew/sbin"),
+        PathBuf::from("/usr/local/bin"),
+        PathBuf::from("/usr/local/sbin"),
+        PathBuf::from("/usr/bin"),
+        PathBuf::from("/bin"),
+        PathBuf::from("/usr/sbin"),
+        PathBuf::from("/sbin"),
+    ];
+
+    if let Some(home) = dirs::home_dir() {
+        dirs_to_add.push(home.join(".cargo/bin"));
+        dirs_to_add.push(home.join(".local/bin"));
+        dirs_to_add.push(home.join("bin"));
+
+        let py_lib = home.join("Library/Python");
+        if py_lib.exists() {
+            if let Ok(entries) = std::fs::read_dir(&py_lib) {
+                for entry in entries.flatten() {
+                    let bin_path = entry.path().join("bin");
+                    if bin_path.exists() {
+                        dirs_to_add.push(bin_path);
+                    }
+                }
+            }
+        }
+    }
+
+    let existing_path = std::env::var_os("PATH").unwrap_or_default();
+    let mut current_paths: Vec<PathBuf> = std::env::split_paths(&existing_path).collect();
+
+    for dir in dirs_to_add {
+        if dir.exists() && !current_paths.contains(&dir) {
+            current_paths.push(dir);
+        }
+    }
+
+    if let Ok(new_path) = std::env::join_paths(current_paths) {
+        std::env::set_var("PATH", new_path);
+    }
+}
+
+#[tauri::command]
+async fn open_file(path: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let p = std::path::Path::new(&path);
+        if !p.exists() {
+            return Err(format!("File does not exist: {}", path));
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to open file: {e}"))?;
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", "start", "", &path])
+                .spawn()
+                .map_err(|e| format!("Failed to open file: {e}"))?;
+        }
+
+        #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+        {
+            std::process::Command::new("xdg-open")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to open file: {e}"))?;
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn show_in_folder(path: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let p = std::path::Path::new(&path);
+        if !p.exists() {
+            return Err(format!("File does not exist: {}", path));
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open")
+                .args(["-R", &path])
+                .spawn()
+                .map_err(|e| format!("Failed to reveal in Finder: {e}"))?;
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("explorer")
+                .args([format!("/select,{}", path)])
+                .spawn()
+                .map_err(|e| format!("Failed to reveal in Explorer: {e}"))?;
+        }
+
+        #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+        {
+            let dir = p.parent().unwrap_or(p);
+            std::process::Command::new("xdg-open")
+                .arg(dir)
+                .spawn()
+                .map_err(|e| format!("Failed to open folder: {e}"))?;
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 pub fn run() {
+    fix_path_environment();
     let _ = dotenvy::dotenv();
 
     tauri::Builder::default()
@@ -692,7 +814,9 @@ pub fn run() {
             delete_project,
             rename_project,
             check_youtube_copyright,
-            download_youtube_video
+            download_youtube_video,
+            open_file,
+            show_in_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoShorts");
@@ -707,7 +831,8 @@ pub struct CopyrightCheckResult {
 #[tauri::command]
 async fn check_youtube_copyright(url: String) -> Result<CopyrightCheckResult, String> {
     tokio::task::spawn_blocking(move || {
-        let output = std::process::Command::new("yt-dlp")
+        let ytdlp_bin = media::resolve_binary("yt-dlp");
+        let output = std::process::Command::new(&ytdlp_bin)
             .args(&["--dump-json", &url])
             .output()
             .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
@@ -742,7 +867,8 @@ async fn download_youtube_video(url: String) -> Result<String, String> {
         let output_template = downloads_dir.join("AutoShorts_%(id)s.%(ext)s");
         let output_template_str = output_template.to_string_lossy().to_string();
 
-        let output = std::process::Command::new("yt-dlp")
+        let ytdlp_bin = media::resolve_binary("yt-dlp");
+        let output = std::process::Command::new(&ytdlp_bin)
             .args(&[
                 "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
                 "--merge-output-format", "mp4",

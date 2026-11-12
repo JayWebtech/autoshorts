@@ -24,6 +24,7 @@ import {
   Cloud,
   Youtube,
   AlertTriangle,
+  FolderOpen,
 } from "lucide-react";
 import "./styles.css";
 
@@ -645,6 +646,22 @@ function App() {
     }
   }
 
+  async function openResultFile(filePath: string) {
+    try {
+      await invoke("open_file", { path: filePath });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function showResultInFolder(filePath: string) {
+    try {
+      await invoke("show_in_folder", { path: filePath });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   if (isOnboarded === null) {
     return (
       <div className="onboarding-loading" style={{ display: 'grid', placeItems: 'center', height: '100vh', background: 'var(--bg-base)' }}>
@@ -1018,10 +1035,18 @@ function App() {
                         <article key={candidate.id} className={`candidate-card ${candidate.selected ? "selected" : ""}`}>
                           {/* 9:16 portrait mockup preview placeholder representing vertical formats */}
                           <div className="portrait-preview-container">
-                            <div className="portrait-preview-mock">
+                            <div
+                              className={`portrait-preview-mock ${isCut ? "interactive" : ""}`}
+                              onClick={() => {
+                                if (isCut && clip?.outputPath) {
+                                  void openResultFile(clip.outputPath);
+                                }
+                              }}
+                              title={isCut ? "Click to play video" : "9:16 Portrait Preview"}
+                            >
                               {isCut ? (
                                 <div className="mock-video-active">
-                                  <Play size={20} className="play-icon-mock" />
+                                  <Play size={20} className="play-icon-mock" fill="currentColor" />
                                 </div>
                               ) : (
                                 <div className="mock-video-inactive">
@@ -1047,6 +1072,28 @@ function App() {
                               <span className={`clip-status ${isCut ? "ready" : clip?.status === "error" ? "error" : ""}`}>
                                 {isCut ? "Cut ready" : clip?.status === "error" ? "Cut failed" : clip?.status ?? "Pending"}
                               </span>
+
+                              {isCut && clip?.outputPath && (
+                                <>
+                                  <button
+                                    className="clip-open-button primary"
+                                    onClick={() => void openResultFile(clip.outputPath!)}
+                                    title="Open and play this video clip"
+                                  >
+                                    <Play size={13} fill="currentColor" />
+                                    Open Clip
+                                  </button>
+                                  <button
+                                    className="clip-open-button"
+                                    onClick={() => void showResultInFolder(clip.outputPath!)}
+                                    title="Reveal file in Finder / Folder"
+                                  >
+                                    <FolderOpen size={13} />
+                                    Finder
+                                  </button>
+                                </>
+                              )}
+
                               <button
                                 className="cut-button"
                                 onClick={() => void cutCandidate(candidate.id)}
@@ -1060,9 +1107,40 @@ function App() {
                                 {renderingCandidateId === candidate.id ? "Cutting..." : isCut ? "Re-cut" : "Cut"}
                               </button>
                             </div>
-                            {clip?.outputPath && <div className="output-path">{clip.outputPath}</div>}
+
+                            {clip?.outputPath && (
+                              <div className="output-path-box">
+                                <div className="output-path-text">{clip.outputPath}</div>
+                                <div className="output-path-actions">
+                                  <button
+                                    className="output-path-link-btn"
+                                    onClick={() => void openResultFile(clip.outputPath!)}
+                                    title="Open and play video"
+                                  >
+                                    <Play size={11} fill="currentColor" /> Open File
+                                  </button>
+                                  <button
+                                    className="output-path-link-btn"
+                                    onClick={() => void showResultInFolder(clip.outputPath!)}
+                                    title="Show in Finder"
+                                  >
+                                    <FolderOpen size={11} /> Reveal in Finder
+                                  </button>
+                                  <button
+                                    className="output-path-link-btn"
+                                    onClick={() => {
+                                      void navigator.clipboard.writeText(clip.outputPath!);
+                                    }}
+                                    title="Copy file path to clipboard"
+                                  >
+                                    <Copy size={11} /> Copy Path
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
                             {clip?.captionAssPath && (
-                              <div className="output-path" style={{ background: "rgba(142, 230, 199, 0.05)", borderColor: "var(--accent-primary)", color: "var(--accent-primary)", marginTop: "4px" }}>
+                              <div className="output-path" style={{ background: "rgba(142, 230, 199, 0.05)", borderColor: "var(--accent-primary)", color: "var(--accent-primary)", marginTop: "6px" }}>
                                 Subtitles: {clip.captionAssPath}
                               </div>
                             )}
