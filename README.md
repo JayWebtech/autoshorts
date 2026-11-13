@@ -1,5 +1,7 @@
 [![Fund my work on FLOSSAfrica](https://flossafrica.com/badge.svg)](https://flossafrica.com/m/jaywebtech?p=autoshorts)
 
+Trade on Bags.fm: https://bags.fm/EPF7HuCUh4KgBFykokstPTR1ESrFPWDm66BDZzCwBAGS
+
 # AutoShorts
 
 AutoShorts is a local-first desktop application for turning long-form video or audio recordings into high-impact, vertical short-form clip candidates (9:16 portrait) with AI-powered viral moment ranking.
