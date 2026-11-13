@@ -966,7 +966,7 @@ fn build_drawtext_filters(
     for path in &font_paths {
         if std::path::Path::new(path).exists() {
             let normalized_path = path.replace('\\', "/");
-            let escaped_path = normalized_path.replace('\'', "'\\''");
+            let escaped_path = normalized_path.replace(':', "\\:").replace('\'', "'\\''");
             font_option = format!("fontfile='{}':", escaped_path);
             break;
         }
@@ -1094,7 +1094,39 @@ mod tests {
 
         if result.contains("fontfile=") {
             assert!(result.contains("fontfile='"));
-            assert!(!result.contains("\\:"));
         }
+    }
+
+    // On Linux a Windows-style path is a relative fixture, so this exercises
+    // the real renderer without touching the host's installed fonts. Run in a
+    // child test process to keep current-directory changes isolated.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn windows_caption_font_keeps_drive_colon() {
+        const FIXTURE: &str = "AUTOSHORTS_CAPTION_FONT_FIXTURE";
+        if let Some(directory) = std::env::var_os(FIXTURE) {
+            std::env::set_current_dir(directory).unwrap();
+            let font = std::path::Path::new("C:/Windows/Fonts/SegoeUIb.ttf");
+            std::fs::create_dir_all(font.parent().unwrap()).unwrap();
+            std::fs::write(font, b"font path fixture").unwrap();
+            let words = vec![TranscriptWord {
+                text: "Hello".into(), start: 0.0, end: 1.0, speaker: None,
+            }];
+            let filter = build_drawtext_filters(&words, 0.0, 2.0, 1080, "classic-outline");
+            assert!(filter.contains("fontfile='C\\:/Windows/Fonts/SegoeUIb.ttf':"), "{filter}");
+            return;
+        }
+        let directory = std::env::temp_dir().join(format!(
+            "autoshorts-font-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let result = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "tests::windows_caption_font_keeps_drive_colon", "--nocapture"])
+            .env(FIXTURE, &directory).output();
+        std::fs::remove_dir_all(directory).unwrap();
+        let output = result.unwrap();
+        assert!(output.status.success(), "{}\n{}",
+            String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
     }
 }
