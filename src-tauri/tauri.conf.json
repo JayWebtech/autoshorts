@@ -20,12 +20,24 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "linux": {
+      "deb": {
+        "depends": ["python3", "python3-venv"]
+      },
+      "rpm": {
+        "depends": ["python3"]
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

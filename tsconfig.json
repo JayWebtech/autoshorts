@@ -10,12 +10,16 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx"
   },
   "include": ["src"],
+  // Testes ficam de fora do `tsc` do build de produção: eles importam
+  // devDependencies (vitest, @testing-library) que podem não existir em
+  // ambientes que só instalam o necessário para empacotar o app.
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**"],
   "references": []
 }

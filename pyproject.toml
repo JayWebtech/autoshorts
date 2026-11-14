@@ -1,0 +1,20 @@
+[project]
+name = "autoshorts"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Leonardo Bezerra",email = "leosoares.bezerra2017@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "openai-whisper (>=20250625,<20250626)"
+]
+
+[tool.poetry]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+

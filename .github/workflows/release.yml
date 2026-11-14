@@ -1,12 +1,61 @@
 name: Release App
 
 on:
+  pull_request:
+    branches:
+      ["main"]
   push:
+    branches:
+      ["main"]
     tags:
       - 'v*' # Triggers on release tags like v0.1.0 or v1.0.0
 
 jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # jsdom 30 pulls in undici 8, which needs Node >= 22.19 (it uses
+      # zlib.createZstdDecompress, absent on Node 20).
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install node modules
+        run: npm ci
+
+      # `tauri::generate_context!` validates `frontendDist: "../dist"`, so the
+      # frontend bundle has to exist before the Rust tests are compiled.
+      - name: Build frontend bundle
+        run: npm run build
+
+      - name: Run frontend tests (Vitest)
+        run: npm test
+
+      - name: Run Rust tests (unit + SQLite integration)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+
   release:
+    # Only real version tags cut a release. On a push to `main` `github.ref_name`
+    # is literally "main", which would create a bogus `main` tag/release.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
     permissions:
       contents: write
     strategy:
@@ -21,7 +70,8 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -33,6 +83,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 
+      # `bun.lock` used to be committed, which made tauri-action pick bun and fail
+      # with "'bun' is not recognized". package.json now pins npm via packageManager.
+      - name: Assert npm is the package manager
+        shell: bash
+        run: |
+          test ! -f bun.lock && test ! -f bun.lockb
+          node -e "const pm=require('./package.json').packageManager||''; if(!pm.startsWith('npm@')) { console.error('packageManager must pin npm, got: '+pm); process.exit(1); }"
+
       - name: Install node modules
         run: npm ci
 
@@ -41,8 +99,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          # Pinned explicitly: tauri-action picks the runner from lockfiles, and a
+          # committed `bun.lock` made it run `bun tauri build` on runners without bun.
+          tauriScript: npm run tauri
           tagName: ${{ github.ref_name }}
           releaseName: 'AutoShorts ${{ github.ref_name }}'
-          releaseBody: 'See release notes for installation details.'
-          releaseDraft: true
+          # `releaseDraft: true` left every build stuck as a draft that was never
+          # published. Publish directly and let GitHub generate the notes from
+          # the commit history.
+          releaseDraft: false
           prerelease: false
+          generateReleaseNotes: true
+        
+        
+
+ 

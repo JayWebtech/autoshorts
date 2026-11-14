@@ -1,17 +1,26 @@
-mod db;
-mod llm;
-mod media;
-mod models;
-mod transcription;
+pub mod autoedit;
+pub mod db;
+pub mod hardware;
+pub mod llm;
+pub mod media;
+pub mod media_server;
+pub mod models;
+pub mod naming;
+pub mod progress;
+pub mod python_env;
+pub mod transcription;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Context, Result};
 use tauri::{Emitter, Manager};
 
 use db::Database;
 use models::{
-    Candidate, EnvironmentStatus, MediaProbe, NormalizedTranscript, Project, ProjectDetail,
+    Candidate, CandidateThumbnail, CaptionCue, CaptionStyleOverride, ClipEdit, ClipEditor,
+    ClipPreview, EnvironmentStatus, MediaProbe, NormalizedTranscript, Project, ProjectDetail,
     Transcript, TranscriptWord,
 };
 
@@ -27,6 +36,26 @@ struct PullProgressPayload {
 struct AppState {
     db: Database,
     data_dir: PathBuf,
+    /// Loopback HTTP server used to hand media files to the webview, which
+    /// cannot open Tauri's `asset://` scheme from its media pipeline.
+    media_server: media_server::MediaServer,
+    /// Per-project preview render slots. The app pre-renders the proxy in the
+    /// background and the editor asks for the same file, so both callers must
+    /// queue instead of running two ffmpeg jobs on one output path.
+    preview_locks: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
+}
+
+impl AppState {
+    fn preview_lock(&self, project_id: &str) -> Arc<Mutex<()>> {
+        let mut locks = self
+            .preview_locks
+            .lock()
+            .expect("preview lock mutex poisoned");
+        locks
+            .entry(project_id.to_string())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    }
 }
 
 #[tauri::command]
@@ -55,11 +84,49 @@ async fn environment_status(state: tauri::State<'_, AppState>) -> Result<Environ
         has_openai_key: std::env::var("OPENAI_API_KEY").is_ok(),
         has_openrouter_key: std::env::var("OPENROUTER_API_KEY").is_ok(),
         has_groq_key: std::env::var("GROQ_API_KEY").is_ok(),
+        has_openai_compatible_key: std::env::var("OPENAI_COMPATIBLE_API_KEY").is_ok()
+            || std::env::var("OPENAI_API_KEY").is_ok(),
+        openai_base_url: std::env::var("OPENAI_BASE_URL")
+            .ok()
+            .filter(|value| !value.trim().is_empty()),
         llm_provider,
         has_local_whisper_model,
         has_ollama,
         has_ytdlp: media::command_exists("yt-dlp"),
+        gpu_accel: hardware::active_video_encoder().is_hardware(),
+        video_encoder: hardware::active_video_encoder().label().to_string(),
     })
+}
+
+#[tauri::command]
+fn python_env_status(state: tauri::State<'_, AppState>) -> python_env::PythonEnvStatus {
+    python_env::status(&state.data_dir)
+}
+
+/// Provisions the managed venv and installs `openai-whisper` into it. Blocking
+/// (pip + a ~1-2 GB PyTorch download), so it runs off the async runtime.
+#[tauri::command]
+async fn install_python_env(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let data_dir = state.data_dir.clone();
+    tokio::task::spawn_blocking(move || python_env::install(&app, &data_dir))
+        .await
+        .map_err(to_command_error)?
+        .map_err(to_command_error)
+}
+
+#[tauri::command]
+fn list_whisper_models() -> Vec<transcription::WhisperModelInfo> {
+    transcription::list_whisper_models()
+}
+
+#[tauri::command]
+async fn download_whisper_model(app: tauri::AppHandle, model_name: String) -> Result<(), String> {
+    transcription::download_whisper_model(app, model_name)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -314,6 +381,7 @@ fn get_project_detail(
 
 #[tauri::command]
 fn probe_project(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     project_id: String,
 ) -> Result<MediaProbe, String> {
@@ -321,16 +389,19 @@ fn probe_project(
         .db
         .get_project(&project_id)
         .map_err(to_command_error)?;
+    progress::emit(&app, "import", "Analyzing media…", None);
     let probe = media::probe_media(&project.source_path).map_err(to_command_error)?;
     state
         .db
         .update_project_status(&project_id, "ingest", probe.duration_sec)
         .map_err(to_command_error)?;
+    progress::finish(&app, "import", "Media ready");
     Ok(probe)
 }
 
 #[tauri::command]
 fn extract_project_audio(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     project_id: String,
 ) -> Result<String, String> {
@@ -338,23 +409,36 @@ fn extract_project_audio(
         .db
         .get_project(&project_id)
         .map_err(to_command_error)?;
-    let audio_path = media::extract_audio(&project.source_path, &project_dir(&state, &project_id))
-        .map_err(to_command_error)?;
+    let progress_app = app.clone();
+    let audio_path = media::extract_audio(
+        &project.source_path,
+        &project_dir(&state, &project_id),
+        move |percentage| {
+            progress::emit(&progress_app, "extract", "Extracting audio…", Some(percentage));
+        },
+    )
+    .map_err(to_command_error)?;
+    progress::finish(&app, "extract", "Audio extracted");
     Ok(audio_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
 async fn transcribe_project(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     project_id: String,
     provider: String,
     api_key: Option<String>,
+    whisper_model: Option<String>,
 ) -> Result<Transcript, String> {
     let db = state.db.clone();
     let data_dir = state.data_dir.clone();
     let project = db.get_project(&project_id).map_err(to_command_error)?;
     db.update_project_status(&project_id, "transcribing", None)
         .map_err(to_command_error)?;
+    let total_duration = media::probe_media(&project.source_path)
+        .ok()
+        .and_then(|probe| probe.duration_sec);
 
     let transcript = match provider.as_str() {
         "deepgram" => {
@@ -364,11 +448,16 @@ async fn transcribe_project(
                     "Set DEEPGRAM_API_KEY or paste an API key to use cloud transcription."
                         .to_string()
                 })?;
+            let extract_app = app.clone();
             let audio_path = media::extract_audio(
                 &project.source_path,
                 &data_dir.join("projects").join(&project_id),
+                move |percentage| {
+                    progress::emit(&extract_app, "extract", "Extracting audio…", Some(percentage));
+                },
             )
             .map_err(to_command_error)?;
+            progress::emit(&app, "transcribe", "Transcribing with Deepgram…", None);
             transcription::transcribe_deepgram(&audio_path.to_string_lossy(), &key)
                 .await
                 .map_err(to_command_error)?
@@ -376,19 +465,40 @@ async fn transcribe_project(
         "local" => {
             let has_whisper = transcription::whisper_cli_exists() || transcription::whisper_python_exists();
             if !has_whisper {
-                return Err("Whisper is not installed. Please install it (e.g., via Homebrew 'brew install whisper-cli' or via Python 'pip3 install openai-whisper').".to_string());
+                return Err("Whisper não está instalado. Abra as configurações e clique em \"Instalar Whisper\" para baixar as dependências Python automaticamente.".to_string());
             }
+            let extract_app = app.clone();
             let audio_path = media::extract_audio(
                 &project.source_path,
                 &data_dir.join("projects").join(&project_id),
+                move |percentage| {
+                    progress::emit(&extract_app, "extract", "Extracting audio…", Some(percentage));
+                },
             )
             .map_err(to_command_error)?;
-            transcription::transcribe_local(&audio_path.to_string_lossy(), &data_dir.to_string_lossy())
-                .await
-                .map_err(to_command_error)?
+            let model = whisper_model.unwrap_or_else(|| "base".to_string());
+            let transcribe_app = app.clone();
+            transcription::transcribe_local(
+                &audio_path.to_string_lossy(),
+                &data_dir.to_string_lossy(),
+                &model,
+                total_duration,
+                Some(Box::new(move |percentage: f64| {
+                    progress::emit(
+                        &transcribe_app,
+                        "transcribe",
+                        "Transcribing audio…",
+                        Some(percentage),
+                    );
+                })),
+            )
+            .await
+            .map_err(to_command_error)?
         }
         other => return Err(format!("Unsupported transcription provider: {other}")),
     };
+
+    progress::finish(&app, "transcribe", "Transcription complete");
 
     let raw_json = serde_json::to_string_pretty(&transcript).map_err(to_command_error)?;
     let saved = db
@@ -424,14 +534,17 @@ fn save_demo_transcript(
 
 #[tauri::command]
 async fn generate_candidates(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     project_id: String,
     api_key: Option<String>,
     provider: Option<String>,
     model_name: Option<String>,
+    base_url: Option<String>,
     _allow_demo: bool,
 ) -> Result<Vec<Candidate>, String> {
     let db = state.db.clone();
+    progress::emit(&app, "moments", "Finding viral moments…", None);
     let transcript = db
         .latest_transcript(&project_id)
         .map_err(to_command_error)?
@@ -493,6 +606,21 @@ async fn generate_candidates(
                 .await
                 .map_err(to_command_error)?
         }
+        "openai-compatible" | "openai_compatible" | "compatible" | "custom" => {
+            // API keys are optional here: local servers (LM Studio, vLLM, llama.cpp) usually need none.
+            let key = api_key
+                .or_else(|| std::env::var("OPENAI_COMPATIBLE_API_KEY").ok())
+                .or_else(|| std::env::var("OPENAI_API_KEY").ok())
+                .filter(|value| !value.trim().is_empty());
+            llm::detect_candidates_with_openai_compatible(
+                &normalized,
+                key.as_deref(),
+                model_name.as_deref(),
+                base_url.as_deref(),
+            )
+            .await
+            .map_err(to_command_error)?
+        }
         _ => {
             let key = api_key
                 .or_else(|| std::env::var("DEEPSEEK_API_KEY").ok())
@@ -512,6 +640,7 @@ async fn generate_candidates(
         .map_err(to_command_error)?;
     db.update_project_status(&project_id, "ready", None)
         .map_err(to_command_error)?;
+    progress::finish(&app, "moments", "Viral moments ready");
     Ok(candidates)
 }
 
@@ -528,7 +657,308 @@ fn set_selected_clip_count(
 }
 
 #[tauri::command]
+fn get_clip_editor(
+    state: tauri::State<'_, AppState>,
+    candidate_id: String,
+) -> Result<ClipEditor, String> {
+    let (candidate, project) = state
+        .db
+        .get_candidate_with_project(&candidate_id)
+        .map_err(to_command_error)?;
+    let edit = state
+        .db
+        .clip_edit(&candidate_id)
+        .map_err(to_command_error)?
+        .unwrap_or_else(|| ClipEdit::default_for(&candidate_id));
+
+    // Saved cues win; otherwise fall back to auto cues from the transcript.
+    let cues = if edit.captions.is_empty() {
+        auto_caption_cues(&state.db, &candidate).unwrap_or_default()
+    } else {
+        edit.captions.clone()
+    };
+
+    let caption_style = edit
+        .caption_style
+        .clone()
+        .or_else(|| project.caption_style.clone())
+        .filter(|style| !style.trim().is_empty())
+        .unwrap_or_else(|| "modern-box".to_string());
+
+    let probe = media::probe_media(&project.source_path).ok();
+
+    Ok(ClipEditor {
+        candidate,
+        source_path: project.source_path,
+        edit,
+        cues,
+        caption_style,
+        source_width: probe.as_ref().and_then(|probe| probe.width),
+        source_height: probe.as_ref().and_then(|probe| probe.height),
+        source_duration_sec: probe
+            .as_ref()
+            .and_then(|probe| probe.duration_sec)
+            .or(project.source_duration),
+        source_video_codec: probe.as_ref().and_then(|probe| probe.video_codec.clone()),
+        source_audio_codec: probe.as_ref().and_then(|probe| probe.audio_codec.clone()),
+    })
+}
+
+/// Produce (and cache) a VP8/Opus proxy of the whole project source.
+///
+/// The editor needs a moving picture before the cut, but webviews only decode
+/// the codecs their platform ships: WebKitGTK on a stock Linux install has no
+/// H.264/AAC decoder, so an MP4 source renders a black frame.
+///
+/// One proxy per project serves every candidate: the editor seeks to the clip
+/// start inside it instead of waiting for a per-clip transcode. The returned
+/// URL goes through the loopback media server because WebKitGTK's media
+/// pipeline cannot open Tauri's `asset://` scheme.
+#[tauri::command]
+async fn prepare_project_preview(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    project_id: String,
+) -> Result<ClipPreview, String> {
+    let db = state.db.clone();
+    let data_dir = state.data_dir.clone();
+    let server = state.media_server.clone();
+    let job = state.preview_lock(&project_id);
+
+    tokio::task::spawn_blocking(move || {
+        let project = db.get_project(&project_id).map_err(to_command_error)?;
+
+        let duration = media::probe_media(&project.source_path)
+            .ok()
+            .and_then(|probe| probe.duration_sec)
+            .unwrap_or(0.0);
+
+        let previews_dir = data_dir.join("projects").join(&project.id).join("previews");
+        let output_path = previews_dir.join("source.webm");
+
+        // A background pre-render may already own this project: wait for it
+        // instead of transcoding the same file twice.
+        let _guard = job.lock().expect("preview job mutex poisoned");
+
+        if !output_path.is_file() {
+            let label = "Preparando pré-visualização…";
+            progress::emit(&app, "preview", label, Some(0.0));
+            media::render_preview_proxy(
+                &project.source_path,
+                &output_path,
+                Some(duration),
+                |percentage| progress::emit(&app, "preview", label, Some(percentage)),
+            )
+            .map_err(|error| error.to_string())?;
+            progress::finish(&app, "preview", label);
+        }
+
+        Ok(output_path)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+    .map(|path| {
+        let url = server.url_for(&path);
+        ClipPreview {
+            path: path.to_string_lossy().to_string(),
+            url,
+            start_sec: 0.0,
+            end_sec: 0.0,
+        }
+    })
+}
+
+/// Produce (and cache) one still frame per candidate for the clip list.
+///
+/// The list used to show a grey `9:16` placeholder; a real frame at 35% of the
+/// window makes moments recognisable at a glance. Frames are cached on disk
+/// and re-rendered only when the clip window moves.
+#[tauri::command]
+async fn prepare_project_thumbnails(
+    state: tauri::State<'_, AppState>,
+    project_id: String,
+) -> Result<Vec<CandidateThumbnail>, String> {
+    let db = state.db.clone();
+    let data_dir = state.data_dir.clone();
+    let server = state.media_server.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let project = db.get_project(&project_id).map_err(to_command_error)?;
+        let candidates = db.list_candidates(&project_id).map_err(to_command_error)?;
+        let thumbs_dir = data_dir
+            .join("projects")
+            .join(&project.id)
+            .join("thumbs");
+        std::fs::create_dir_all(&thumbs_dir).map_err(|error| error.to_string())?;
+
+        let mut thumbnails = Vec::with_capacity(candidates.len());
+        for candidate in candidates {
+            let span = (candidate.end_sec - candidate.start_sec).max(0.0);
+            let time_sec = candidate.start_sec + span * 0.35;
+            let path = thumbs_dir.join(format!("{}.jpg", candidate.id));
+            let cached = path
+                .metadata()
+                .map(|meta| meta.len() > 0)
+                .unwrap_or(false);
+            if !cached {
+                if let Err(error) = media::render_thumbnail(&project.source_path, time_sec, &path) {
+                    eprintln!(
+                        "[thumbnails] skipping {}: {error}",
+                        candidate.id
+                    );
+                    continue;
+                }
+            }
+            let url = server.url_for(&path);
+            thumbnails.push(CandidateThumbnail {
+                candidate_id: candidate.id,
+                path: path.to_string_lossy().to_string(),
+                url,
+                time_sec,
+            });
+        }
+
+        Ok(thumbnails)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// Copy one clip's caption look onto every candidate of the project.
+///
+/// Repeating the same font, colours and box settings on ten clips by hand is
+/// busywork, so the editor offers a single "apply to all" action. Candidates
+/// without a saved edit get one, which also keeps the list badge in sync.
+#[tauri::command]
+fn apply_caption_style_to_project(
+    state: tauri::State<'_, AppState>,
+    project_id: String,
+    caption_style: Option<String>,
+    caption_override: Option<CaptionStyleOverride>,
+) -> Result<Vec<ClipEdit>, String> {
+    let candidates = state
+        .db
+        .list_candidates(&project_id)
+        .map_err(to_command_error)?;
+
+    let mut saved = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        let mut edit = state
+            .db
+            .clip_edit(&candidate.id)
+            .map_err(to_command_error)?
+            .unwrap_or_else(|| ClipEdit::default_for(&candidate.id));
+        edit.caption_style = caption_style.clone();
+        edit.caption_override = caption_override.clone();
+        saved.push(
+            state
+                .db
+                .save_clip_edit(&edit)
+                .map_err(to_command_error)?,
+        );
+    }
+
+    Ok(saved)
+}
+
+/// Move a candidate's clip window, so a cut can be stretched over a whole
+/// sentence instead of stopping mid-word.
+#[tauri::command]
+fn update_candidate_range(
+    state: tauri::State<'_, AppState>,
+    candidate_id: String,
+    start_sec: f64,
+    end_sec: f64,
+) -> Result<Candidate, String> {
+    let candidate = state
+        .db
+        .update_candidate_range(&candidate_id, start_sec, end_sec)
+        .map_err(to_command_error)?;
+
+    // The cached frame was taken inside the old window; drop it so the list
+    // re-renders the thumbnail on its next pass.
+    let _ = std::fs::remove_file(
+        state
+            .data_dir
+            .join("projects")
+            .join(&candidate.project_id)
+            .join("thumbs")
+            .join(format!("{}.jpg", candidate.id)),
+    );
+
+    Ok(candidate)
+}
+
+/// Re-derive transcript captions for an arbitrary window, used when the user
+/// stretches a clip and wants the lines that now fall inside it.
+#[tauri::command]
+fn caption_cues_for_range(
+    state: tauri::State<'_, AppState>,
+    project_id: String,
+    start_sec: f64,
+    end_sec: f64,
+) -> Result<Vec<CaptionCue>, String> {
+    let Some(record) = state
+        .db
+        .latest_transcript(&project_id)
+        .map_err(to_command_error)?
+    else {
+        return Ok(Vec::new());
+    };
+    let normalized: NormalizedTranscript =
+        serde_json::from_str(&record.raw_json).map_err(|error| error.to_string())?;
+    Ok(cues_from_words(&normalized.words, start_sec, end_sec))
+}
+
+#[tauri::command]
+fn save_clip_edit(state: tauri::State<'_, AppState>, edit: ClipEdit) -> Result<ClipEdit, String> {
+    state.db.save_clip_edit(&edit).map_err(to_command_error)
+}
+
+/// Derive editor cues from the latest transcript, three words per line.
+fn auto_caption_cues(db: &Database, candidate: &Candidate) -> Result<Vec<CaptionCue>> {
+    let Some(record) = db.latest_transcript(&candidate.project_id)? else {
+        return Ok(Vec::new());
+    };
+    let normalized: NormalizedTranscript = serde_json::from_str(&record.raw_json)?;
+    Ok(cues_from_words(
+        &normalized.words,
+        candidate.start_sec,
+        candidate.end_sec,
+    ))
+}
+
+/// Chunk transcript words into absolute-time cues inside the clip window.
+fn cues_from_words(words: &[TranscriptWord], start_sec: f64, end_sec: f64) -> Vec<CaptionCue> {
+    words
+        .iter()
+        .filter(|word| word.end > start_sec && word.start < end_sec)
+        .collect::<Vec<_>>()
+        .chunks(3)
+        .filter_map(|chunk| {
+            let first = chunk.first()?;
+            let last = chunk.last()?;
+            let start = first.start.max(start_sec);
+            let end = last.end.min(end_sec);
+            if end <= start {
+                return None;
+            }
+            Some(CaptionCue {
+                start,
+                end,
+                text: chunk
+                    .iter()
+                    .map(|word| word.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            })
+        })
+        .collect()
+}
+
+#[tauri::command]
 async fn render_flat_clip_for_candidate(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     candidate_id: String,
 ) -> Result<String, String> {
@@ -539,82 +969,209 @@ async fn render_flat_clip_for_candidate(
         let (candidate, project) = db
             .get_candidate_with_project(&candidate_id)
             .map_err(to_command_error)?;
+        let edit = db
+            .clip_edit(&candidate_id)
+            .map_err(to_command_error)?
+            .unwrap_or_else(|| ClipEdit::default_for(&candidate_id));
         db
             .update_clip_for_candidate(&candidate_id, "cutting", None, None, None)
             .map_err(to_command_error)?;
+        let clip_label = format!("Rendering clip #{}…", candidate.rank);
+        progress::emit(&app, "cut", clip_label.clone(), Some(0.0));
 
-        let output_path = documents_project_dir(&project)?
-            .join("clips")
-            .join(format!("clip-{:02}_flat.mp4", candidate.rank));
-
-        let mut srt_path = None;
-        let mut drawtext_filters = None;
-
-        let probe = media::probe_media(&project.source_path).ok();
-        let cropped_width = if let Some(p) = &probe {
-            let iw = p.width.unwrap_or(1920) as f64;
-            let ih = p.height.unwrap_or(1080) as f64;
-            let w = (iw.min(ih * 9.0 / 16.0) / 2.0).floor() * 2.0;
-            w as i64
-        } else {
-            1080
-        };
-
-        if let Ok(Some(transcript_record)) = db.latest_transcript(&project.id) {
-            if let Ok(normalized) = serde_json::from_str::<NormalizedTranscript>(&transcript_record.raw_json) {
-                let srt_content = generate_srt(&normalized.words, candidate.start_sec, candidate.end_sec);
-                let clip_srt_path = data_dir.join("projects").join(&project.id).join(format!("clip-{}.srt", candidate.id));
-                if std::fs::write(&clip_srt_path, srt_content).is_ok() {
-                    srt_path = Some(clip_srt_path);
-                }
-                let style = project.caption_style.as_deref().unwrap_or("modern-box");
-                let drawtext = build_drawtext_filters(
-                    &normalized.words,
+        let output_path = match documents_project_dir(&project) {
+            Ok(dir) => {
+                let clips_dir = dir.join("clips");
+                // Name the file after the project, the clip rank and the hook
+                // so the exported videos are identifiable outside the app.
+                // A renamed project wins over the source file stem.
+                let project_label = project
+                    .name
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_string)
+                    .unwrap_or_else(|| project_output_slug(&project));
+                let file_name = naming::clip_file_name(
+                    &project_label,
+                    candidate.rank,
+                    &candidate.hook,
                     candidate.start_sec,
                     candidate.end_sec,
-                    cropped_width,
-                    style,
                 );
-                if !drawtext.is_empty() {
-                    drawtext_filters = Some(drawtext);
+                // Deterministic name on purpose: re-cutting a clip replaces its
+                // previous render instead of piling up `-2`, `-3` duplicates.
+                clips_dir.join(file_name)
+            }
+            Err(error) => {
+                // Surface the failure as a clip error instead of leaving the
+                // candidate stuck in `cutting` with a frozen 0% bar.
+                let _ = db.update_clip_for_candidate(&candidate_id, "error", None, None, Some(&error));
+                return Err(error);
+            }
+        };
+
+        let mut caption_ass_path: Option<std::path::PathBuf> = None;
+
+        // Probe once and reuse the result for the whole render.
+        let probe = media::probe_media(&project.source_path).ok();
+        let has_video = probe.as_ref().map(|probe| probe.has_video).unwrap_or(true);
+        let has_audio = probe
+            .as_ref()
+            .map(|probe| probe.audio_codec.is_some())
+            .unwrap_or(true);
+
+        let caption_style = edit
+            .caption_style
+            .clone()
+            .or_else(|| project.caption_style.clone())
+            .unwrap_or_else(|| "modern-box".to_string());
+        let project_data_dir = data_dir.join("projects").join(&project.id);
+        let _ = std::fs::create_dir_all(&project_data_dir);
+
+        // The transcript feeds both the caption text and the auto-edit speech
+        // map, so parse it once.
+        let normalized = db
+            .latest_transcript(&project.id)
+            .ok()
+            .flatten()
+            .and_then(|record| serde_json::from_str::<NormalizedTranscript>(&record.raw_json).ok());
+
+        // Auto-edit is opt-in per clip. A failure (missing ffmpeg, unreadable
+        // source) degrades to the normal render instead of losing the clip.
+        let auto_edit_plan = edit
+            .auto_edit
+            .clone()
+            .filter(|settings| settings.enabled)
+            .and_then(|settings| {
+                let words = normalized
+                    .as_ref()
+                    .map(|transcript| transcript.words.as_slice())
+                    .unwrap_or(&[]);
+                match autoedit::build_plan(
+                    &project.source_path,
+                    candidate.start_sec,
+                    candidate.end_sec,
+                    &settings,
+                    words,
+                ) {
+                    Ok(plan) if !plan.is_noop() => Some(plan),
+                    Ok(_) => None,
+                    Err(error) => {
+                        eprintln!("[autoshorts] auto-edit skipped: {error}");
+                        None
+                    }
                 }
+            });
+
+        // Captions authored in the editor win; otherwise derive them from the
+        // latest transcript exactly like before. With auto-edit the cues are
+        // rewritten onto the compressed timeline and the ASS window becomes
+        // `0..output_duration`.
+        let mut cues: Vec<CaptionCue> = if !edit.captions.is_empty() {
+            edit.captions.clone()
+        } else {
+            normalized
+                .as_ref()
+                .map(|transcript| {
+                    cues_from_words(&transcript.words, candidate.start_sec, candidate.end_sec)
+                })
+                .unwrap_or_default()
+        };
+        let (caption_start, caption_end) = match auto_edit_plan.as_ref() {
+            Some(plan) => {
+                cues = autoedit::remap_cues(&cues, plan);
+                (0.0, plan.output_duration)
+            }
+            None => (candidate.start_sec, candidate.end_sec),
+        };
+
+        let ass_content = if cues.is_empty() {
+            None
+        } else {
+            // Plain-text sidecar kept for the UI / upload metadata.
+            let srt_content = generate_srt_from_cues(&cues, caption_start, caption_end);
+            let clip_srt_path = project_data_dir.join(format!("clip-{}.srt", candidate.id));
+            let _ = std::fs::write(&clip_srt_path, srt_content);
+
+            // One ASS file replaces the previous drawtext chain: ffmpeg
+            // evaluates a single `ass` filter per frame.
+            Some(build_ass_captions_from_cues(
+                &cues,
+                caption_start,
+                caption_end,
+                &caption_style,
+                edit.caption_override.as_ref(),
+            ))
+        };
+
+        if let Some(ass_content) = ass_content {
+            let clip_ass_path =
+                project_data_dir.join(format!("clip-{:02}_captions.ass", candidate.rank));
+            if std::fs::write(&clip_ass_path, ass_content).is_ok() {
+                caption_ass_path = Some(clip_ass_path);
             }
         }
 
-        match media::render_flat_clip(
-            &project.source_path,
-            candidate.start_sec,
-            candidate.end_sec,
-            &output_path,
-            drawtext_filters.as_deref(),
-        ) {
+        let segments: &[autoedit::RenderSegment] = auto_edit_plan
+            .as_ref()
+            .map(|plan| plan.segments.as_slice())
+            .unwrap_or(&[]);
+
+        let request = media::ClipRenderRequest {
+            source_path: &project.source_path,
+            start_sec: candidate.start_sec,
+            end_sec: candidate.end_sec,
+            output_path: &output_path,
+            has_video,
+            has_audio,
+            ass_path: caption_ass_path.as_deref(),
+            aspect_ratio: &edit.aspect_ratio,
+            crop_x: edit.crop_x,
+            crop_y: edit.crop_y,
+            segments,
+        };
+
+        match media::render_flat_clip(&request, |percentage| {
+            progress::emit(&app, "cut", clip_label.clone(), Some(percentage));
+        }) {
             Ok(path) => {
                 let path_string = path.to_string_lossy().to_string();
-                let srt_string = srt_path.map(|p| p.to_string_lossy().to_string());
+                let ass_string = caption_ass_path
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string());
                 db
                     .update_clip_for_candidate(
                         &candidate_id,
                         "done",
                         Some(&path_string),
-                        srt_string.as_deref(),
+                        ass_string.as_deref(),
                         None,
                     )
                     .map_err(to_command_error)?;
+                progress::finish(&app, "cut", clip_label.clone());
                 Ok(path_string)
             }
             Err(error) => {
                 let err_msg = error.to_string();
-                // Fallback retry rendering without captions overlay on any error
-                match media::render_flat_clip(
-                    &project.source_path,
-                    candidate.start_sec,
-                    candidate.end_sec,
-                    &output_path,
-                    None,
-                ) {
+                // Only retry without captions when captions were actually used:
+                // re-rendering blindly doubled the work on every failure.
+                if caption_ass_path.is_none() {
+                    db
+                        .update_clip_for_candidate(&candidate_id, "error", None, None, Some(&err_msg))
+                        .map_err(to_command_error)?;
+                    return Err(err_msg);
+                }
+
+                let fallback = media::ClipRenderRequest {
+                    ass_path: None,
+                    ..request
+                };
+                match media::render_flat_clip(&fallback, |percentage| {
+                    progress::emit(&app, "cut", clip_label.clone(), Some(percentage));
+                }) {
                     Ok(path) => {
                         let path_string = path.to_string_lossy().to_string();
-                        let srt_string = srt_path.map(|p| p.to_string_lossy().to_string());
                         let warning_msg = format!(
                             "Clip rendered successfully, but captions were skipped. Error: {}",
                             err_msg
@@ -624,10 +1181,11 @@ async fn render_flat_clip_for_candidate(
                                 &candidate_id,
                                 "done",
                                 Some(&path_string),
-                                srt_string.as_deref(),
+                                None,
                                 Some(&warning_msg),
                             )
                             .map_err(to_command_error)?;
+                        progress::finish(&app, "cut", clip_label.clone());
                         Ok(path_string)
                     }
                     Err(retry_err) => {
@@ -659,6 +1217,7 @@ fn rename_project(
     state.db.rename_project(&project_id, &name).map_err(to_command_error)
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _ = dotenvy::dotenv();
 
@@ -671,12 +1230,24 @@ pub fn run() {
                 .context("resolving app data directory")?;
             std::fs::create_dir_all(&data_dir).context("creating app data directory")?;
             std::fs::create_dir_all(data_dir.join("models")).context("creating models directory")?;
+            // Registered before anything can probe for Whisper: the managed
+            // venv is what transcription should prefer over system Python.
+            python_env::register_venv_dir(&data_dir);
             let db = Database::open(&data_dir.join("autoshorts.sqlite"))?;
-            app.manage(AppState { db, data_dir });
+            let media_server =
+                media_server::MediaServer::start().context("starting the media server")?;
+            app.manage(AppState {
+                db,
+                data_dir,
+                media_server,
+                preview_locks: Arc::new(Mutex::new(HashMap::new())),
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             environment_status,
+            list_whisper_models,
+            download_whisper_model,
             pull_ollama_model,
             install_ollama,
             create_project_from_path,
@@ -688,11 +1259,20 @@ pub fn run() {
             save_demo_transcript,
             generate_candidates,
             set_selected_clip_count,
+            get_clip_editor,
+            save_clip_edit,
+            apply_caption_style_to_project,
+            update_candidate_range,
+            caption_cues_for_range,
+            prepare_project_preview,
+            prepare_project_thumbnails,
             render_flat_clip_for_candidate,
             delete_project,
             rename_project,
             check_youtube_copyright,
-            download_youtube_video
+            download_youtube_video,
+            python_env_status,
+            install_python_env
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoShorts");
@@ -734,8 +1314,9 @@ async fn check_youtube_copyright(url: String) -> Result<CopyrightCheckResult, St
 }
 
 #[tauri::command]
-async fn download_youtube_video(url: String) -> Result<String, String> {
+async fn download_youtube_video(app: tauri::AppHandle, url: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
+        progress::emit(&app, "youtube", "Downloading video…", None);
         let downloads_dir = dirs::download_dir()
             .ok_or_else(|| "Could not find Downloads folder".to_string())?;
         
@@ -766,6 +1347,7 @@ async fn download_youtube_video(url: String) -> Result<String, String> {
             return Err("Could not locate downloaded file".to_string());
         }
 
+        progress::finish(&app, "youtube", "Download complete");
         Ok(filepath.to_string())
     })
     .await
@@ -777,11 +1359,23 @@ fn project_dir(state: &AppState, project_id: &str) -> PathBuf {
 }
 
 fn documents_project_dir(project: &Project) -> Result<PathBuf, String> {
-    let documents_dir = dirs::document_dir()
-        .ok_or_else(|| "Could not find your Documents folder for clip output.".to_string())?;
-    Ok(documents_dir
-        .join("AutoShorts")
-        .join(project_output_slug(project)))
+    // Minimal Linux/WSL setups ship without `~/Documents` and without
+    // `~/.config/user-dirs.dirs`, so `dirs::document_dir()` returns `None`.
+    // Failing here aborted the render right after the 0% progress event.
+    let base = dirs::document_dir()
+        .or_else(|| {
+            let candidate = dirs::home_dir()?.join("Documents");
+            std::fs::create_dir_all(&candidate).ok()?;
+            Some(candidate)
+        })
+        .or_else(|| {
+            let fallback = dirs::data_dir()?;
+            std::fs::create_dir_all(&fallback).ok()?;
+            Some(fallback)
+        })
+        .ok_or_else(|| "Could not find a folder to write clips to.".to_string())?;
+
+    Ok(base.join("AutoShorts").join(project_output_slug(project)))
 }
 
 fn project_output_slug(project: &Project) -> String {
@@ -867,10 +1461,23 @@ fn demo_transcript() -> NormalizedTranscript {
     }
 }
 
-fn to_command_error(error: impl std::fmt::Display) -> String {
-    error.to_string()
+fn to_command_error(error: impl Into<anyhow::Error>) -> String {
+    let error = error.into();
+    // `Display` on an `anyhow::Error` prints only the outermost context, so the
+    // user would just see "calling X" with no cause. Walk the chain instead.
+    let mut message = error.to_string();
+    for cause in error.chain().skip(1) {
+        let text = cause.to_string();
+        if text.is_empty() || message.contains(&text) {
+            continue;
+        }
+        message.push_str(": ");
+        message.push_str(&text);
+    }
+    message
 }
 
+#[cfg(test)]
 fn generate_srt(words: &[TranscriptWord], start_sec: f64, end_sec: f64) -> String {
     let mut srt = String::new();
     let mut index = 1;
@@ -908,6 +1515,28 @@ fn generate_srt(words: &[TranscriptWord], start_sec: f64, end_sec: f64) -> Strin
     srt
 }
 
+/// Serialize already-chunked cues as SRT, rebased onto `start_sec`. Cues are
+/// absolute before the auto-edit remap and 0-based after it, so both paths run
+/// through this helper.
+fn generate_srt_from_cues(cues: &[CaptionCue], start_sec: f64, end_sec: f64) -> String {
+    let mut srt = String::new();
+    let mut index = 1;
+
+    for cue in cues {
+        let start_rel = (cue.start - start_sec).max(0.0);
+        let end_rel = (cue.end - start_sec).min(end_sec - start_sec).max(0.0);
+        if end_rel <= start_rel {
+            continue;
+        }
+        srt.push_str(&format!("{index}\n"));
+        srt.push_str(&format!("{}\n", format_srt_time(start_rel, end_rel)));
+        srt.push_str(&format!("{}\n\n", cue.text.trim()));
+        index += 1;
+    }
+
+    srt
+}
+
 fn format_srt_time(start: f64, end: f64) -> String {
     let format_time = |secs: f64| {
         let hours = (secs / 3600.0) as u32;
@@ -919,6 +1548,315 @@ fn format_srt_time(start: f64, end: f64) -> String {
     format!("{} --> {}", format_time(start), format_time(end))
 }
 
+/// ASS timestamps use `H:MM:SS.cc`.
+fn format_ass_time(seconds: f64) -> String {
+    let total = seconds.max(0.0);
+    let hours = (total / 3600.0) as u32;
+    let minutes = ((total % 3600.0) / 60.0) as u32;
+    let secs = total % 60.0;
+    format!("{hours}:{minutes:02}:{secs:05.2}")
+}
+
+/// Pick a font family that ships with the OS; libass falls back to its own
+/// default when the family is missing.
+fn caption_font_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "Segoe UI"
+    } else if cfg!(target_os = "macos") {
+        "Avenir Next"
+    } else {
+        "DejaVu Sans"
+    }
+}
+
+/// Resolved ASS style for the caption line, after preset + user overrides.
+struct AssCaptionStyle {
+    font_family: String,
+    font_size: f64,
+    primary_colour: String,
+    outline_colour: String,
+    back_colour: String,
+    border_style: u8,
+    outline: f64,
+    shadow: f64,
+    bold: bool,
+    margin_v: i64,
+    margin_lr: i64,
+}
+
+/// ASS canvas the styles are authored against; libass scales it to the clip.
+const ASS_CANVAS_WIDTH: f64 = 1080.0;
+const ASS_CANVAS_HEIGHT: f64 = 1920.0;
+
+/// Convert `#RRGGBB` into ASS `&HAABBGGRR`.
+fn ass_colour(hex: &str, alpha: u8) -> Option<String> {
+    let hex = hex.trim().trim_start_matches('#');
+    if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let red = &hex[0..2];
+    let green = &hex[2..4];
+    let blue = &hex[4..6];
+    Some(format!("&H{alpha:02X}{blue}{green}{red}").to_ascii_uppercase())
+}
+
+/// Fold the user's overrides into the preset, field by field.
+fn apply_caption_override(
+    mut style: AssCaptionStyle,
+    over: Option<&crate::models::CaptionStyleOverride>,
+) -> AssCaptionStyle {
+    let Some(over) = over else { return style };
+
+    if let Some(font) = over.font_family.as_deref() {
+        style.font_family = font.to_string();
+    }
+    if let Some(size) = over.font_size {
+        style.font_size = size;
+    }
+    if let Some(colour) = over.text_color.as_deref().and_then(|hex| ass_colour(hex, 0x00)) {
+        style.primary_colour = colour;
+    }
+    if let Some(colour) = over.outline_color.as_deref().and_then(|hex| ass_colour(hex, 0x00)) {
+        style.outline_colour = colour;
+    }
+    if let Some(colour) = over.box_color.as_deref().and_then(|hex| ass_colour(hex, 0x50)) {
+        style.back_colour = colour;
+    }
+    if let Some(border) = over.border_style {
+        style.border_style = border;
+    }
+    if let Some(outline) = over.outline {
+        style.outline = outline;
+    }
+    if let Some(bold) = over.bold {
+        style.bold = bold;
+    }
+    if let Some(position) = over.position {
+        // 0.0 = top, 1.0 = bottom; ASS margins are measured from the bottom.
+        style.margin_v = ((1.0 - position) * (ASS_CANVAS_HEIGHT / 2.0)).round() as i64;
+    }
+    if let Some(width) = over.max_width {
+        let margin = ((1.0 - width) / 2.0 * ASS_CANVAS_WIDTH).round() as i64;
+        style.margin_lr = margin.clamp(0, 540);
+    }
+    style
+}
+
+/// Mirror the previous drawtext presets in ASS, using a 1080x1920 canvas so
+/// libass scales them to whatever resolution the clip is encoded at.
+fn ass_caption_style(name: &str) -> AssCaptionStyle {
+    // Defaults describe the `modern-box` preset.
+    let mut style = AssCaptionStyle {
+        font_family: caption_font_name().to_string(),
+        font_size: 81.0,
+        primary_colour: "&H00FFFFFF".to_string(),
+        outline_colour: "&H00000000".to_string(),
+        back_colour: "&H50000000".to_string(),
+        border_style: 3,
+        outline: 10.0,
+        shadow: 0.0,
+        bold: true,
+        margin_v: 458,
+        margin_lr: 40,
+    };
+
+    match name {
+        "classic-outline" => {
+            style.primary_colour = "&H0000FFFF".to_string(); // yellow
+            style.back_colour = "&H80000000".to_string();
+            style.border_style = 1;
+            style.outline = 5.0;
+            style.shadow = 0.0;
+            style.margin_v = 592;
+        }
+        "minimal-shadow" => {
+            style.back_colour = "&H80000000".to_string();
+            style.border_style = 1;
+            style.outline = 0.0;
+            style.shadow = 3.0;
+            style.margin_v = 496;
+        }
+        "vibrant-cyan" => {
+            style.primary_colour = "&H00FFFF00".to_string();
+            style.back_colour = "&H80000000".to_string();
+            style.border_style = 1;
+            style.outline = 0.0;
+            style.shadow = 3.0;
+            style.margin_v = 496;
+        }
+        "vibrant-yellow-box" => {
+            style.primary_colour = "&H00000000".to_string(); // black on yellow box
+            style.back_colour = "&H1F00FFFF".to_string();
+            style.border_style = 3;
+            style.outline = 10.0;
+            style.shadow = 0.0;
+            style.margin_v = 458;
+        }
+        "vibrant-green" => {
+            style.primary_colour = "&H0014FF39".to_string();
+            style.back_colour = "&H80000000".to_string();
+            style.border_style = 1;
+            style.outline = 4.0;
+            style.shadow = 2.0;
+            style.margin_v = 496;
+        }
+        "vibrant-red" => {
+            style.primary_colour = "&H00303BFF".to_string();
+            style.back_colour = "&H80000000".to_string();
+            style.border_style = 1;
+            style.outline = 4.0;
+            style.shadow = 2.0;
+            style.margin_v = 496;
+        }
+        _ => {}
+    }
+
+    style
+}
+
+fn ass_escape_text(text: &str) -> String {
+    text.chars()
+        .filter(|c| !matches!(c, '{' | '}' | '\\' | '\n' | '\r'))
+        .collect()
+}
+
+/// Build an ASS subtitle file for the clip.
+///
+/// Replaces the previous "one drawtext filter per word pair" approach: ffmpeg
+/// now evaluates a single `ass` filter per frame, which is several times faster
+/// on long clips.
+#[cfg(test)]
+fn build_ass_captions(
+    words: &[TranscriptWord],
+    start_sec: f64,
+    end_sec: f64,
+    caption_style: &str,
+    over: Option<&crate::models::CaptionStyleOverride>,
+) -> String {
+    let mut ass = ass_document_header(caption_style, over);
+    let uppercase = over.and_then(|value| value.uppercase).unwrap_or(true);
+
+    let candidate_words: Vec<&TranscriptWord> = words
+        .iter()
+        .filter(|w| w.end > start_sec && w.start < end_sec)
+        .collect();
+
+    for chunk in candidate_words.chunks(2) {
+        if chunk.is_empty() {
+            continue;
+        }
+        let first = chunk[0];
+        let last = chunk[chunk.len() - 1];
+        let start_rel = (first.start - start_sec).max(0.0);
+        let end_rel = (last.end - start_sec).min(end_sec - start_sec).max(0.0);
+        if end_rel <= start_rel {
+            continue;
+        }
+        let text = chunk
+            .iter()
+            .map(|w| w.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let text = if uppercase { text.to_uppercase() } else { text };
+        push_ass_dialogue(&mut ass, start_rel, end_rel, &text);
+    }
+
+    ass
+}
+
+/// Build an ASS subtitle file from explicit caption cues.
+///
+/// Cues are timed in absolute source seconds; they are filtered to the clip
+/// window, clamped into it, and rendered uppercase like the transcript-derived
+/// captions.
+pub fn build_ass_captions_from_cues(
+    cues: &[CaptionCue],
+    start_sec: f64,
+    end_sec: f64,
+    style_name: &str,
+    over: Option<&crate::models::CaptionStyleOverride>,
+) -> String {
+    let mut ass = ass_document_header(style_name, over);
+    let uppercase = over.and_then(|value| value.uppercase).unwrap_or(true);
+
+    for cue in cues {
+        if cue.end <= start_sec || cue.start >= end_sec {
+            continue;
+        }
+        let text = cue.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        let start_rel = (cue.start - start_sec).max(0.0);
+        let end_rel = cue.end.min(end_sec) - start_sec;
+        if end_rel <= start_rel {
+            continue;
+        }
+        let text = if uppercase {
+            text.to_uppercase()
+        } else {
+            text.to_string()
+        };
+        push_ass_dialogue(&mut ass, start_rel, end_rel, &text);
+    }
+
+    ass
+}
+
+/// Script info + styles + event header shared by every ASS writer.
+fn ass_document_header(
+    caption_style: &str,
+    over: Option<&crate::models::CaptionStyleOverride>,
+) -> String {
+    let style = apply_caption_override(ass_caption_style(caption_style), over);
+    let bold = if style.bold { -1 } else { 0 };
+
+    let mut ass = String::new();
+    ass.push_str("[Script Info]\n");
+    ass.push_str("ScriptType: v4.00+\n");
+    ass.push_str(&format!("PlayResX: {}\n", ASS_CANVAS_WIDTH as i64));
+    ass.push_str(&format!("PlayResY: {}\n", ASS_CANVAS_HEIGHT as i64));
+    ass.push_str("WrapStyle: 2\n");
+    ass.push_str("ScaledBorderAndShadow: yes\n\n");
+
+    ass.push_str("[V4+ Styles]\n");
+    ass.push_str(
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, \
+         BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, \
+         BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n",
+    );
+    ass.push_str(&format!(
+        "Style: Default,{font},{size},{primary},&H000000FF,{outline_c},{back},{bold},0,0,0,\
+         100,100,0,0,{border},{outline_w},{shadow},2,{margin_lr},{margin_lr},{margin_v},1\n\n",
+        font = style.font_family,
+        size = style.font_size.round() as i64,
+        primary = style.primary_colour,
+        outline_c = style.outline_colour,
+        back = style.back_colour,
+        border = style.border_style,
+        outline_w = style.outline,
+        shadow = style.shadow,
+        margin_lr = style.margin_lr,
+        margin_v = style.margin_v,
+    ));
+
+    ass.push_str("[Events]\n");
+    ass.push_str("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n");
+    ass
+}
+
+fn push_ass_dialogue(ass: &mut String, start_rel: f64, end_rel: f64, text: &str) {
+    ass.push_str(&format!(
+        "Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
+        format_ass_time(start_rel),
+        format_ass_time(end_rel),
+        ass_escape_text(text)
+    ));
+}
+
+/// Legacy drawtext builder, kept only as a reference for the old caption
+/// presets. Rendering now burns a single ASS file instead.
+#[allow(dead_code)]
 fn build_drawtext_filters(
     words: &[TranscriptWord],
     start_sec: f64,
@@ -1070,22 +2008,41 @@ mod tests {
     use super::*;
     use crate::models::TranscriptWord;
 
+    fn word(text: &str, start: f64, end: f64) -> TranscriptWord {
+        TranscriptWord {
+            text: text.to_string(),
+            start,
+            end,
+            speaker: Some("S1".to_string()),
+        }
+    }
+
+    fn project(source_path: &str) -> Project {
+        Project {
+            id: "project-id".to_string(),
+            name: None,
+            source_path: source_path.to_string(),
+            source_duration: Some(120.0),
+            status: "ingest".to_string(),
+            transcription_mode: "local".to_string(),
+            caption_style: Some("modern-box".to_string()),
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            updated_at: "2024-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn command_errors_include_the_underlying_cause() {
+        let error = anyhow::anyhow!("connection refused").context("calling endpoint");
+        assert_eq!(
+            to_command_error(error),
+            "calling endpoint: connection refused"
+        );
+    }
+
     #[test]
     fn test_build_drawtext_filters_formatting() {
-        let words = vec![
-            TranscriptWord {
-                text: "Hello".to_string(),
-                start: 0.0,
-                end: 1.0,
-                speaker: None,
-            },
-            TranscriptWord {
-                text: "world".to_string(),
-                start: 1.0,
-                end: 2.0,
-                speaker: None,
-            },
-        ];
+        let words = vec![word("Hello", 0.0, 1.0), word("world", 1.0, 2.0)];
 
         let result = build_drawtext_filters(&words, 0.0, 5.0, 1080, "classic-outline");
         assert!(!result.is_empty());
@@ -1096,5 +2053,210 @@ mod tests {
             assert!(result.contains("fontfile='"));
             assert!(!result.contains("\\:"));
         }
+    }
+
+    #[test]
+    fn format_srt_time_uses_comma_milliseconds() {
+        assert_eq!(format_srt_time(0.0, 1.5), "00:00:00,000 --> 00:00:01,500");
+        assert_eq!(format_srt_time(62.5, 3661.25), "00:01:02,500 --> 01:01:01,250");
+    }
+
+    #[test]
+    fn format_ass_time_uses_centiseconds() {
+        assert_eq!(format_ass_time(0.0), "0:00:00.00");
+        assert_eq!(format_ass_time(62.5), "0:01:02.50");
+        assert_eq!(format_ass_time(3661.5), "1:01:01.50");
+        assert_eq!(format_ass_time(-5.0), "0:00:00.00");
+    }
+
+    #[test]
+    fn generate_srt_chunks_three_words_and_clips_to_window() {
+        let words = vec![
+            word("alpha", 0.0, 0.5),
+            word("beta", 1.0, 1.5),
+            word("gamma", 2.0, 2.5),
+            word("delta", 3.0, 3.5),
+            word("outside", 10.0, 10.5),
+        ];
+
+        let srt = generate_srt(&words, 0.0, 4.0);
+        assert!(srt.starts_with("1\n00:00:00,000 --> 00:00:02,500\nalpha beta gamma\n\n"));
+        assert!(
+            srt.contains("2\n00:00:03,000 --> 00:00:03,500\ndelta\n\n"),
+            "unexpected srt: {srt:?}"
+        );
+        assert!(!srt.contains("outside"));
+    }
+
+    #[test]
+    fn generate_srt_is_empty_without_words_in_window() {
+        let words = vec![word("alpha", 10.0, 11.0)];
+        assert!(generate_srt(&words, 0.0, 5.0).is_empty());
+    }
+
+    #[test]
+    fn ass_escape_text_strips_override_characters() {
+        assert_eq!(ass_escape_text("a{b}c\\d\ne\rf"), "abcdef");
+    }
+
+    #[test]
+    fn build_ass_captions_contains_header_and_uppercase_dialogue() {
+        let words = vec![word("hello", 0.0, 0.5), word("world", 0.5, 1.0)];
+        let ass = build_ass_captions(&words, 0.0, 5.0, "classic-outline", None);
+
+        assert!(ass.contains("[Script Info]"));
+        assert!(ass.contains("PlayResX: 1080"));
+        assert!(ass.contains("PlayResY: 1920"));
+        assert!(ass.contains("Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,HELLO WORLD"));
+    }
+
+    #[test]
+    fn build_ass_captions_skips_degenerate_timings() {
+        let words = vec![word("zero", 1.0, 1.0)];
+        let ass = build_ass_captions(&words, 0.0, 5.0, "modern-box", None);
+        assert!(!ass.contains("Dialogue:"));
+    }
+
+    #[test]
+    fn build_ass_captions_from_cues_uppercases_and_clamps() {
+        let cues = vec![
+            CaptionCue {
+                start: 0.5,
+                end: 2.0,
+                text: "first line".to_string(),
+            },
+            CaptionCue {
+                start: 4.5,
+                end: 9.0,
+                text: "crosses the end".to_string(),
+            },
+        ];
+
+        let ass = build_ass_captions_from_cues(&cues, 1.0, 5.0, "classic-outline", None);
+
+        assert!(ass.contains("[Script Info]"));
+        assert!(ass.contains("Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,FIRST LINE"));
+        assert!(ass.contains("Dialogue: 0,0:00:03.50,0:00:04.00,Default,,0,0,0,,CROSSES THE END"));
+    }
+
+    #[test]
+    fn build_ass_captions_from_cues_skips_cues_outside_window() {
+        let cues = vec![
+            CaptionCue {
+                start: 0.0,
+                end: 1.0,
+                text: "before".to_string(),
+            },
+            CaptionCue {
+                start: 10.0,
+                end: 11.0,
+                text: "after".to_string(),
+            },
+            CaptionCue {
+                start: 2.0,
+                end: 3.0,
+                text: "   ".to_string(),
+            },
+        ];
+
+        let ass = build_ass_captions_from_cues(&cues, 5.0, 8.0, "modern-box", None);
+
+        assert!(!ass.contains("Dialogue:"));
+        assert!(!ass.contains("BEFORE"));
+        assert!(!ass.contains("AFTER"));
+    }
+
+    #[test]
+    fn ass_caption_style_falls_back_to_modern_box() {
+        let style = ass_caption_style("does-not-exist");
+        assert_eq!(style.primary_colour, "&H00FFFFFF");
+        assert_eq!(style.border_style, 3);
+    }
+
+    #[test]
+    fn ass_colour_converts_rgb_to_ass_bgr_order() {
+        assert_eq!(ass_colour("#FF0000", 0x00).as_deref(), Some("&H000000FF"));
+        assert_eq!(ass_colour("00FF00", 0x50).as_deref(), Some("&H5000FF00"));
+        assert_eq!(ass_colour("#0000ff", 0x00).as_deref(), Some("&H00FF0000"));
+        assert_eq!(ass_colour("nope", 0x00), None);
+    }
+
+    #[test]
+    fn caption_override_rewrites_font_colour_and_position() {
+        let over = crate::models::CaptionStyleOverride {
+            font_family: Some("Inter".to_string()),
+            font_size: Some(120.0),
+            text_color: Some("#FF0000".to_string()),
+            outline_color: Some("#00FF00".to_string()),
+            box_color: Some("#0000FF".to_string()),
+            border_style: Some(1),
+            outline: Some(2.0),
+            bold: Some(false),
+            uppercase: Some(false),
+            position: Some(0.0),
+            max_width: Some(0.5),
+        };
+
+        let header = ass_document_header("modern-box", Some(&over));
+        assert!(header.contains("Default,Inter,120,&H000000FF"), "{header}");
+        assert!(header.contains("&H0000FF00"), "{header}");
+        assert!(header.contains("&H50FF0000"), "{header}");
+        // Bold off, outline 1, position 0 (top) -> half canvas margin.
+        assert!(header.contains(",0,0,0,0,100,100,0,0,1,2,0,2,270,270,960,1"), "{header}");
+    }
+
+    #[test]
+    fn caption_override_can_keep_lowercase_text() {
+        let cues = vec![CaptionCue {
+            start: 1.0,
+            end: 2.0,
+            text: "Mixed Case".to_string(),
+        }];
+        let over = crate::models::CaptionStyleOverride {
+            uppercase: Some(false),
+            ..Default::default()
+        };
+        let ass = build_ass_captions_from_cues(&cues, 0.0, 5.0, "modern-box", Some(&over));
+        assert!(ass.contains(",,Mixed Case"), "{ass}");
+        assert!(!ass.contains("MIXED CASE"), "{ass}");
+    }
+
+    #[test]
+    fn project_output_slug_sanitizes_file_stem() {
+        assert_eq!(
+            project_output_slug(&project("/tmp/My Video - Final!.mp4")),
+            "My-Video---Final"
+        );
+        assert_eq!(project_output_slug(&project("/tmp/episode_01.mkv")), "episode_01");
+    }
+
+    #[test]
+    fn project_output_slug_falls_back_to_project_id() {
+        assert_eq!(project_output_slug(&project("/")), "project-id");
+    }
+
+    #[test]
+    fn validate_media_extension_accepts_supported_types_case_insensitively() {
+        for path in ["clip.mp4", "clip.MOV", "audio.mp3", "audio.wav", "audio.m4a"] {
+            assert!(validate_media_extension(path).is_ok(), "{path} should be accepted");
+        }
+    }
+
+    #[test]
+    fn validate_media_extension_rejects_unknown_and_missing_extensions() {
+        let unsupported = validate_media_extension("clip.avi").unwrap_err().to_string();
+        assert!(unsupported.contains("Unsupported file type .avi"));
+
+        let missing = validate_media_extension("clip").unwrap_err().to_string();
+        assert!(missing.contains("does not have an extension"));
+    }
+
+    #[test]
+    fn demo_transcript_has_words_and_segments() {
+        let transcript = demo_transcript();
+        assert!(!transcript.words.is_empty());
+        assert!(!transcript.segments.is_empty());
+        assert!(transcript.duration > 0.0);
+        assert_eq!(transcript.speakers, vec!["A".to_string()]);
     }
 }
