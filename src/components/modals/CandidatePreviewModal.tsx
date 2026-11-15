@@ -47,7 +47,7 @@ interface CandidatePreviewModalProps {
   trimEnd: number;
   setTrimEnd: (val: number | ((prev: number) => number)) => void;
   isSavingTrim: boolean;
-  onSaveTrim: () => Promise<void>;
+  onSaveTrim: (startSec?: number, endSec?: number) => Promise<void>;
   onCutCandidate: (candidateId: string, options?: any) => Promise<void>;
   clipByCandidate: Map<string, Clip>;
   busy: string;
@@ -107,7 +107,7 @@ export function CandidatePreviewModal({
   });
 
   const [ctaText, setCtaText] = useState<string>(() => {
-    return localStorage.getItem("autoshorts_cta_text") || "❤️ ¡Sígueme y dale like!";
+    return localStorage.getItem("autoshorts_cta_text") || "¡Sígueme y dale like!";
   });
 
   const [ctaPosition, setCtaPosition] = useState<"top" | "center" | "bottom">(() => {
@@ -744,7 +744,7 @@ export function CandidatePreviewModal({
                   flexShrink: 0,
                 }}
               >
-                <span>✨ Mostrando Clip Exportado (Incrustado)</span>
+                <span>Mostrando Clip Exportado (Incrustado)</span>
                 <span style={{ fontSize: "0.66rem", opacity: 0.85, fontFamily: "var(--font-mono)" }}>
                   {exportedPath ? exportedPath.split(/[\\/]/).pop() : ""}
                 </span>
@@ -755,9 +755,9 @@ export function CandidatePreviewModal({
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem", padding: "0 2px" }}>
               <div style={{ display: "flex", gap: "3px", background: "var(--bg-surface)", padding: "2px", borderRadius: "6px", border: "1px solid var(--border-default)" }}>
                 {[
-                  { id: "original", label: "🎞️ Original", title: "Mantiene la relación nativa original de la fuente" },
-                  { id: "16:9", label: "🖥️ 16:9", title: "Formato Horizontal YouTube (1920x1080)" },
-                  { id: "9:16", label: "📱 9:16", title: "Formato Vertical Shorts/TikTok (1080x1920 con auto-crop)" },
+                  { id: "original", label: "Original", title: "Mantiene la relación nativa original de la fuente" },
+                  { id: "16:9", label: "16:9", title: "Formato Horizontal YouTube (1920x1080)" },
+                  { id: "9:16", label: "9:16", title: "Formato Vertical Shorts/TikTok (1080x1920 con auto-crop)" },
                 ].map((ar) => {
                   const active = exportAspectRatio === ar.id;
                   return (
@@ -1477,13 +1477,15 @@ export function CandidatePreviewModal({
                         try {
                           localStorage.setItem("autoshorts_candidate_segments_" + candidate.id, JSON.stringify(segments));
                           const activeSubRanges = segments.filter((s) => !s.deleted);
+                          let newStart = trimStart;
+                          let newEnd = trimEnd;
                           if (activeSubRanges.length > 0) {
-                            const newStart = activeSubRanges[0].start;
-                            const newEnd = activeSubRanges[activeSubRanges.length - 1].end;
+                            newStart = activeSubRanges[0].start;
+                            newEnd = activeSubRanges[activeSubRanges.length - 1].end;
                             setTrimStart(newStart);
                             setTrimEnd(newEnd);
                           }
-                          await onSaveTrim();
+                          await onSaveTrim(newStart, newEnd);
                           setSaveFeedback(true);
                           setTimeout(() => setSaveFeedback(false), 2500);
                         } catch (e) {
@@ -1558,14 +1560,14 @@ export function CandidatePreviewModal({
                             cursor: "pointer",
                           }}
                         >
-                          <option value="loud-viral">🔥 Loud Viral (HyperFrames Impact 3D)</option>
-                          <option value="arcade-retro">🎮 Arcade Retro (Gaming HUD Neón)</option>
-                          <option value="cyber-terminal">💻 Cyber Terminal (Matrix Monospace)</option>
-                          <option value="clean-editorial">✨ Clean Editorial (Elegante & Suave)</option>
-                          <option value="tiktok-karaoke">🟡 TikTok Karaoke (Palabra Resaltada)</option>
-                          <option value="modern-box">⬛ Caja Moderna (Fondo Oscuro)</option>
-                          <option value="classic-outline">🟨 Clásico Contorno (Amarillo y Negro)</option>
-                          <option value="minimal-shadow">⬜ Minimalista (Blanco con Sombra)</option>
+                          <option value="loud-viral">Loud Viral (3D Impact)</option>
+                          <option value="arcade-retro">Arcade Retro (Gaming Neón)</option>
+                          <option value="cyber-terminal">Cyber Terminal (Monospace)</option>
+                          <option value="clean-editorial">Clean Editorial (Elegante & Suave)</option>
+                          <option value="tiktok-karaoke">TikTok Karaoke (Palabra Resaltada)</option>
+                          <option value="modern-box">Caja Moderna (Fondo Oscuro)</option>
+                          <option value="classic-outline">Clásico Contorno (Amarillo y Negro)</option>
+                          <option value="minimal-shadow">Minimalista (Blanco con Sombra)</option>
                         </select>
                       </div>
 
@@ -2037,7 +2039,7 @@ export function CandidatePreviewModal({
                           Distribución de líneas:
                         </label>
                         <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
-                          {captionLines === "1" ? "⚡ 1 sola línea fija (estilo TikTok / Shorts)" : "Dividir en hasta 2 líneas"}
+                          {captionLines === "1" ? "1 sola línea fija (estilo TikTok / Shorts)" : "Dividir en hasta 2 líneas"}
                         </span>
                       </div>
                       <div style={{ display: "flex", gap: "0.3rem" }}>
@@ -2149,18 +2151,18 @@ export function CandidatePreviewModal({
                           }}
                         >
                           <option value="" disabled>Elegir sugerencia rápida...</option>
-                          <option value="❤️ ¡Sígueme y dale like!">❤️ ¡Sígueme y dale like!</option>
-                          <option value="🔥 ¡Apóyame con tu follow!">🔥 ¡Apóyame con tu follow!</option>
-                          <option value="🔔 ¡Suscríbete para más clips!">🔔 ¡Suscríbete para más clips!</option>
-                          <option value="💬 ¡Comenta qué opinas!">💬 ¡Comenta qué opinas!</option>
-                          <option value="⭐ ¡Guarda este video!">⭐ ¡Guarda este video!</option>
+                          <option value="¡Sígueme y dale like!">¡Sígueme y dale like!</option>
+                          <option value="¡Apóyame con tu follow!">¡Apóyame con tu follow!</option>
+                          <option value="¡Suscríbete para más clips!">¡Suscríbete para más clips!</option>
+                          <option value="¡Comenta qué opinas!">¡Comenta qué opinas!</option>
+                          <option value="¡Guarda este video!">¡Guarda este video!</option>
                         </select>
                       </div>
                       <input
                         type="text"
                         value={ctaText}
                         onChange={(e) => setCtaText(e.target.value)}
-                        placeholder="Ej. ❤️ ¡Sígueme y dale like!"
+                        placeholder="Ej. ¡Sígueme y dale like!"
                         style={{
                           width: "100%",
                           padding: "0.45rem 0.65rem",
@@ -2192,10 +2194,10 @@ export function CandidatePreviewModal({
                             cursor: "pointer",
                           }}
                         >
-                          <option value="bounce-land">💥 Impacto & Rebote (Bounce Land)</option>
-                          <option value="slide-up">⬆️ Deslizamiento Suave (Slide Up)</option>
-                          <option value="pulse-glow">💓 Latido Neón Continuo (Pulse Glow)</option>
-                          <option value="fade-smooth">✨ Fundido Elegante (Fade Smooth)</option>
+                          <option value="bounce-land">Impacto Dinámico (Bounce Land)</option>
+                          <option value="slide-up">Deslizamiento Suave (Slide Up)</option>
+                          <option value="pulse-glow">Latido Neón (Pulse Glow)</option>
+                          <option value="fade-smooth">Fundido Suave (Fade Smooth)</option>
                         </select>
                       </div>
 
@@ -2479,7 +2481,7 @@ export function CandidatePreviewModal({
                 fontFamily: "var(--font-mono)",
               }}
             >
-              ● Score IA: {Math.round(candidate.score * 10)}/100
+              Score IA: {Math.round(candidate.score * 10)}/100
             </span>
             <p
               style={{

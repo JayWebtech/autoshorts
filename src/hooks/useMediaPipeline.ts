@@ -123,17 +123,17 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
     }
   }, [detail?.transcript]);
 
-  const selectedCount = useMemo(() => {
-    return detail?.candidates.filter((candidate) => candidate.selected).length ?? 0;
+  const selectedCandidates = useMemo(() => {
+    return detail?.candidates.filter((candidate) => candidate.selected && !candidate.dismissed) ?? [];
   }, [detail?.candidates]);
+
+  const selectedCount = useMemo(() => {
+    return selectedCandidates.length;
+  }, [selectedCandidates]);
 
   const clipByCandidate = useMemo(() => {
     return new Map(detail?.clips.map((clip) => [clip.candidateId, clip]) ?? []);
   }, [detail?.clips]);
-
-  const selectedCandidates = useMemo(() => {
-    return detail?.candidates.filter((candidate) => candidate.selected) ?? [];
-  }, [detail?.candidates]);
 
   const selectedCutCount = useMemo(() => {
     return selectedCandidates.filter((candidate) => {
@@ -466,23 +466,29 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
     setTrimEnd(candidate.endSec);
   }, []);
 
-  const saveCandidateTrim = useCallback(async () => {
-    if (!previewCandidate || !detail) return;
-    try {
-      setIsSavingTrim(true);
-      const updated = await invoke<Candidate>("update_candidate_trim", {
-        candidateId: previewCandidate.id,
-        startSec: trimStart,
-        endSec: trimEnd,
-      });
-      setPreviewCandidate(updated);
-      await refresh(detail.project.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsSavingTrim(false);
-    }
-  }, [previewCandidate, detail, trimStart, trimEnd, refresh, setError]);
+  const saveCandidateTrim = useCallback(
+    async (startSec?: number, endSec?: number, candidateId?: string) => {
+      const targetId = candidateId || previewCandidate?.id;
+      if (!targetId || !detail) return;
+      const effStart = startSec !== undefined ? startSec : trimStart;
+      const effEnd = endSec !== undefined ? endSec : trimEnd;
+      try {
+        setIsSavingTrim(true);
+        const updated = await invoke<Candidate>("update_candidate_trim", {
+          candidateId: targetId,
+          startSec: effStart,
+          endSec: effEnd,
+        });
+        setPreviewCandidate(updated);
+        await refresh(detail.project.id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setIsSavingTrim(false);
+      }
+    },
+    [previewCandidate, detail, trimStart, trimEnd, refresh, setError]
+  );
 
   const updateClipCount = useCallback(
     async (count: number) => {
@@ -505,7 +511,9 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
       if (!detail) return;
       const prevCandidates = detail.candidates;
       const updatedCandidates = detail.candidates.map((c) =>
-        c.id === candidateId ? { ...c, dismissed } : c
+        c.id === candidateId
+          ? { ...c, dismissed, selected: dismissed ? false : c.selected }
+          : c
       );
       setDetail({ ...detail, candidates: updatedCandidates });
 
@@ -610,6 +618,7 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
+        throw err;
       } finally {
         setRenderingCandidateId(null);
         setBusy("idle");
@@ -628,13 +637,64 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
       const burnSubtitles = savedBurn !== null ? savedBurn === "true" : true;
       const captionStyle = localStorage.getItem("autoshorts_caption_style") || "tiktok-karaoke";
       const captionPosition = (localStorage.getItem("autoshorts_caption_position") as "bottom" | "center" | "top") || "bottom";
+      const captionColor = localStorage.getItem("autoshorts_caption_color") || "#ffffff";
+      const captionHighlight = localStorage.getItem("autoshorts_caption_highlight") || "#facc15";
+      const captionLines = (localStorage.getItem("autoshorts_caption_lines") as "1" | "2") || "1";
+
       const ctaEnabled = localStorage.getItem("autoshorts_cta_enabled") === "true";
-      const ctaText = localStorage.getItem("autoshorts_cta_text") || "❤️ ¡Sígueme y dale like!";
+      const ctaText = localStorage.getItem("autoshorts_cta_text") || "¡Sígueme y dale like!";
       const ctaPosition = (localStorage.getItem("autoshorts_cta_position") as "top" | "center" | "bottom") || "top";
       const ctaAnimation = localStorage.getItem("autoshorts_cta_animation") || "bounce-land";
 
+      const isVert =
+        clipAspectRatio === "9:16" ||
+        (clipAspectRatio === "original" && (detail.project.sourceHeight || 0) > (detail.project.sourceWidth || 0));
+      const suffix = isVert ? "_v" : "_h";
+
+      const savedCapX = localStorage.getItem(`autoshorts_caption_x${suffix}`);
+      const savedCapY = localStorage.getItem(`autoshorts_caption_y${suffix}`);
+      const savedCapFS = localStorage.getItem("autoshorts_caption_font_size");
+      const savedCapAlignH = localStorage.getItem("autoshorts_caption_align_h");
+
+      const savedCtaX = localStorage.getItem(`autoshorts_cta_x${suffix}`);
+      const savedCtaY = localStorage.getItem(`autoshorts_cta_y${suffix}`);
+      const savedCtaScale = localStorage.getItem("autoshorts_cta_scale");
+
+      const effCaptionX = savedCapX !== null ? Number(savedCapX) : (isVert ? 540 : 960);
+      const effCaptionY = savedCapY !== null ? Number(savedCapY) : (isVert ? 1680 : 920);
+      const effCaptionFS = savedCapFS !== null ? Number(savedCapFS) : (isVert ? 62 : 50);
+      const effCaptionAlignH = savedCapAlignH || "center";
+
+      const effCtaX = savedCtaX !== null ? Number(savedCtaX) : (isVert ? 540 : 960);
+      const effCtaY = savedCtaY !== null ? Number(savedCtaY) : (isVert ? 280 : 120);
+      const effCtaScale = savedCtaScale !== null ? Number(savedCtaScale) / 100 : 1.0;
+
       for (const candidate of selectedCandidates) {
         setRenderingCandidateId(candidate.id);
+
+        let activeSubRanges: { start: number; end: number }[] | undefined = undefined;
+        let effStart = candidate.startSec;
+        let effEnd = candidate.endSec;
+
+        try {
+          const rawSegments = localStorage.getItem("autoshorts_candidate_segments_" + candidate.id);
+          if (rawSegments) {
+            const parsed = JSON.parse(rawSegments);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const nonDeleted = parsed.filter((s: any) => !s.deleted);
+              if (nonDeleted.length > 0) {
+                effStart = nonDeleted[0].start;
+                effEnd = nonDeleted[nonDeleted.length - 1].end;
+                if (nonDeleted.length > 1) {
+                  activeSubRanges = nonDeleted.map((s: any) => ({ start: s.start, end: s.end }));
+                }
+              }
+            }
+          }
+        } catch {
+          // ignore parsing error and keep defaults
+        }
+
         await invoke<string>("render_flat_clip_for_candidate", {
           candidateId: candidate.id,
           outputDir: customOutputDir || null,
@@ -642,10 +702,23 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           burnSubtitles,
           captionStyle,
           captionPosition,
+          captionColor,
+          captionHighlight,
+          captionLines,
+          captionX: effCaptionX,
+          captionY: effCaptionY,
+          captionFontSize: effCaptionFS,
+          captionAlignH: effCaptionAlignH,
           ctaEnabled,
           ctaText,
           ctaPosition,
           ctaAnimation,
+          ctaX: effCtaX,
+          ctaY: effCtaY,
+          ctaScale: effCtaScale,
+          startSec: effStart,
+          endSec: effEnd,
+          ...(activeSubRanges ? { subRanges: activeSubRanges } : {}),
         });
       }
     } catch (err) {

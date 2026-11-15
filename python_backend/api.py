@@ -995,7 +995,14 @@ class Api:
     def toggle_candidate_dismissed(self, args: Any) -> bool:
         candidate_id = args.get("candidateId") if isinstance(args, dict) else args
         dismissed = bool(args.get("dismissed", True)) if isinstance(args, dict) else True
-        return self.db.toggle_candidate_dismissed(candidate_id, dismissed)
+        res = self.db.toggle_candidate_dismissed(candidate_id, dismissed)
+        try:
+            cand, proj = self.db.get_candidate_with_project(candidate_id)
+            if proj and proj.get("id"):
+                sync_project_to_disk(self.db, proj["id"])
+        except Exception as e:
+            print(f"Warning syncing project after dismiss: {e}")
+        return res
 
     def select_output_directory(self, _args: Any = None) -> Optional[str]:
         if not self._window:
@@ -1114,103 +1121,140 @@ class Api:
         subtitle_filter = None
         srt_path = None
         cta_badge_path = None
+        badge_file: Optional[Path] = None
+        exported_ass_path: Optional[Path] = None
 
-        # 1. Generate high-fidelity CTA badge PNG if enabled
-        if cta_enabled and cta_text and cta_text.strip():
-            try:
-                badge_file = out_dir / f"{base_name}_cta.png"
-                generate_cta_badge_image(
-                    text=cta_text,
-                    output_path=str(badge_file),
-                    is_vertical=is_vert_video,
-                    scale_factor=cta_scale
-                )
-                if badge_file.exists():
-                    cta_badge_path = badge_file
-            except Exception as e:
-                print(f"Warning generating CTA badge: {e}")
-
-        # 2. Generate Subtitles
-        transcript_record = self.db.latest_transcript(project["id"])
-        if transcript_record:
-            try:
-                normalized = json.loads(transcript_record["rawJson"])
-                words = normalized.get("words", [])
-                if not words and "segments" in normalized:
-                    words = rebuild_words_from_segments(normalized["segments"])
-
-                srt_content = generate_srt(words, start_sec, end_sec, sub_ranges=sub_ranges)
-
-                # Always export the .srt alongside the .mp4 in the user's export folder!
-                with open(exported_srt_path, "w", encoding="utf-8") as f:
-                    f.write(srt_content)
-                srt_path = str(exported_srt_path)
-
-                # If subtitles are burned
-                if burn_subtitles and caption_style != "none":
-                    ass_content = generate_ass_subtitles(
-                        words=words,
-                        start_sec=start_sec,
-                        end_sec=end_sec,
-                        caption_style=caption_style,
-                        position=caption_position,
-                        aspect_ratio=ass_aspect_ratio,
-                        primary_color_hex=caption_color,
-                        highlight_color_hex=caption_highlight,
-                        single_line=single_line,
-                        sub_ranges=sub_ranges,
-                        pos_x=caption_x,
-                        pos_y=caption_y,
-                        font_size_override=caption_font_size,
-                        align_h=caption_align_h,
-                        source_width=src_w,
-                        source_height=src_h
+        try:
+            # 1. Generate high-fidelity CTA badge PNG if enabled
+            if cta_enabled and cta_text and cta_text.strip():
+                try:
+                    badge_file = out_dir / f"{base_name}_cta.png"
+                    generate_cta_badge_image(
+                        text=cta_text,
+                        output_path=str(badge_file),
+                        is_vertical=is_vert_video,
+                        scale_factor=cta_scale
                     )
-                    if ass_content:
-                        exported_ass_path = out_dir / f"{base_name}.ass"
-                        with open(exported_ass_path, "w", encoding="utf-8") as f:
-                            f.write(ass_content)
-                        # Escape Windows path for ffmpeg ass filter
-                        ass_posix = exported_ass_path.resolve().as_posix()
-                        drive = ass_posix[0]
-                        rest = ass_posix[2:].replace("'", r"'\''")
-                        subtitle_filter = f"ass='{drive}\\:{rest}'"
+                    if badge_file.exists():
+                        cta_badge_path = badge_file
+                except Exception as e:
+                    print(f"Warning generating CTA badge: {e}")
+
+            # 2. Generate Subtitles
+            transcript_record = self.db.latest_transcript(project["id"])
+            if transcript_record:
+                try:
+                    normalized = json.loads(transcript_record["rawJson"])
+                    words = normalized.get("words", [])
+                    if not words and "segments" in normalized:
+                        words = rebuild_words_from_segments(normalized["segments"])
+
+                    srt_content = generate_srt(words, start_sec, end_sec, sub_ranges=sub_ranges)
+
+                    # Always export the .srt alongside the .mp4 in the user's export folder!
+                    with open(exported_srt_path, "w", encoding="utf-8") as f:
+                        f.write(srt_content)
+                    srt_path = str(exported_srt_path)
+
+                    # If subtitles are burned
+                    if burn_subtitles and caption_style != "none":
+                        ass_content = generate_ass_subtitles(
+                            words=words,
+                            start_sec=start_sec,
+                            end_sec=end_sec,
+                            caption_style=caption_style,
+                            position=caption_position,
+                            aspect_ratio=ass_aspect_ratio,
+                            primary_color_hex=caption_color,
+                            highlight_color_hex=caption_highlight,
+                            single_line=single_line,
+                            sub_ranges=sub_ranges,
+                            pos_x=caption_x,
+                            pos_y=caption_y,
+                            font_size_override=caption_font_size,
+                            align_h=caption_align_h,
+                            source_width=src_w,
+                            source_height=src_h
+                        )
+                        if ass_content:
+                            exported_ass_path = out_dir / f"{base_name}.ass"
+                            with open(exported_ass_path, "w", encoding="utf-8") as f:
+                                f.write(ass_content)
+                            # Escape Windows path for ffmpeg ass filter
+                            ass_posix = exported_ass_path.resolve().as_posix()
+                            drive = ass_posix[0]
+                            rest = ass_posix[2:].replace("'", r"'\''")
+                            subtitle_filter = f"ass='{drive}\\:{rest}'"
+                except Exception as e:
+                    print(f"Warning building captions: {e}")
+
+            rendered_path = render_flat_clip(
+                source_path=project["sourcePath"],
+                start_sec=start_sec,
+                end_sec=end_sec,
+                output_path=output_path,
+                drawtext_filters=drawtext_filters,
+                aspect_ratio=aspect_ratio,
+                subtitle_filter=subtitle_filter,
+                cta_badge_path=cta_badge_path,
+                cta_position=cta_position,
+                caption_position=caption_position,
+                cta_animation=cta_animation,
+                sub_ranges=sub_ranges,
+                transition=transition,
+                target_fps=target_fps,
+                cta_x=cta_x,
+                cta_y=cta_y
+            )
+
+            self.db.update_clip_for_candidate(
+                candidate_id=candidate_id,
+                status="done",
+                output_path=str(rendered_path),
+                caption_path=srt_path
+            )
+            log_buffer.push(f"[Exportación] Clip completado y registrado en proyecto: {base_name}.mp4")
+            try:
+                sync_project_to_disk(self.db, project["id"])
             except Exception as e:
-                print(f"Warning building captions: {e}")
-
-        rendered_path = render_flat_clip(
-            source_path=project["sourcePath"],
-            start_sec=start_sec,
-            end_sec=end_sec,
-            output_path=output_path,
-            drawtext_filters=drawtext_filters,
-            aspect_ratio=aspect_ratio,
-            subtitle_filter=subtitle_filter,
-            cta_badge_path=cta_badge_path,
-            cta_position=cta_position,
-            caption_position=caption_position,
-            cta_animation=cta_animation,
-            sub_ranges=sub_ranges,
-            transition=transition,
-            target_fps=target_fps,
-            cta_x=cta_x,
-            cta_y=cta_y
-        )
-
-        self.db.update_clip_for_candidate(
-            candidate_id=candidate_id,
-            status="done",
-            output_path=str(rendered_path),
-            caption_path=srt_path
-        )
-        log_buffer.push(f"[Exportación] Clip completado y registrado en proyecto: {base_name}.mp4")
-        return str(rendered_path)
+                print(f"Warning syncing project on export: {e}")
+            return str(rendered_path)
+        except Exception as e:
+            err_msg = str(e)
+            log_buffer.push(f"[Exportación ERROR] Falló exportación de clip #{candidate.get('rank', 1)}: {err_msg}")
+            try:
+                self.db.update_clip_for_candidate(
+                    candidate_id=candidate_id,
+                    status="error",
+                    render_log=err_msg
+                )
+            except Exception:
+                pass
+            raise
+        finally:
+            if badge_file and badge_file.exists():
+                try:
+                    badge_file.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            if exported_ass_path and exported_ass_path.exists():
+                try:
+                    exported_ass_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
 
     def update_candidate_trim(self, args: Any) -> Dict[str, Any]:
         candidate_id = args.get("candidateId")
         start_sec = float(args.get("startSec", 0.0))
         end_sec = float(args.get("endSec", 0.0))
-        return self.db.update_candidate_trim(candidate_id, start_sec, end_sec)
+        res = self.db.update_candidate_trim(candidate_id, start_sec, end_sec)
+        try:
+            cand, proj = self.db.get_candidate_with_project(candidate_id)
+            if proj and proj.get("id"):
+                sync_project_to_disk(self.db, proj["id"])
+        except Exception as e:
+            print(f"Warning syncing project after trim: {e}")
+        return res
 
     def delete_project(self, args: Any):
 

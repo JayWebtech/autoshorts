@@ -821,6 +821,9 @@ def call_lmstudio(
         if "Model unloaded" in err_text or "unloaded by user" in err_text:
             raise ModelFatalError("El modelo fue descargado en LM Studio o la petición fue anulada por el servidor.")
 
+        if "no model" in err_text.lower() or "not loaded" in err_text.lower():
+            raise ModelFatalError("No hay ningún modelo cargado en memoria en LM Studio. Abre LM Studio y carga tu modelo preferido o presiona 'Cargar RAM'.")
+
         raise RuntimeError(f"LM Studio call failed ({resp.status_code}): {err_text}")
 
     data = resp.json()
@@ -1331,7 +1334,10 @@ Escribe en Español natural, directo y sin guiones largos (em dashes)."""
             }
             resp = requests.post(url, json=payload, timeout=120)
             if not resp.ok:
-                raise RuntimeError(f"LM Studio call failed ({resp.status_code}): {resp.text}")
+                err_text = resp.text
+                if "no model" in err_text.lower() or "not loaded" in err_text.lower():
+                    raise ModelFatalError("No hay ningún modelo cargado en memoria en LM Studio. Abre LM Studio y carga tu modelo preferido o presiona 'Cargar RAM'.")
+                raise RuntimeError(f"LM Studio call failed ({resp.status_code}): {err_text}")
             choices = resp.json().get("choices", [])
             content = choices[0]["message"]["content"] if choices else ""
             if "<think>" in content:

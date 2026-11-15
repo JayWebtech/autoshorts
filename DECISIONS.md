@@ -250,3 +250,27 @@
 
 
 
+
+
+## D-030: Auditoría Senior — Sincronización en Lote, Descarte Atómico, Resiliencia ante Errores y Pulido Antislop
+- **Decisión:**
+  1. **Sincronización Completa de Coordenadas, Estilos y Cortes en Lote (`src/hooks/useMediaPipeline.ts`):**
+     - En `cutSelected`, recuperar de `localStorage` para cada candidato seleccionado sus coordenadas proporcionales de subtítulos y CTA según orientación (`_v` vs `_h`), colores, escala y segmentos internos estilo CapCut (`autoshorts_candidate_segments_${candidate.id}`), propagando la carga completa de parámetros a `render_flat_clip_for_candidate`.
+  2. **Descarte Atómico y Exclusión de Descartados en Slider (`python_backend/db.py`, `src/hooks/useMediaPipeline.ts`, `CandidatePanel.tsx`):**
+     - En `db.py` (`toggle_candidate_dismissed`), limpiar automáticamente el estado de selección con `selected = CASE WHEN ? = 1 THEN 0 ELSE selected END`.
+     - En `db.py` (`set_selected_clip_count`), añadir la cláusula `AND (dismissed = 0 OR dismissed IS NULL)` para prevenir que el slider re-seleccione momentos descartados.
+     - En `useMediaPipeline.ts`, derivar `selectedCandidates` y `selectedCount` filtrando estrictamente `candidate.selected && !candidate.dismissed`.
+  3. **Solución a Condición de Carrera en Guardado de Trim y Contratos de Tipos (`CandidatePreviewModal.tsx`, `ModalContainer.tsx`, `useMediaPipeline.ts`):**
+     - Definir la firma de `saveCandidateTrim` como `(startSec?: number, endSec?: number, candidateId?: string)` y tipar las interfaces de props a `(startSec?: number, endSec?: number) => Promise<void>`.
+     - Invocar `await onSaveTrim(newStart, newEnd)` de forma síncrona en el modal, eliminando la dependencia del ciclo asíncrono de renderizado de React.
+  4. **Resiliencia de Exportación, Rollback de Estado y Limpieza de Temporales (`python_backend/api.py`, `useMediaPipeline.ts`):**
+     - En `render_flat_clip_for_candidate`, envolver la ejecución en `try...except...finally`: ante fallos de FFmpeg actualizar SQLite a `status="error"`, registrar en buffer de logs y propagar la excepción.
+     - En el bloque `finally:`, eliminar de forma segura los archivos temporales intermedios (`*_cta.png`, `*.ass`) mediante `unlink(missing_ok=True)`, manteniendo intactos el video `.mp4` y el `.srt`.
+     - En `cutCandidate`, re-lanzar `throw err` para que el modal capture el error y no se cierre prematuramente mediante `onClose()`. En `CandidatePanel.tsx`, agregar `.catch(() => {})` para mitigar advertencias de promesas no capturadas.
+  5. **Diagnóstico Amigable ante LM Studio sin Modelo Cargado (`python_backend/llm.py`):**
+     - Capturar respuestas HTTP 400 con `"no model"` o `"not loaded"` en `call_lmstudio` y `generate_social_copy_with_llm`, lanzando `ModelFatalError` con instrucción clara para el usuario.
+  6. **Persistencia Continua de Archivo de Proyecto (`python_backend/api.py`):**
+     - Invocar `sync_project_to_disk` tras exportar clips, actualizar trim o alternar el descarte de candidatos.
+  7. **Antislop UI Integral en Modal de Previsualización (`CandidatePreviewModal.tsx`):**
+     - Erradicar emojis decorativos en formatos, presets de estilo de subtítulos, animaciones y opciones de CTA.
+- **Motivo:** Garantizar que los clips cortados en lote respeten rigurosamente los ajustes finos del creador, eliminar estados inconsistentes en base de datos y disco, proteger la experiencia de usuario ante fallos de red/render y ofrecer una interfaz sobria y profesional de grado NLE.

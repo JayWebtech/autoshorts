@@ -684,26 +684,26 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
               </button>
             </div>
 
-            {filterTab === "all" && (
+            {(filterTab === "all" || filterTab === "pending") && (
               <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flex: 1, justifyContent: "flex-end", minWidth: "220px" }}>
                 <SlidersHorizontal size={14} color="var(--text-secondary)" />
                 <input
                   type="range"
                   min="0"
-                  max={detail.candidates.length}
+                  max={activeCandidates.length}
                   value={selectedCount}
                   onChange={(event) => void updateClipCount(Number(event.target.value))}
                   style={{ width: "90px", accentColor: "#fafafa" }}
                 />
                 <strong style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "0.76rem" }}>
-                  {selectedCount}/{detail.candidates.length}
+                  {selectedCount}/{activeCandidates.length}
                 </strong>
                 <button
                   className="icon-button"
                   style={{ fontSize: "0.72rem", padding: "0.2rem 0.5rem", whiteSpace: "nowrap" }}
-                  onClick={() => void updateClipCount(selectedCount === detail.candidates.length ? 0 : detail.candidates.length)}
+                  onClick={() => void updateClipCount(selectedCount === activeCandidates.length ? 0 : activeCandidates.length)}
                 >
-                  {selectedCount === detail.candidates.length ? "Deseleccionar" : "Todos"}
+                  {selectedCount === activeCandidates.length ? "Deseleccionar" : "Todos"}
                 </button>
               </div>
             )}
@@ -1197,7 +1197,7 @@ export const CandidatePanel: React.FC<CandidatePanelProps> = ({
                     </button>
                     <button
                       className="cut-button"
-                      onClick={() => void cutCandidate(candidate.id)}
+                      onClick={() => { void Promise.resolve(cutCandidate(candidate.id)).catch(() => {}); }}
                       disabled={busy !== "idle" || !environment?.hasFfmpeg}
                     >
                       {renderingCandidateId === candidate.id ? <Loader2 className="spin" size={13} /> : <Scissors size={13} />}

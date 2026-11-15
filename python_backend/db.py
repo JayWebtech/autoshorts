@@ -408,7 +408,7 @@ class Database:
             conn.execute("UPDATE candidates SET selected = 0 WHERE project_id = ?", (project_id,))
             if count > 0:
                 conn.execute(
-                    f"UPDATE candidates SET selected = 1 WHERE id IN (SELECT id FROM candidates WHERE project_id = ? ORDER BY rank ASC LIMIT {count})",
+                    f"UPDATE candidates SET selected = 1 WHERE id IN (SELECT id FROM candidates WHERE project_id = ? AND (dismissed = 0 OR dismissed IS NULL) ORDER BY rank ASC LIMIT {count})",
                     (project_id,)
                 )
             conn.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (now, project_id))
@@ -503,9 +503,10 @@ class Database:
 
     def toggle_candidate_dismissed(self, candidate_id: str, dismissed: bool) -> bool:
         with self.get_conn() as conn:
+            d_val = 1 if dismissed else 0
             conn.execute(
-                "UPDATE candidates SET dismissed = ? WHERE id = ?",
-                (1 if dismissed else 0, candidate_id)
+                "UPDATE candidates SET dismissed = ?, selected = CASE WHEN ? = 1 THEN 0 ELSE selected END WHERE id = ?",
+                (d_val, d_val, candidate_id)
             )
         return True
 

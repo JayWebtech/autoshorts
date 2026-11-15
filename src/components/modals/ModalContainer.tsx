@@ -103,7 +103,7 @@ export interface ModalContainerProps {
   trimEnd: number;
   setTrimEnd: (val: number | ((prev: number) => number)) => void;
   isSavingTrim: boolean;
-  onSaveTrim: () => Promise<void>;
+  onSaveTrim: (startSec?: number, endSec?: number) => Promise<void>;
   onCutCandidate: (candidateId: string, options?: any) => Promise<void>;
   clipByCandidate: Map<string, any>;
   busy: BusyState;
