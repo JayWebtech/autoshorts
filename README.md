@@ -1,10 +1,10 @@
 <div align="center">
   <img src="icon.png" width="120" height="120" alt="AutoShorts Logo" style="border-radius: 18px; margin-bottom: 12px;" />
   <h1>AutoShorts</h1>
-  <p><strong>Suite de Escritorio 100% Local para Extracción y Edición de Clips Verticales Virales</strong></p>
+  <p><strong>Suite de Escritorio Local-First para Extracción, Detección Inteligente y Edición de Clips Verticales Virales</strong></p>
 
-  [![Version 2.5.0](https://img.shields.io/badge/Release-v2.5.0-brightgreen.svg)](https://github.com/jeffd2599/autoshorts/releases)
-  [![Portable Windows](https://img.shields.io/badge/Portable-Windows%20x64%20(178%20MB)-blue.svg)](https://github.com/jeffd2599/autoshorts/releases)
+  [![Version 2.9.0](https://img.shields.io/badge/Release-v2.9.0-brightgreen.svg)](https://github.com/jeffd2599/autoshorts/releases)
+  [![Portable Windows](https://img.shields.io/badge/Portable-Windows%20x64%20(ZIP%20Portable)-blue.svg)](https://github.com/jeffd2599/autoshorts/releases)
   [![Python 3.11](https://img.shields.io/badge/Python-3.11%20Recomendado-3776AB?logo=python&logoColor=white)](https://www.python.org/)
   [![React 19](https://img.shields.io/badge/React-19.0-61DAFB?logo=react&logoColor=black)](https://react.dev/)
   [![TypeScript 5.7](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -18,15 +18,15 @@
 
 ---
 
-**AutoShorts** es una suite de escritorio a medida y de código abierto especializada en la **extracción, detección inteligente y edición de clips verticales virales (9:16 Shorts, TikToks y Reels)** a partir de grabaciones extensas de directos (Twitch, Kick o YouTube) y podcasts de 1 a 4+ horas.
+**AutoShorts** es una suite de escritorio de alto rendimiento especializada en la **extracción, detección inteligente y edición de clips verticales virales (9:16 Shorts, TikToks y Reels)** a partir de grabaciones extensas de directos (Twitch, Kick o YouTube) y podcasts de 1 a 4+ horas.
 
-Construida bajo una arquitectura **100% Local-First**, AutoShorts procesa todo el contenido utilizando la potencia de tu propio hardware: transcripción acelerada por GPU mediante **faster-whisper (CTranslate2)** e inferencia de lenguaje local con **Ollama** y **LM Studio**. No requiere suscripciones mensuales ni pagos por minuto en APIs externas.
+Diseñada bajo una arquitectura **Local-First**, AutoShorts procesa la transcripción de audio de forma 100% local en tu hardware con **faster-whisper (CTranslate2)** sobre GPU NVIDIA CUDA o CPU. Para la inferencia y análisis de momentos virales, ofrece compatibilidad flexible con **LLMs locales (Ollama y LM Studio)** y con la nube mediante **OpenRouter (modelos Free y Paid)** con optimización avanzada de macro-chunks para no saturar tu cuota diaria.
 
 > [!TIP]
-> **🚀 Versión Portable Oficial (Zero-Install):** Para la gran mayoría de usuarios y creadores de contenido, **no es necesario instalar Python, Node.js ni compilar código**. Descarga el paquete [AutoShorts-v2.5.0-windows-x64-portable.zip](https://github.com/jeffd2599/autoshorts/releases) (~178 MB), descomprímelo en cualquier disco o pendrive y ejecuta directamente `AutoShorts.exe`.
+> **Versión Portable Oficial para Windows (Zero-Install):** Para la gran mayoría de usuarios y creadores de contenido, **no es necesario instalar Python, Node.js ni compilar código**. Descarga el archivo [AutoShorts-v2.9.0-windows-x64-portable.zip](https://github.com/jeffd2599/autoshorts/releases) (~180 MB), descomprímelo en cualquier disco o pendrive y ejecuta directamente `AutoShorts.exe`.
 
 > [!NOTE]
-> **Filosofía 100% Local (Cero Coste Operativo):** Toda la transcripción, análisis de audio RMS, detección de ganchos virales y renderizado de subtítulos ocurre en tu máquina. Tus grabaciones nunca salen de tu red local y no gastas dinero en tokens ni límites de peticiones cloud.
+> **Privacidad y Cero Consumo de Audio:** Toda la transcripción acústica, detección de voz, cálculo de decibelios RMS y renderizado de video con FFmpeg ocurren en tu equipo. Tu archivo de video jamás se sube a internet.
 
 ---
 
@@ -34,24 +34,25 @@ Construida bajo una arquitectura **100% Local-First**, AutoShorts procesa todo e
 
 - [Arquitectura del Sistema](#arquitectura-del-sistema)
 - [Funcionalidades Principales](#funcionalidades-principales)
-  - [1. Deteccion Inteligente de Momentos y Chunks Adaptativos](#1-deteccion-inteligente-de-momentos-y-chunks-adaptativos)
-  - [2. Arquitectura de Proyectos Autonomos (autoshorts.project)](#2-arquitectura-de-proyectos-autonomos-autoshortsproject)
-  - [3. Visor de Terminal y Logs en Vivo](#3-visor-de-terminal-y-logs-en-vivo)
-  - [4. Estudio de Subtitulos Dinamicos y Presets](#4-estudio-de-subtitulos-dinamicos-y-presets)
-  - [5. IA Local y Gestion Inteligente de Hardware](#5-ia-local-y-gestion-inteligente-de-hardware)
-  - [6. Modulo de Social Copywriting Conciso](#6-modulo-de-social-copywriting-conciso)
-  - [7. Telemetria de Hardware en Tiempo Real](#7-telemetria-de-hardware-en-tiempo-real)
-- [Descarga y Ejecucion Portable](#descarga-y-ejecucion-portable)
+  - [1. Detección Inteligente de Momentos y Chunks Adaptativos](#1-deteccion-inteligente-de-momentos-y-chunks-adaptativos)
+  - [2. Inferencia en la Nube con OpenRouter (Free y Paid)](#2-inferencia-en-la-nube-con-openrouter-free-y-paid)
+  - [3. Editor de Cortes Internos Estilo CapCut](#3-editor-de-cortes-internos-estilo-capcut)
+  - [4. Estudio de Subtítulos Dinámicos e Insignias CTA](#4-estudio-de-subtitulos-dinamicos-e-insignias-cta)
+  - [5. Arquitectura de Proyectos Autónomos (autoshorts.project)](#5-arquitectura-de-proyectos-autonomos-autoshortsproject)
+  - [6. Visor y Exportador de Logs del Sistema](#6-visor-y-exportador-de-logs-del-sistema)
+  - [7. Social Copywriting Conciso y Antislop UI](#7-social-copywriting-conciso-y-antislop-ui)
+  - [8. Telemetría de Hardware en Tiempo Real](#8-telemetria-de-hardware-en-tiempo-real)
+- [Descarga y Ejecución Portable](#descarga-y-ejecucion-portable)
 - [Requisitos Previos (Para Desarrolladores)](#requisitos-previos-para-desarrolladores)
-- [Instalacion para Desarrolladores](#instalacion-para-desarrolladores)
-- [Modos de Ejecucion](#modos-de-ejecucion)
-  - [Modo 1: Binario Portable (AutoShorts.exe)](#modo-1-binario-portable-autoshortsexe)
-  - [Modo 2: Lanzador Rapido (AutoShorts.bat)](#modo-2-lanzador-rapido-autoshortsbat)
-  - [Modo 3: Modo Desarrollo (Hot Reload)](#modo-3-modo-desarrollo-hot-reload)
-- [Configuracion y Almacenamiento Dual](#configuracion-y-almacenamiento-dual)
+- [Instalación para Desarrolladores](#instalacion-para-desarrolladores)
+- [Modos de Ejecución](#modos-de-ejecucion)
+  - [Modo 1: Binario Portable Oficial (AutoShorts.exe)](#modo-1-binario-portable-oficial-autoshortsexe)
+  - [Modo 2: Lanzador Rápido (AutoShorts.bat)](#modo-2-lanzador-rapido-autoshortsbat)
+  - [Modo 3: Modo Desarrollo con Hot Reload](#modo-3-modo-desarrollo-con-hot-reload)
+- [Configuración y Almacenamiento Dual](#configuracion-y-almacenamiento-dual)
 - [Estructura del Repositorio](#estructura-del-repositorio)
-- [Resolucion de Problemas Frecuentes](#resolucion-de-problemas-frecuentes)
-- [Creditos y Licencia](#creditos-y-licencia)
+- [Resolución de Problemas Frecuentes](#resolucion-de-problemas-frecuentes)
+- [Créditos y Licencia](#creditos-y-licencia)
 
 ---
 
@@ -61,9 +62,9 @@ Construida bajo una arquitectura **100% Local-First**, AutoShorts procesa todo e
 flowchart TB
     subgraph Frontend ["Frontend (UI Nativa con WebView2)"]
         UI["React 19 + TypeScript + Vite"]
-        ST["Estilos Dark Mode (CSS Puro)"]
-        TL["Barra de Telemetria (CPU, GPU, VRAM, Temp)"]
-        Logs["Visor de Terminal y Logs (LogsModal.tsx)"]
+        ST["Estilos Dark Mode NLE (CSS Puro)"]
+        TL["Barra de Telemetría (CPU, GPU, VRAM, Temp)"]
+        Logs["Visor y Exportador de Logs (LogsModal.tsx)"]
         Bridge["apiBridge.ts (Llamadas RPC nativas a PyWebView)"]
         UI --> ST
         UI --> TL
@@ -72,9 +73,9 @@ flowchart TB
     end
 
     subgraph DesktopShell ["Shell de Escritorio Windows"]
-        EXE["AutoShorts.exe (Compilacion onedir portable)"]
-        BAT["AutoShorts.bat (Lanzador de desarrollo con 1 clic)"]
-        PW["PyWebView 5.0 (Ventana Nativa Win32 / WebView2)"]
+        EXE["AutoShorts.exe (Compilación onedir portable con Subsystem 2 GUI)"]
+        BAT["AutoShorts.bat (Lanzador con auto-detección de venv)"]
+        PW["PyWebView 5.0 (Ventana Nativa Win32 / Edge WebView2)"]
         StreamSrv["Servidor HTTP de Streaming Local (:1422 con Range 206)"]
         EXE --> PW
         BAT --> PW
@@ -82,15 +83,15 @@ flowchart TB
     end
 
     subgraph Backend ["Backend Python 3 (python_backend/)"]
-        API["api.py (Controlador central RPC)"]
-        DB[("autoshorts.db (SQLite3)")]
-        Media["media.py (FFmpeg, Subtitulos ASS, Audio RMS, Pillow)"]
-        Trans["transcription.py (faster-whisper sobre CTranslate2)"]
-        LLM["llm.py (Ollama y LM Studio con biseccion adaptativa)"]
+        API["api.py (Controlador central RPC y exportador de logs)"]
+        DB[("autoshorts.db (SQLite3 WAL con connection pool)")]
+        Media["media.py (FFmpeg, Subtítulos ASS, Audio RMS, Pillow, CapCut trim)"]
+        Trans["transcription.py (faster-whisper sobre CTranslate2 CUDA / CPU)"]
+        LLM["llm.py (Ollama, LM Studio y OpenRouter con macro-chunks adaptativos)"]
         Tele["telemetry.py (Win32 GetSystemTimes, nvidia-smi)"]
-        Logger["logger.py (Buffer circular y rotacion de logs)"]
-        Paths["paths.py (Resolucion portable ./data/ vs perfil usuario)"]
-        Services["project_service.py (autoshorts.project descentralizado)"]
+        Logger["logger.py (Buffer circular y volcado de logs)"]
+        Paths["paths.py (Resolución portable ./data/ vs perfil usuario)"]
+        Services["project_service.py (autoshorts.project y exportación summary/)"]
 
         PW <--> API
         API --> DB
@@ -104,16 +105,16 @@ flowchart TB
         StreamSrv --> Media
     end
 
-    subgraph Local_AI ["Motores de IA 100% Locales (Sin Coste de API)"]
+    subgraph Inferencia ["Motores de IA Flexibles"]
         FW["faster-whisper (CTranslate2 nativo CUDA FP16 / CPU)"]
         OLL["Ollama (Modelos locales con descarga de VRAM)"]
-        LMS["LM Studio (Servidor local :1234 con auto-deteccion)"]
-        FFM["FFmpeg + FFprobe (Recorte, escalado y subtitulos ASS)"]
+        LMS["LM Studio (Servidor local :1234 con detección de contexto)"]
+        OR["OpenRouter (Cloud API Free / Paid con macro-chunks)"]
 
         Trans --> FW
         LLM --> OLL
         LLM --> LMS
-        Media --> FFM
+        LLM --> OR
     end
 ```
 
@@ -121,193 +122,151 @@ flowchart TB
 
 ## Funcionalidades Principales
 
-### 1. Deteccion Inteligente de Momentos y Chunks Adaptativos
+### 1. Detección Inteligente de Momentos y Chunks Adaptativos
 
-El motor de escaneo combina analisis de volumen acustico con comprension semantica del dialogo para aislar los fragmentos con mayor potencial de viralidad:
+El motor combina el análisis acústico RMS en segundo plano con la comprensión semántica del diálogo:
 
-- **Prompt Fusionado de Alta Retencion:** Instruye al LLM local bajo directrices editoriales estrictas:
-  - *Ganchos de Alto Impacto:* Frases polemicas, preguntas intrigantes, remates o revelaciones en los primeros 3 segundos.
-  - *Picos Emocionales y Gameplay:* Clutches, jugadas destacadas, risas contagiosas, gritos, enfados, sustos o celebraciones.
-  - *Contenido Narrativo y Humor:* Fails comicos, anecdotas rapidas, debates intensos o explicaciones condensadas.
-- **Reglas Estrictas de Segmentacion:**
-  - *Auto-conclusion:* Cada clip posee inicio claro, desarrollo y remate o conclusion logica, sin depender de contexto externo.
-  - *Cortes limpios:* Jamas corta una palabra o frase a la mitad, usando silencios y pausas naturales como puntos de transicion.
-  - *Exclusiones:* Descarta introducciones lentas, transiciones vacias y segmentos promocionales.
-- **Segmentacion Dinamica Adaptativa por Biseccion:** AutoShorts detecta la ventana de contexto de tu motor local (4k, 8k o 16k tokens) y dimensiona dinamicamente los bloques temporales. Si un segmento sobrepasa el contexto (`exceed_context_size_error`), el algoritmo aplica biseccion recursiva subdividiendo el bloque a la mitad de forma automatica. Esto permite operar fluidamente con ventanas ajustadas (4k/8k) para ahorrar VRAM sin provocar errores HTTP 400.
-- **Circuit Breaker Preventivo:** Si el modelo es descargado o la conexion con el servidor local se interrumpe, el pipeline se detiene de inmediato notificando al usuario en vez de iterar fallidamente sobre los bloques restantes.
-- **Analisis acustico RMS:** Algoritmo en Python puro (`wave`, `struct`, `math`) con soporte de cancelacion inmediata. Si el creador esta concentrado en una jugada tensa sin hablar, el detector identifica picos sonoros e inyecta la etiqueta `[CLUTCH / ACCION ACUSTICA]` en la transcripcion.
-- **Duraciones objetivo configurables:** Rango de tiempos ajustables de 30s, 1m, 2m, 3m o 5m.
+- **Prompt Fusionado de Alta Retención:** Instruye a la IA bajo directrices editoriales rigurosas:
+  - *Ganchos de Alto Impacto:* Frases polémicas, preguntas intrigantes o revelaciones en los primeros 3 segundos.
+  - *Picos Emocionales y Gameplay:* Clutches, jugadas épicas, risas contagiosas, gritos, enfados o sustos.
+  - *Contenido Narrativo y Humor:* Fails cómicos, anécdotas rápidas, debates intensos o explicaciones condensadas.
+- **Detección Acústica en Gameplay Silencioso:** Inyecta etiquetas `[CLUTCH / ACCION ACUSTICA]` analizando decibelios RMS de fondo cuando el jugador se concentra en jugadas tensas sin hablar.
+- **Normalización de Duraciones:** Aplica restricción estricta (`clamp_candidate_duration`) para que un clip de 1 minuto jamás se desborde a 3 o 5 minutos.
+- **Segmentación Dinámica Adaptativa:** AutoShorts dimensiona automáticamente los bloques según la ventana de contexto (4k, 8k o 16k tokens) y subdivide por bisección ante desbordamiento de contexto (`exceed_context_size_error`).
 
 ---
 
-### 2. Arquitectura de Proyectos Autonomos (`autoshorts.project`)
+### 2. Inferencia en la Nube con OpenRouter (Free y Paid)
 
-Inspirado en editores de video profesionales (como Premiere Pro o CapCut), AutoShorts guarda cada proyecto de forma descentralizada:
+Para usuarios que no cuentan con tarjetas gráficas con suficiente VRAM para correr modelos 7B/14B en local, AutoShorts incorpora integración oficial con **OpenRouter**:
 
-- **Archivo de Proyecto Autónomo:** En la raíz de cada carpeta de grabación se genera automáticamente un archivo `autoshorts.project`.
-- **Portabilidad de Datos:** Contiene la transcripción completa palabra por palabra, los candidatos detectados y los clips exportados. Si mueves la carpeta a otra PC o a un disco externo, AutoShorts lo reconoce al instante y **omite volver a transcribir con Whisper**.
-- **Auto-Migración Transparente:** Los proyectos preexistentes en la base de datos se exportan automáticamente a `autoshorts.project` al cargarlos.
-- **Re-vinculación Inteligente:** Si cambias la unidad de disco (por ejemplo de `D:\` a `E:\`), el sistema detecta si el video sigue en la misma carpeta relativa y lo re-vincula de inmediato.
-
----
-
-### 3. Visor de Terminal y Logs en Vivo
-
-AutoShorts incorpora un terminal de diagnóstico integrado para supervisar todo lo que ocurre bajo el capó sin necesidad de consolas externas:
-
-- **Acceso Rápido:** Accesible desde el botón de consola en el menú lateral (`Sidebar`) y en la barra de estado inferior (`StatusBar`).
-- **Buffer Circular en Memoria:** Mantiene las últimas 1,000 líneas con formateo visual según severidad (`INFO`, `WARNING`, `ERROR`, `SUCCESS`).
-- **Herramientas de Utilidad:** Auto-scroll automático, botón de pausar seguimiento, limpieza de pantalla y copiado rápido al portapapeles.
-- **Persistencia Física con Rotación:** Escritura automática en `autoshorts.log` con rotación a 5 MB para evitar consumo de disco.
+- **Modelos Gratuitos (`openrouter/free`):** Ruteo automático hacia modelos de alto rendimiento como Particle-1, Nemotron 3.5, North Mini Code o Ling 3.2 sin costo alguno ($0.00).
+- **Macro-Chunks Adaptativos para Videos Largos:**
+  - Grabaciones de hasta 1 hora: bloques de 15 minutos (`900s`).
+  - Grabaciones de 1 a 2 horas: bloques de 20 minutos (`1200s`).
+  - Grabaciones de más de 2 horas (directos de 125+ min): bloques de 25 minutos (`1500s`).
+  - En un directo de 2 horas y 5 minutos, esto reduce las llamadas a la API de **9 a solo 5 peticiones**, preservando el 90% de la cuota diaria de 50 peticiones/día de OpenRouter Free.
+- **Rate Limit Guard y Circuit Breaker:** Retraso inteligente de 2.5s entre bloques y circuit breaker inmediato ante HTTP 401 (clave errónea) o 429 (cuota diaria alcanzada), evitando bloqueos y reintentos innecesarios.
+- **Saneamiento Automático de Razonamiento (CoT):** Purga etiquetas `<think>...</think>` y extrae respuestas limpias desde `reasoning_content` de modelos DeepSeek R1 o similares.
 
 ---
 
-### 4. Estudio de Subtitulos Dinamicos y Presets
+### 3. Editor de Cortes Internos Estilo CapCut
 
-El motor multimedia genera subtitulos en formato SubStation Alpha (`.ass`) con sincronizacion palabra por palabra, renderizados mediante el filtro `ass` de FFmpeg con aceleracion por hardware:
+AutoShorts permite refinar el momento detectado antes de mandarlo a exportar:
 
-| Preset | Tipografia | Paleta y Resalte | Descripcion |
-| :--- | :--- | :--- | :--- |
-| **`tiktok-karaoke`** | Arial Black | Blanco con resalte amarillo neon | Estilo clasico de alta retencion con animacion de escala (jump/pop) en la palabra activa. |
-| **`loud-viral`** | Impact (Ultra-bold) | Trazo 3D masivo, amarillo lima y fuego naranja | Diseno de alto ritmo con fuerte enfasis en palabras clave. |
-| **`arcade-retro`** | Trebuchet MS | Borde rosa magenta con resalte cian activo | Estetica de videojuego arcade y eSports retro. |
-| **`cyber-terminal`** | Consolas (Monospace) | Verde fosforo con resalte cian electrico | Aspecto de terminal informatica y estetica tecnica. |
-| **`clean-editorial`** | Segoe UI | Blanco puro, borde fino y sombra suave multinivel | Diseno sobrio adecuado para podcasts, entrevistas y debates. |
-| **`modern-box`** | Arial | Texto sobre caja opaca delimitada | Maxima legibilidad en fondos con alto movimiento o colores saturados. |
-
-#### Opciones de Personalizacion
-- **Posicion en pantalla:** Superior, Centro o Inferior (para evitar tapar interfaces del juego, webcams o botones de interaccion de TikTok/Reels).
-- **Densidad de texto:** Visualizacion en 1 o 2 lineas continuas.
-- **Stickers Tipográficos con Supersampling 2X:** Renderizado nítido mediante Pillow (`PIL`) con soporte de emojis, cajas translúcidas y bordes de alta definición.
+- **Línea de Tiempo Multi-Segmento:** Botón "Dividir en cabezal" para partir el clip en fragmentos independientes.
+- **Descarte de Fragmentos Muertos:** Marca o desmarca fragmentos para eliminar silencios, esperas o pausas dentro del clip.
+- **Concatenación Frame-Accurate con FFmpeg:** Fusión transparente de video y audio con remapeo temporal matemático de los subtítulos `.ass` y `.srt`.
 
 ---
 
-### 5. IA Local y Gestion Inteligente de Hardware
+### 4. Estudio de Subtítulos Dinámicos e Insignias CTA
 
-- **Inicio Directo sin Bloqueos:** Inicia directamente en el Dashboard. Detecta automaticamente si LM Studio u Ollama estan activos sin imponer descargas forzosas.
-- **Deteccion Dinamica de VRAM y GPU:** Clasifica dinamicamente los modelos Whisper y LLM en tres niveles (`Optimo`, `Moderado` y `Pesado`) segun la VRAM disponible (4GB, 6GB, 8GB, 12GB, 16GB o CPU).
-- **Cancelacion Inmediata con Liberacion Total:** Al cancelar la transcripcion o la busqueda de momentos, AutoShorts desreferencia de inmediato los modelos de memoria y vacia la GPU al instante.
-- **faster-whisper sobre CTranslate2 Nativo:** Inferencia ultrarrápida en GPU NVIDIA CUDA FP16 sin depender del runtime pesado de PyTorch.
-- **Descarga inmediata de VRAM (`keep_alive: 0`):** Al finalizar la deteccion o generacion de copys, ordena al servidor local liberar de inmediato la memoria de la tarjeta grafica.
-
----
-
-### 6. Modulo de Social Copywriting Conciso
-
-- **Formato Ultra-Conciso (2 a 3 lineas):** Textos compactos con gancho intrigante, una oracion de contexto y llamada a la accion sin relleno.
-- **Limite Estricto de 3 a 5 Hashtags:** Previene penalizaciones algoritmicas por saturacion de etiquetas.
-- **Alineacion Exacta con la Transcripcion:** La funcion de "Rehacer Copy" toma unicamente las palabras habladas entre los timestamps reales del clip.
+- **6 Presets Tipográficos Profesionales:** `tiktok-karaoke`, `loud-viral`, `arcade-retro`, `cyber-terminal`, `clean-editorial` y `modern-box`.
+- **Control de Posición y Tamaño Interactivo:** Arrastra o ajusta la posición de los subtítulos (Superior, Centro, Inferior) y el tamaño de la tipografía para no tapar interfaces del juego ni botones de redes sociales.
+- **Insignias CTA Animadas:** Configuración de botón "Seguir" o "Suscríbete" con escalado vectorial y renderizado quemado en video con FFmpeg.
+- **Persistencia en Cortes en Lote:** La exportación individual o en lote recupera automáticamente las coordenadas, estilos y recortes personalizados de cada momento.
 
 ---
 
-### 7. Telemetria de Hardware en Tiempo Real
+### 5. Arquitectura de Proyectos Autónomos (`autoshorts.project`)
 
-Barra de estado inferior persistente con actualizacion periodica continua:
-- **CPU %:** Medicion nativa con `GetSystemTimes` de la API Win32 (sin consumo de CPU).
-- **GPU y VRAM:** Lectura directa de porcentaje de carga y memoria asignada mediante `nvidia-smi`.
-- **Temperatura de la GPU (°C):** Control termico en tiempo real durante renderizados intensivos con FFmpeg.
+- **Archivo Descentralizado:** En la raíz de cada carpeta de video se almacena `autoshorts.project`.
+- **Cero Re-Transcripciones:** Si trasladas la carpeta a otro equipo o disco, AutoShorts reconoce la transcripción y candidatos al instante sin volver a procesar con Whisper.
+- **Re-vinculación Inteligente de Disco:** Si la letra de la unidad cambia (ej. de `D:\` a `E:\`), el software actualiza las rutas relativas de forma transparente.
+- **Carpeta `summary/` Automática:** Generación continua de `transcripcion_completa.txt`, `subtitulos_completos.srt` y `momentos_virales.txt`.
 
 ---
 
-## Descarga y Ejecucion Portable
+### 6. Visor y Exportador de Logs del Sistema
 
-Para la inmensa mayoría de usuarios, no se requiere instalación manual:
+- **Consola Integrada:** Visualiza en tiempo real eventos de transcripción, uso de VRAM, peticiones LLM y comandos FFmpeg.
+- **Exportación Nativa a Disco:** Botón "Exportar" con diálogo nativo de Windows (`SAVE_DIALOG`), guardado de logs con formato UTF-8 y botón rápido de "Abrir carpeta".
+- **Copia al Portapapeles Blindada:** Fallback mediante elemento fuera de pantalla ante pérdidas de foco en WebView2.
 
-1. Ve a la sección de [Releases oficiales en GitHub](https://github.com/jeffd2599/autoshorts/releases).
-2. Descarga el archivo: `AutoShorts-v2.5.0-windows-x64-portable.zip` (~178 MB).
-3. Descomprime la carpeta en la ubicación que prefieras (disco local o pendrive).
-4. Haz doble clic en `AutoShorts.exe`.
+---
 
-Tus configuraciones y datos se almacenarán en `./data/` de forma autónoma.
+### 7. Social Copywriting Conciso y Antislop UI
+
+- **Copys Virales Sin Relleno:** Títulos llamativos y descripciones de 2 a 3 líneas sin repetir innecesariamente el titular.
+- **Límite Estricto de 3 a 5 Hashtags:** Selección de etiquetas precisas para no saturar las descripciones en smartphone.
+- **Diseño Profesional Antislop:** Interfaz limpia estilo suite NLE profesional, sin emojis decorativos no solicitados en métricas ni botones.
+
+---
+
+### 8. Telemetría de Hardware en Tiempo Real
+
+- **CPU %:** Lectura Win32 con `GetSystemTimes` (sin consumo de CPU).
+- **GPU y VRAM:** Carga y memoria asignada mediante `nvidia-smi`.
+- **Temperatura de GPU (°C):** Monitorización térmica continua durante renderizados de video.
+
+---
+
+## Descarga y Ejecución Portable
+
+1. Descarga el paquete oficial: [AutoShorts-v2.9.0-windows-x64-portable.zip](https://github.com/jeffd2599/autoshorts/releases) (~180 MB).
+2. Haz clic derecho y selecciona **Extraer todo...** en la carpeta o disco que desees.
+3. Entra a la carpeta `AutoShorts` y ejecuta directamente `AutoShorts.exe`.
+4. El programa abrirá una ventana de escritorio pura (con `Subsystem = 2`, sin consolas CMD emergentes).
 
 ---
 
 ## Requisitos Previos (Para Desarrolladores)
 
-Si deseas clonar el repositorio y ejecutar el código fuente o desarrollar extensiones:
-
-| Componente | Requisito Minimo | Recomendado | Notas |
+| Componente | Mínimo | Recomendado | Notas |
 | :--- | :--- | :--- | :--- |
-| **Sistema Operativo** | Windows 10 (64-bit) | Windows 11 (64-bit) | Compatible con Linux y macOS en modo desarrollo. |
-| **Python** | 3.10 | **3.11.x** | Version recomendada para compatibilidad nativa con CTranslate2 y PyWebView. |
-| **Node.js** | 18.x (LTS) | 20.x o superior | Requerido para compilar la interfaz de usuario. |
-| **Gestor de Paquetes** | **pnpm 9+** | **pnpm 9+** | Gestor obligatorio para dependencias del frontend. |
-| **FFmpeg y FFprobe** | Version 5.x | **Version 6.x o 7.x en el PATH** | Indispensable para cortes, subtitulos ASS y analisis RMS de audio. |
-| **GPU NVIDIA (Opcional)** | CPU Intel / AMD | **NVIDIA GeForce RTX (CUDA)** | Aceleración nativa de transcripción con faster-whisper. |
+| **Sistema Operativo** | Windows 10 (64-bit) | Windows 11 (64-bit) | Compatible con Linux y macOS en desarrollo. |
+| **Python** | 3.10 | **3.11.x** | Recomendado para CTranslate2 y PyWebView. |
+| **Node.js** | 18.x (LTS) | 20.x o superior | Para compilar la interfaz de React. |
+| **Gestor de Paquetes** | **pnpm 9+** | **pnpm 9+** | Gestor obligatorio para el frontend. |
+| **FFmpeg y FFprobe** | Versión 5.x | **Versión 6.x o 7.x en el PATH** | Indispensable para cortes y subtítulos. |
+| **GPU NVIDIA (Opcional)** | CPU Intel / AMD | **GeForce RTX con CUDA** | Aceleración nativa de faster-whisper. |
 
-### Instalacion de FFmpeg
+### Instalación de FFmpeg
 - **Windows (PowerShell):** `winget install Gyan.FFmpeg`
 - **macOS:** `brew install ffmpeg`
 - **Linux (Ubuntu / Debian):** `sudo apt update && sudo apt install -y ffmpeg`
 
 ---
 
-## Instalacion para Desarrolladores
+## Instalación para Desarrolladores
 
-### 1. Clonar el Repositorio
 ```bash
+# 1. Clonar el repositorio
 git clone https://github.com/jeffd2599/autoshorts.git
 cd autoshorts
-```
 
-### 2. Configurar el Entorno Virtual de Python
-```bash
+# 2. Crear y activar entorno virtual
 python -m venv venv
+.\venv\Scripts\Activate.ps1   # En Windows
 
-# En Windows (PowerShell):
-.\venv\Scripts\Activate.ps1
-
-# En Linux o macOS:
-source venv/bin/activate
-```
-
-### 3. Instalar Dependencias del Backend
-```bash
+# 3. Instalar dependencias backend
 pip install -r requirements.txt
-```
-> [!NOTE]
-> `faster-whisper` utiliza CTranslate2 para ejecutar CUDA FP16 directamente. No es necesario instalar paquetes masivos de PyTorch.
 
-### 4. Instalar y Compilar el Frontend con pnpm
-```bash
+# 4. Instalar y compilar frontend
 pnpm install
 pnpm run build
 ```
 
 ---
 
-## Modos de Ejecucion
+## Modos de Ejecución
 
-### Modo 1: Binario Portable (AutoShorts.exe)
-Ejecución zero-install sin consolas ni dependencias externas.
+### Modo 1: Binario Portable Oficial (AutoShorts.exe)
+Ejecución zero-install autónoma con datos almacenados en `./data/`.
 
-### Modo 2: Lanzador Rapido (AutoShorts.bat)
-Doble clic en `AutoShorts.bat`. Detecta automáticamente el entorno virtual (`venv`, `.venv`, `env`) o el Python del sistema e inicia la aplicación con diagnóstico en caso de error.
+### Modo 2: Lanzador Rápido (AutoShorts.bat)
+Lanzador en 1 clic que auto-detecta el entorno virtual (`venv`, `.venv`) y valida dependencias con diagnóstico en caso de error.
 
-### Modo 3: Modo Desarrollo (Hot Reload)
-Para editar la interfaz en tiempo real mientras el backend permanece activo:
-1. **Terminal 1 (Vite Dev Server):**
-   ```bash
-   pnpm run dev
-   ```
-2. **Terminal 2 (Desktop Launcher):**
-   ```bash
-   AutoShorts.bat
-   ```
-El lanzador detectará el servidor en `http://127.0.0.1:1420` y conectará la ventana nativa con recarga en caliente automática.
+### Modo 3: Modo Desarrollo con Hot Reload
+```bash
+# Terminal 1: Servidor de desarrollo Vite
+pnpm run dev
 
----
-
-## Configuracion y Almacenamiento Dual
-
-AutoShorts gestiona el almacenamiento de datos de forma inteligente a través de `python_backend/paths.py`:
-
-- **Modo Portable:** Si existe el archivo marcador `portable.mode` (junto al ejecutable), la base de datos `autoshorts.db`, el registro de logs `autoshorts.log` y la configuración `config.json` se guardan localmente en `./data/`.
-- **Modo Instalado / Desarrollo:** Si no está en modo portable, se almacena en el perfil del usuario:
-  ```text
-  %USERPROFILE%\.autoshorts\config.json
-  %USERPROFILE%\.autoshorts\autoshorts.db
-  ```
+# Terminal 2: Shell de escritorio
+AutoShorts.bat
+```
 
 ---
 
@@ -317,74 +276,52 @@ AutoShorts gestiona el almacenamiento de datos de forma inteligente a través de
 autoshorts/
 ├── python_backend/               # Backend en Python 3
 │   ├── api.py                    # Controlador RPC principal expuesto a PyWebView
-│   ├── db.py                     # Capa de datos en SQLite3 embebido
-│   ├── llm.py                    # Orquestador de LLMs locales (Ollama y LM Studio)
-│   ├── llm_prompts.py            # Plantillas de prompts especializadas para clips
-│   ├── logger.py                 # Buffer circular de logs y rotacion en autoshorts.log
-│   ├── media.py                  # Integracion con FFmpeg, subtitulos ASS, audio RMS y Pillow
-│   ├── paths.py                  # Resolucion de rutas portables (./data/ vs %USERPROFILE%)
-│   ├── stream_server.py          # Servidor HTTP local con soporte Range 206 para videos
-│   ├── telemetry.py              # Telemetria de CPU (Win32), GPU, VRAM y temperatura
-│   ├── transcription.py          # Pipeline optimizado con faster-whisper (CTranslate2)
-│   ├── version.py                # Fuente de verdad de versionado semantico (v2.5.0)
-│   └── services/                 # Servicios modulares
-│       └── project_service.py    # Proyectos autonomos (autoshorts.project) y auto-migracion
+│   ├── db.py                     # Capa de datos en SQLite3 embebido con WAL
+│   ├── llm.py                    # Orquestador LLM (Ollama, LM Studio y OpenRouter)
+│   ├── llm_prompts.py            # Prompts de retención y generador de copys
+│   ├── logger.py                 # Buffer circular de logs y rotación en disco
+│   ├── media.py                  # Integración FFmpeg, subtítulos ASS, audio RMS y Pillow
+│   ├── paths.py                  # Resolución de rutas portables (./data/ vs %USERPROFILE%)
+│   ├── stream_server.py          # Servidor HTTP local con soporte Range 206
+│   ├── telemetry.py              # Telemetría de CPU (Win32), GPU, VRAM y temperatura
+│   ├── transcription.py          # Pipeline con faster-whisper (CTranslate2 CUDA/CPU)
+│   ├── version.py                # Fuente de verdad de versionado semántico (v2.9.0)
+│   └── services/                 # Servicios modulares de proyecto y archivos
 ├── src/                          # Frontend en React 19 + TypeScript
-│   ├── components/               # Componentes modulares de interfaz
-│   │   ├── common/               # Componentes reutilizables (StatusBar, ModelBadge)
-│   │   ├── modals/               # Modales de trabajo (StyleModal, CandidatePreview, LogsModal)
-│   │   └── panels/               # Vistas principales (HomeDashboard, CandidatePanel, Sidebar)
-│   ├── hooks/                    # Hooks de estado y pipelines (useMediaPipeline, useProjectActions)
-│   ├── styles/                   # Sistema de diseno dark mode en CSS puro
-│   ├── types.ts                  # Definiciones de tipos TypeScript compartidos
-│   ├── apiBridge.ts              # Adaptador RPC nativo para PyWebView
-│   └── App.tsx                   # Componente raiz de la aplicacion
-├── AutoShorts.bat                # Lanzador con deteccion de venv y diagnostico
-├── AutoShorts.spec               # Especificacion PyInstaller onedir con assets e iconos
-├── build_portable.py             # Script de construccion de paquete portable .zip con SHA-256
+│   ├── components/               # Modales, paneles y componentes de interfaz
+│   ├── hooks/                    # Gestión de estado (useMediaPipeline, useAppSettings)
+│   ├── styles/                   # Sistema de diseño dark mode NLE en CSS puro
+│   ├── types.ts                  # Definiciones de tipos TypeScript
+│   └── apiBridge.ts              # Adaptador RPC nativo para PyWebView
+├── AutoShorts.bat                # Lanzador de desarrollo con detección de entorno
+├── AutoShorts.spec               # Especificación PyInstaller onedir con assets y DLLs CUDA
+├── build_portable.py             # Compilador y empaquetador oficial .zip y .tar.gz
 ├── run.py                        # Punto de entrada principal con freeze_support
-├── requirements.txt              # Dependencias de Python (faster-whisper, pywebview, pillow)
-├── package.json                  # Scripts y dependencias del frontend (pnpm, v2.5.0)
-├── pnpm-lock.yaml                # Lockfile oficial de pnpm
-├── vite.config.ts                # Configuracion del empaquetador Vite
-├── DECISIONS.md                  # Registro de decisiones de arquitectura (D-001 a D-015)
-└── README.md                     # Documentacion tecnica del proyecto
+├── requirements.txt              # Requisitos de Python (faster-whisper, pywebview, pillow)
+├── package.json                  # Scripts y dependencias del frontend (v2.9.0)
+├── DECISIONS.md                  # Registro de decisiones de arquitectura
+└── README.md                     # Documentación técnica exhaustiva del proyecto
 ```
 
 ---
 
-## Resolucion de Problemas Frecuentes
+## Resolución de Problemas Frecuentes
 
 ### 1. `ffmpeg` o `ffprobe` no se reconocen como un comando
-- Verifica que instalaste FFmpeg y que su subcarpeta `bin` esta incluida en la variable de entorno `PATH` de Windows.
-- Comprueba la salida en terminal con `ffmpeg -version`.
+Verifica que FFmpeg esté instalado y que su subcarpeta `bin` esté en la variable de entorno `PATH`. Comprueba con `ffmpeg -version`.
 
-### 2. faster-whisper no utiliza la tarjeta grafica NVIDIA
-- CTranslate2 utiliza la GPU NVIDIA mediante sus librerías nativas.
-- Puedes comprobar si tu entorno detecta la GPU ejecutando en consola:
-  ```bash
-  python -c "import ctranslate2; print('Dispositivos CUDA detectados:', ctranslate2.get_cuda_device_count())"
-  ```
-- Si devuelve `1` o más, la aceleración GPU está plenamente operativa.
+### 2. Cuota de OpenRouter agotada (HTTP 429)
+En modo Free (`openrouter/free`), OpenRouter limita a 50 peticiones por día. Con los macro-chunks adaptativos de AutoShorts v2.9, un directo de 2 horas solo consume 5 peticiones. Si alcanzas el límite de 50 peticiones en un solo día, puedes alternar temporalmente a Ollama / LM Studio local o ingresar créditos en OpenRouter conmutando a modo "Pago".
 
-### 3. No se detecta Ollama o LM Studio
-- **Ollama:** Comprueba que el servicio esta activo visitando en tu navegador `http://127.0.0.1:11434`.
-- **LM Studio:** En la pestaña "Local Server", presiona el botón "Start Server" y verifica que el puerto sea el `1234`.
-
-### 4. El archivo fuente del video se movio o renombro
-- Si cambiaste de ubicación una grabación original, AutoShorts marcará el proyecto con una advertencia en el dashboard.
-- Haz clic en el botón de re-vincular para seleccionar la nueva ruta del archivo sin perder tus transcripciones ni tus momentos detectados.
+### 3. faster-whisper no utiliza la tarjeta gráfica NVIDIA
+Verifica que tu entorno detecte la GPU ejecutando:
+```bash
+python -c "import ctranslate2; print('Dispositivos CUDA:', ctranslate2.get_cuda_device_count())"
+```
+Si devuelve `1` o más, la aceleración CUDA está plenamente activa. En caso contrario, el sistema aplicará fallback elegante a CPU sin detenerse.
 
 ---
 
-## Creditos y Licencia
-
-Este proyecto es una evolución y desarrollo derivado del trabajo conceptual de [JayWebtech/autoshorts](https://github.com/JayWebtech/autoshorts).
-
-### Fundamentos de la Migracion a Python
-La versión conceptual previa utilizaba una arquitectura basada en Rust (Tauri). Para este desarrollo, el backend fue reescrito íntegramente en **Python 3.11 sobre PyWebView**, aportando ventajas directas:
-1. **Instalacion directa sin herramientas de compilacion complejas:** Elimina la necesidad de instalar el toolchain de Rust (`cargo`, `rustc`) ni Microsoft Visual C++ Build Tools.
-2. **Inferencia local con aceleración GPU:** Integración nativa con `faster-whisper` sobre `CTranslate2` y comunicación directa con Ollama y LM Studio.
-3. **Mantenibilidad y Portabilidad:** Todo el pipeline multimedia y los algoritmos acústicos RMS operan en código limpio y pueden distribuirse de forma 100% portable.
+## Créditos y Licencia
 
 Este software se distribuye bajo los términos de la **Licencia MIT**. Consulta el archivo [LICENSE](LICENSE) para más información.

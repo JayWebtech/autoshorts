@@ -1209,16 +1209,31 @@ def detect_candidates_pipeline(
 
     log_buffer.push(f"[Contexto IA] Contexto detectado: {available_ctx} tokens ({provider}).")
 
-    if provider == "openrouter" and is_free:
-        # Macro chunks of 15 minutes to guarantee <= 2-3 API calls for 30-45m recordings
-        chunk_dur = 900.0
-        overlap = 60.0
-    elif target_duration == "15m":
+    total_duration = max((s.get("end", 0.0) for s in segments), default=0.0)
+
+    if target_duration == "15m":
         chunk_dur = 1800.0  # 30 min chunk for 15 min clip target
         overlap = 240.0     # 4 min overlap
     elif target_duration == "10m":
         chunk_dur = 1200.0  # 20 min chunk for 10 min clip target
         overlap = 180.0     # 3 min overlap
+    elif provider == "openrouter":
+        if available_ctx >= 16384:
+            if total_duration > 7200.0:    # > 2 horas (reduce llamadas en streams largos)
+                chunk_dur = 1500.0         # 25 minutos
+                overlap = 120.0            # 2 minutos
+            elif total_duration > 3600.0:  # 1 a 2 horas
+                chunk_dur = 1200.0         # 20 minutos
+                overlap = 90.0             # 1.5 minutos
+            else:                          # <= 1 hora
+                chunk_dur = 900.0          # 15 minutos
+                overlap = 60.0
+        elif available_ctx <= 8192:
+            chunk_dur = 600.0              # 10 minutos (seguridad para 8k)
+            overlap = 60.0
+        else:
+            chunk_dur = 900.0              # Fallback seguro para contextos intermedios
+            overlap = 60.0
     elif available_ctx <= 4096:
         chunk_dur = 180.0
         overlap = 30.0

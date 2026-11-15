@@ -1,6 +1,6 @@
 """
 Script de construccion y empaquetado portable para AutoShorts.
-Genera la distribucion onedir compilada y el paquete comprimido .tar.gz (Gzip nivel 9) con hash SHA-256.
+Genera la distribucion onedir compilada y los paquetes comprimidos .zip y .tar.gz (Gzip nivel 9) con hash SHA-256.
 """
 
 import os
@@ -8,6 +8,7 @@ import sys
 import shutil
 import hashlib
 import tarfile
+import zipfile
 import subprocess
 from pathlib import Path
 import pefile
@@ -77,12 +78,14 @@ def main():
         try:
             shutil.rmtree(output_dir)
         except Exception as e:
-            print(f"[!] Aviso al limpiar dist/AutoShorts: {e}")
+            print(f"[!] Error al limpiar {output_dir}: {e}")
+            print("    Asegúrate de haber cerrado todas las instancias activas de AutoShorts.exe.")
+            sys.exit(1)
     if build_dir.exists():
         try:
             shutil.rmtree(build_dir)
         except Exception as e:
-            print(f"[!] Aviso al limpiar build/AutoShorts: {e}")
+            print(f"[!] Aviso al limpiar {build_dir}: {e}")
 
     run_command("pyinstaller -y --clean AutoShorts.spec", "Compilando backend ejecutable con PyInstaller (onedir)")
 
@@ -100,7 +103,39 @@ def main():
         f.write("# AutoShorts Portable Mode - Data will be stored locally in ./data/\n")
     os.makedirs(output_dir / "data", exist_ok=True)
 
-    # 4. Comprimir en archivo tar.gz de distribución (Gzip nivel 9)
+    # 4. Comprimir en archivo .zip de distribución oficial para Windows
+    zip_name = f"AutoShorts-v{__version__}-windows-x64-portable.zip"
+    zip_path = PROJECT_ROOT / "dist" / zip_name
+
+    print(f"\n[*] Comprimiendo {output_dir.name} en {zip_name} (ZIP Deflated nivel 9)...")
+    if zip_path.exists():
+        try:
+            os.remove(zip_path)
+        except Exception:
+            pass
+
+    excluded_extensions = {".pyc", ".log", ".db", ".tmp"}
+    file_count = 0
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        zf.writestr("AutoShorts/data/", "")
+        for root, dirs, files in os.walk(output_dir):
+            dirs[:] = [d for d in dirs if d != "__pycache__" and not d.startswith(".git")]
+            for file in files:
+                if any(file.endswith(ext) for ext in excluded_extensions):
+                    continue
+                full_path = Path(root) / file
+                arc_name = (Path("AutoShorts") / full_path.relative_to(output_dir)).as_posix()
+                zf.write(full_path, arcname=arc_name)
+                file_count += 1
+
+    zip_size_mb = zip_path.stat().st_size / (1024 * 1024)
+    zip_sha256 = compute_sha256(zip_path)
+
+    zip_sha_file = zip_path.with_name(f"{zip_name}.sha256")
+    with open(zip_sha_file, "w", encoding="utf-8") as f:
+        f.write(f"{zip_sha256}  {zip_name}\n")
+
+    # 5. Comprimir también en archivo .tar.gz (Gzip nivel 9) para entornos mixtos
     tar_name = f"AutoShorts-v{__version__}-windows-x64-portable.tar.gz"
     tar_path = PROJECT_ROOT / "dist" / tar_name
 
@@ -111,31 +146,32 @@ def main():
         except Exception:
             pass
 
-    file_count = 0
     with tarfile.open(tar_path, "w:gz", compresslevel=9) as tf:
-        for root, _, files in os.walk(output_dir):
+        for root, dirs, files in os.walk(output_dir):
+            dirs[:] = [d for d in dirs if d != "__pycache__" and not d.startswith(".git")]
             for file in files:
+                if any(file.endswith(ext) for ext in excluded_extensions):
+                    continue
                 full_path = Path(root) / file
-                arc_name = Path("AutoShorts") / full_path.relative_to(output_dir)
-                tf.add(full_path, arcname=str(arc_name).replace("\\", "/"))
-                file_count += 1
+                arc_name = (Path("AutoShorts") / full_path.relative_to(output_dir)).as_posix()
+                tf.add(full_path, arcname=arc_name)
 
-    size_mb = tar_path.stat().st_size / (1024 * 1024)
-    sha256 = compute_sha256(tar_path)
+    tar_size_mb = tar_path.stat().st_size / (1024 * 1024)
+    tar_sha256 = compute_sha256(tar_path)
 
-    sha_file = tar_path.with_name(f"{tar_name}.sha256")
-    with open(sha_file, "w", encoding="utf-8") as f:
-        f.write(f"{sha256}  {tar_name}\n")
+    tar_sha_file = tar_path.with_name(f"{tar_name}.sha256")
+    with open(tar_sha_file, "w", encoding="utf-8") as f:
+        f.write(f"{tar_sha256}  {tar_name}\n")
 
     print("\n" + "=" * 60)
     print("      CONSTRUCCIÓN Y EMPAQUETADO PORTABLE EXITOSO")
     print("=" * 60)
     print(f" Aplicación:     {APP_NAME} v{__version__}")
     print(f" Directorio:     {output_dir}")
-    print(f" Paquete tar.gz: {tar_path}")
-    print(f" Tamaño tar.gz:  {size_mb:.2f} MB ({file_count} archivos incluidos)")
-    print(f" SHA-256:        {sha256}")
-    print(f" Hash Check:     {sha_file}")
+    print(f" Paquete ZIP:    {zip_path} ({zip_size_mb:.2f} MB, {file_count} archivos)")
+    print(f" SHA-256 (ZIP):  {zip_sha256}")
+    print(f" Paquete tar.gz: {tar_path} ({tar_size_mb:.2f} MB)")
+    print(f" SHA-256 (tar):  {tar_sha256}")
     print("=" * 60)
 
 

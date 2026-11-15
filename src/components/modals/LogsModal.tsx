@@ -8,6 +8,8 @@ import {
   ArrowDownCircle,
   Search,
   Activity,
+  Download,
+  Folder,
 } from "lucide-react";
 import { invoke } from "../../apiBridge";
 
@@ -28,6 +30,8 @@ export const LogsModal: React.FC<LogsModalProps> = ({ isOpen, onClose }) => {
   const [filter, setFilter] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [exported, setExported] = useState(false);
+  const [exportPath, setExportPath] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Fetch initial logs when opened
@@ -74,11 +78,81 @@ export const LogsModal: React.FC<LogsModalProps> = ({ isOpen, onClose }) => {
       )
     : logs;
 
+  const fallbackCopyText = (text: string) => {
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.top = "-9999px";
+      textArea.style.left = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      console.error("Failed to copy logs with fallback:", e);
+    }
+  };
+
   const handleCopyLogs = () => {
     const text = logs.map((l) => l.raw).join("\n");
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch(() => {
+          fallbackCopyText(text);
+        });
+    } else {
+      fallbackCopyText(text);
+    }
+  };
+
+  const handleExportLogs = async () => {
+    try {
+      const res = await invoke<{
+        success: boolean;
+        cancelled?: boolean;
+        path?: string;
+        dir?: string;
+      }>("export_system_logs");
+
+      if (res && res.success && res.path) {
+        setExported(true);
+        setExportPath(res.path);
+        setTimeout(() => setExported(false), 3000);
+        return;
+      }
+      if (res && res.cancelled) {
+        return;
+      }
+    } catch (err) {
+      console.warn("Backend log export failed, falling back to browser blob download:", err);
+    }
+
+    // Fallback: browser blob download
+    try {
+      const text = logs.map((l) => l.raw).join("\n");
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `autoshorts_logs_${new Date().toISOString().replace(/[:.]/g, "-")}.log`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExported(true);
+      setTimeout(() => setExported(false), 3000);
+    } catch (blobErr) {
+      console.error("Blob download also failed:", blobErr);
+    }
   };
 
   const handleClearLogs = async () => {
@@ -205,6 +279,27 @@ export const LogsModal: React.FC<LogsModalProps> = ({ isOpen, onClose }) => {
 
             <button
               type="button"
+              onClick={handleExportLogs}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "5px 10px",
+                fontSize: "0.75rem",
+                backgroundColor: exported ? "rgba(16, 185, 129, 0.2)" : "rgba(255, 255, 255, 0.06)",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                borderRadius: "6px",
+                color: exported ? "#34d399" : "#cbd5e1",
+                cursor: "pointer",
+              }}
+              title="Exportar archivo de logs a disco"
+            >
+              {exported ? <Check size={13} /> : <Download size={13} />}
+              <span>{exported ? "Exportado" : "Exportar"}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleClearLogs}
               style={{
                 display: "inline-flex",
@@ -312,6 +407,48 @@ export const LogsModal: React.FC<LogsModalProps> = ({ isOpen, onClose }) => {
             {filteredLogs.length} / {logs.length} líneas
           </span>
         </div>
+
+        {/* Export Notification Banner */}
+        {exportPath && (
+          <div
+            style={{
+              padding: "6px 16px",
+              backgroundColor: "rgba(16, 185, 129, 0.12)",
+              borderBottom: "1px solid rgba(16, 185, 129, 0.25)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.75rem",
+              color: "#34d399",
+            }}
+          >
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              Logs exportados exitosamente en: <strong>{exportPath}</strong>
+            </span>
+            <button
+              type="button"
+              onClick={() => invoke("open_folder", { path: exportPath })}
+              style={{
+                marginLeft: "12px",
+                background: "transparent",
+                border: "1px solid rgba(52, 211, 153, 0.4)",
+                borderRadius: "4px",
+                color: "#34d399",
+                padding: "2px 8px",
+                cursor: "pointer",
+                fontSize: "0.72rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                whiteSpace: "nowrap",
+              }}
+              title="Abrir carpeta contenedora en el explorador"
+            >
+              <Folder size={11} />
+              <span>Abrir carpeta</span>
+            </button>
+          </div>
+        )}
 
         {/* Terminal Output */}
         <div

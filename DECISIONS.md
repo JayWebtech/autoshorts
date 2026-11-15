@@ -293,3 +293,22 @@
      - En `StyleModal.tsx` y `QuickCopyModal.tsx`, agregar soporte fluido a OpenRouter con indicador del modelo activo.
      - Corregir `canUseActiveLlm` en `useAppSettings.ts` para que dependa exclusivamente de la presencia de la clave configurada al seleccionar OpenRouter.
 - **Motivo:** Garantizar que el software portable abra con una ventana de escritorio pura y limpia sin terminales parásitas en Windows, y brindar a los creadores flexibilidad para usar modelos gratuitos de OpenRouter sin saturar su cuota diaria.
+
+## D-032: Release v2.9.0 — Empaquetado Portable ZIP Oficial, Actualización Exhaustiva de README, Macro-Chunks Dinámicos y Exportador de Logs
+- **Decisión:**
+  1. **Empaquetado Portable ZIP Oficial para Windows (`build_portable.py`):**
+     - Incorporar la generación automática de `AutoShorts-v2.9.0-windows-x64-portable.zip` mediante `zipfile` con compresión `ZIP_DEFLATED, compresslevel=9`, forzando rutas internas en formato POSIX `/` (`arc_name.as_posix()`) para máxima compatibilidad con el explorador nativo de Windows.
+     - Mantener la verificación in-place de la cabecera PE `ensure_gui_subsystem` (Subsystem = 2), abortar limpiamente si instancias abiertas bloquean la carpeta y excluir explícitamente archivos temporales (`.db`, `.log`, `.tmp`, `__pycache__`).
+     - Generar checksum SHA-256 (`.zip.sha256`) garantizando un tamaño final inferior a 400 MB.
+  2. **Macro-Chunks Adaptativos para OpenRouter en Videos Extensos (`python_backend/llm.py`):**
+     - En grabaciones largas procesadas con OpenRouter en contexto de 16k tokens, escalar dinámicamente el tamaño de los bloques: 15 minutos para $\le 1$h, 20 minutos para $1-2$h y 25 minutos para $> 2$h (120+ min).
+     - Preservar prioritariamente el tamaño mínimo de bloque para clips largos solicitados expresamente (mínimo 20 min para `10m` y 30 min para `15m`).
+     - En directos de más de 2 horas (ej. 125 min), esto reduce las llamadas a la API de 9 a solo 5 peticiones, conservando el 90% de la cuota diaria de 50 peticiones/día en modo Free.
+  3. **Exportador Integral de Logs con Diálogo Nativo de Windows (`python_backend/api.py`, `LogsModal.tsx`):**
+     - En `api.py`, implementar `export_system_logs`: volcar el 100% de entradas en memoria de `log_buffer` a un archivo `.log` en UTF-8 y presentar el diálogo nativo `SAVE_DIALOG` de PyWebView (con fallback a `Downloads`).
+     - En `LogsModal.tsx`, incorporar botón "Exportar" con feedback visual de guardado, banner con ruta del archivo y botón para abrir la carpeta contenedora en el explorador.
+     - Blindar la copia al portapapeles mediante elemento fuera de pantalla ante pérdidas de foco en WebView2.
+  4. **Bump de Versión a v2.9.0 y Documentación Integral (`version.py`, `package.json`, `README.md`):**
+     - Fijar formalmente la versión semántica en `v2.9.0`.
+     - Reestructurar y actualizar exhaustivamente `README.md` documentando OpenRouter (Free/Paid), cortes internos CapCut, controles de subtítulos y CTA, ejecución sin consolas y descarga directa del ZIP portable.
+- **Motivo:** Entregar un paquete portable estándar en formato ZIP listo para su publicación en GitHub Releases, optimizar drásticamente el consumo de API en grabaciones extensas, resolver las fallas de exportación de registros del sistema y actualizar la documentación oficial a los estándares de la versión v2.9.0.

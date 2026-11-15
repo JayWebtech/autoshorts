@@ -1390,6 +1390,58 @@ class Api:
         clear_system_logs()
         return True
 
+    def export_system_logs(self, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Exports the entire in-memory log buffer to a file selected via native SAVE_DIALOG,
+        or defaults to user's Downloads folder if headless or dialog is unsupported.
+        """
+        from .paths import get_user_data_dir
+
+        entries = log_buffer.get_entries(limit=5000)
+        default_filename = f"autoshorts_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        dest_path = None
+
+        if self._window:
+            dialog_type = getattr(webview, "FileDialog", None)
+            save_mode = dialog_type.SAVE if dialog_type else getattr(webview, "SAVE_DIALOG", 20)
+            res = self._window.create_file_dialog(
+                save_mode,
+                save_filename=default_filename,
+                file_types=("Archivos de registro (*.log;*.txt)", "Todos los archivos (*.*)")
+            )
+            if not res or len(res) == 0:
+                return {"success": False, "cancelled": True, "lines": len(entries)}
+            chosen = res[0] if isinstance(res, (list, tuple)) else res
+            dest_path = Path(chosen)
+        else:
+            downloads_dir = Path.home() / "Downloads"
+            if not downloads_dir.exists():
+                downloads_dir = get_user_data_dir()
+            dest_path = downloads_dir / default_filename
+
+        try:
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(dest_path, "w", encoding="utf-8", errors="replace") as f:
+                f.write(f"--- AutoShorts System Logs Export: {datetime.now().isoformat()} ---\n")
+                for e in entries:
+                    raw_line = e.get("raw") or f"[{e.get('timestamp', '')}] [{e.get('level', 'INFO')}] {e.get('message', '')}"
+                    f.write(f"{raw_line}\n")
+
+            return {
+                "success": True,
+                "cancelled": False,
+                "path": str(dest_path),
+                "dir": str(dest_path.parent),
+                "lines": len(entries)
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "cancelled": False,
+                "error": str(e),
+                "lines": len(entries)
+            }
+
     def open_project_file_dialog(self, _args: Optional[Dict[str, Any]] = None) -> Optional[str]:
         if not self._window:
             return None
