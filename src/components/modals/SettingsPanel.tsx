@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Bot, Download, Mic, RefreshCw, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { Bot, Download, Eye, EyeOff, Mic, RefreshCw, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import {
   DEFAULT_WHISPER_MODELS,
   EnvironmentStatus,
@@ -40,6 +40,14 @@ interface SettingsPanelProps {
   setLmstudioModel?: (model: string) => void;
   lmstudioBaseUrl?: string;
   setLmstudioBaseUrl?: (url: string) => void;
+  openRouterKey?: string;
+  setOpenRouterKey?: (key: string) => void;
+  openRouterModel?: string;
+  setOpenRouterModel?: (model: string) => void;
+  openRouterIsFree?: boolean;
+  setOpenRouterIsFree?: (isFree: boolean) => void;
+  openRouterContextSize?: number;
+  setOpenRouterContextSize?: (size: number) => void;
   customMomentsPrompt: string;
   setCustomMomentsPrompt: (prompt: string) => void;
   defaultMomentsPrompt: string;
@@ -70,6 +78,14 @@ export function SettingsPanel({
   setLmstudioModel,
   lmstudioBaseUrl = "http://127.0.0.1:1234/v1",
   setLmstudioBaseUrl,
+  openRouterKey = "",
+  setOpenRouterKey,
+  openRouterModel = "openrouter/free",
+  setOpenRouterModel,
+  openRouterIsFree = true,
+  setOpenRouterIsFree,
+  openRouterContextSize = 16384,
+  setOpenRouterContextSize,
   customMomentsPrompt,
   setCustomMomentsPrompt,
   defaultMomentsPrompt,
@@ -77,6 +93,7 @@ export function SettingsPanel({
   onResetConfig,
 }: SettingsPanelProps) {
   const [confirmReset, setConfirmReset] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
   const effectiveWhisperModels = useMemo(() => {
     return whisperModelsList && whisperModelsList.length > 0
       ? whisperModelsList
@@ -345,7 +362,7 @@ export function SettingsPanel({
               <span style={{ fontWeight: 600, fontSize: "0.76rem", color: "var(--text-secondary)", letterSpacing: "0.03em", display: "block", marginBottom: "0.45rem" }}>
                 PROVEEDOR ACTIVO
               </span>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.65rem" }}>
                 <button
                   type="button"
                   onClick={() => {
@@ -399,6 +416,34 @@ export function SettingsPanel({
                   </div>
                   <span style={{ fontSize: "0.68rem", fontWeight: 600, padding: "2px 6px", borderRadius: "4px", background: environment?.hasLmStudio ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.05)", color: environment?.hasLmStudio ? "#34d399" : "#71717a" }}>
                     {environment?.hasLmStudio ? `${lmStudioCount} cargados` : "Desconectado"}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLlmEngine("openrouter");
+                    syncConfig({ llmEngine: "openrouter" });
+                  }}
+                  style={{
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "8px",
+                    border: llmEngine === "openrouter" ? "2px solid #38bdf8" : "1px solid #27272a",
+                    background: llmEngine === "openrouter" ? "rgba(56, 189, 248, 0.1)" : "rgba(255, 255, 255, 0.02)",
+                    color: llmEngine === "openrouter" ? "#fafafa" : "#a1a1aa",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: openRouterKey.trim() ? "#10b981" : "#f59e0b" }} />
+                    <span style={{ fontWeight: 700, fontSize: "0.84rem" }}>OpenRouter (Cloud)</span>
+                  </div>
+                  <span style={{ fontSize: "0.68rem", fontWeight: 600, padding: "2px 6px", borderRadius: "4px", background: openRouterKey.trim() ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)", color: openRouterKey.trim() ? "#34d399" : "#fbbf24" }}>
+                    {openRouterKey.trim() ? "Listo" : "Sin Clave"}
                   </span>
                 </button>
               </div>
@@ -564,6 +609,174 @@ export function SettingsPanel({
                     placeholder="http://127.0.0.1:1234/v1"
                     style={{ width: "100%", padding: "0.4rem 0.65rem", fontSize: "0.82rem", fontFamily: "var(--font-mono, monospace)" }}
                   />
+                </div>
+              </div>
+            )}
+
+            {/* Ajustes específicos de OpenRouter */}
+            {llmEngine === "openrouter" && (
+              <div style={{ marginTop: "0.4rem", padding: "0.85rem", borderRadius: "8px", background: "rgba(0, 0, 0, 0.25)", border: "1px solid #202025", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {/* 1. API Key */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                    <label style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--text-primary)" }}>
+                      API Key de OpenRouter:
+                    </label>
+                    <span style={{ fontSize: "0.7rem", color: openRouterKey.trim() ? "#34d399" : "#fbbf24", fontWeight: 600 }}>
+                      {openRouterKey.trim() ? "Clave configurada" : "Falta ingresar clave"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <input
+                      type={showApiKey ? "text" : "password"}
+                      className="form-input"
+                      value={openRouterKey}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (setOpenRouterKey) setOpenRouterKey(val);
+                      }}
+                      placeholder="sk-or-v1-..."
+                      style={{ flex: 1, padding: "0.4rem 0.65rem", fontSize: "0.82rem", fontFamily: "var(--font-mono, monospace)" }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-cancel"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      style={{ padding: "0 10px", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.72rem" }}
+                      title={showApiKey ? "Ocultar clave" : "Mostrar clave"}
+                    >
+                      {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                      <span>{showApiKey ? "Ocultar" : "Mostrar"}</span>
+                    </button>
+                  </div>
+                  <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", marginTop: "0.25rem", display: "block" }}>
+                    Tu clave se guarda localmente en este equipo y nunca se comparte externamente.
+                  </span>
+                </div>
+
+                {/* 2. Modelo */}
+                <div style={{ borderTop: "1px solid #202025", paddingTop: "0.65rem" }}>
+                  <label style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--text-primary)", display: "block", marginBottom: "0.35rem" }}>
+                    Modelo de OpenRouter:
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={openRouterModel}
+                    onChange={(e) => {
+                      if (setOpenRouterModel) setOpenRouterModel(e.target.value);
+                    }}
+                    placeholder="openrouter/free"
+                    style={{ width: "100%", padding: "0.4rem 0.65rem", fontSize: "0.82rem", fontFamily: "var(--font-mono, monospace)", marginBottom: "0.4rem" }}
+                  />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", alignSelf: "center", marginRight: "2px" }}>Presets:</span>
+                    {[
+                      { label: "openrouter/free (Gratis)", id: "openrouter/free" },
+                      { label: "Llama 3.3 70B (Gratis)", id: "meta-llama/llama-3.3-70b-instruct:free" },
+                      { label: "Gemini 2.0 Flash (Gratis)", id: "google/gemini-2.0-flash-exp:free" },
+                      { label: "DeepSeek Chat (Pago)", id: "deepseek/deepseek-chat" },
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          if (setOpenRouterModel) setOpenRouterModel(m.id);
+                          if (m.id.includes(":free") || m.id === "openrouter/free") {
+                            if (setOpenRouterIsFree) setOpenRouterIsFree(true);
+                          } else {
+                            if (setOpenRouterIsFree) setOpenRouterIsFree(false);
+                          }
+                        }}
+                        style={{
+                          fontSize: "0.68rem",
+                          padding: "2px 7px",
+                          borderRadius: "4px",
+                          border: openRouterModel === m.id ? "1px solid #38bdf8" : "1px solid #27272a",
+                          background: openRouterModel === m.id ? "rgba(56, 189, 248, 0.15)" : "#18181b",
+                          color: openRouterModel === m.id ? "#38bdf8" : "#a1a1aa",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. Modalidad Free vs Pago */}
+                <div style={{ borderTop: "1px solid #202025", paddingTop: "0.65rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                    <label style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--text-primary)" }}>
+                      Modalidad del Modelo:
+                    </label>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (setOpenRouterIsFree) setOpenRouterIsFree(true);
+                      }}
+                      style={{
+                        padding: "0.5rem 0.65rem",
+                        borderRadius: "6px",
+                        border: openRouterIsFree ? "1.5px solid #34d399" : "1px solid #27272a",
+                        background: openRouterIsFree ? "rgba(16, 185, 129, 0.12)" : "transparent",
+                        color: openRouterIsFree ? "#fafafa" : "#a1a1aa",
+                        cursor: "pointer",
+                        fontSize: "0.78rem",
+                        fontWeight: openRouterIsFree ? 700 : 500,
+                        textAlign: "left",
+                      }}
+                    >
+                      <div>Modelo Free (50 req/día)</div>
+                      <div style={{ fontSize: "0.68rem", opacity: 0.7, marginTop: "2px" }}>Macro-chunks de 15m (ahorro de cuota)</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (setOpenRouterIsFree) setOpenRouterIsFree(false);
+                      }}
+                      style={{
+                        padding: "0.5rem 0.65rem",
+                        borderRadius: "6px",
+                        border: !openRouterIsFree ? "1.5px solid #60a5fa" : "1px solid #27272a",
+                        background: !openRouterIsFree ? "rgba(96, 165, 250, 0.12)" : "transparent",
+                        color: !openRouterIsFree ? "#fafafa" : "#a1a1aa",
+                        cursor: "pointer",
+                        fontSize: "0.78rem",
+                        fontWeight: !openRouterIsFree ? 700 : 500,
+                        textAlign: "left",
+                      }}
+                    >
+                      <div>Modelo Pago (Sin Límite)</div>
+                      <div style={{ fontSize: "0.68rem", opacity: 0.7, marginTop: "2px" }}>Inferencia directa sin pausas de ráfaga</div>
+                    </button>
+                  </div>
+                  <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", marginTop: "0.35rem", display: "block" }}>
+                    {openRouterIsFree
+                      ? "Macro-compactación activa: comprime el stream en 2 o 3 bloques grandes para un video de 30m, permitiendo analizar hasta 15-20 grabaciones al día dentro de tus 50 peticiones gratuitas."
+                      : "Modo sin restricciones de cuota diaria activa."}
+                  </span>
+                </div>
+
+                {/* 4. Ventana de Contexto */}
+                <div style={{ borderTop: "1px solid #202025", paddingTop: "0.65rem" }}>
+                  <label style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--text-primary)", display: "block", marginBottom: "0.35rem" }}>
+                    Ventana de Contexto (Context Window):
+                  </label>
+                  <select
+                    className="form-select"
+                    value={openRouterContextSize}
+                    onChange={(e) => {
+                      if (setOpenRouterContextSize) setOpenRouterContextSize(Number(e.target.value));
+                    }}
+                    style={{ width: "100%", padding: "0.4rem 0.65rem", fontSize: "0.82rem" }}
+                  >
+                    <option value={16384}>16,384 tokens (Recomendado - 2 a 3 peticiones por video)</option>
+                    <option value={8192}>8,192 tokens (Estándar)</option>
+                    <option value={32768}>32,768 tokens (Modelos grandes)</option>
+                  </select>
                 </div>
               </div>
             )}

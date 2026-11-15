@@ -188,7 +188,7 @@ export type ContentType = "gaming" | "tutorial" | "podcast" | "general";
 
 export type TranscriptionEngine = "local" | "faster-whisper";
 
-export type LlmEngine = "local" | "ollama" | "lmstudio";
+export type LlmEngine = "local" | "ollama" | "lmstudio" | "openrouter";
 
 export type HardwareTelemetry = {
   hasGpu: boolean;

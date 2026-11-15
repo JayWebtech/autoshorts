@@ -901,6 +901,8 @@ class Api:
             custom_prompt = args.get("customPrompt")
             gaming_subgenre = args.get("gamingSubgenre")
             game_context = args.get("gameContext")
+            is_free = bool(args.get("isFree", True) if "isFree" in args else ("free" in str(model_name).lower()))
+            context_size = int(args.get("contextSize", 16384))
         else:
             project_id = args
             api_key = None
@@ -912,6 +914,8 @@ class Api:
             custom_prompt = None
             gaming_subgenre = None
             game_context = None
+            is_free = False
+            context_size = 8192
 
         self._cancel_candidates_flag = False
 
@@ -968,7 +972,9 @@ class Api:
             audio_path=audio_path if os.path.exists(audio_path) else None,
             custom_prompt=custom_prompt,
             gaming_subgenre=gaming_subgenre,
-            game_context=game_context
+            game_context=game_context,
+            is_free=is_free,
+            context_size=context_size
         )
 
         if self._cancel_candidates_flag:

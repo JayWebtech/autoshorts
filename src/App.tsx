@@ -66,6 +66,10 @@ export function App() {
     targetDuration: projectActions.targetDuration,
     autoDetectMoments: projectActions.autoDetectMoments,
     pullModelDirectly: settings.pullModelDirectly,
+    openRouterKey: settings.openRouterKey,
+    openRouterModel: settings.openRouterModel,
+    openRouterIsFree: settings.openRouterIsFree,
+    openRouterContextSize: settings.openRouterContextSize,
   });
   mediaPipelineRef.current = mediaPipeline;
 
@@ -92,6 +96,14 @@ export function App() {
       setLmstudioModel={settings.setLmstudioModel}
       lmstudioBaseUrl={settings.lmstudioBaseUrl}
       setLmstudioBaseUrl={settings.setLmstudioBaseUrl}
+      openRouterKey={settings.openRouterKey}
+      setOpenRouterKey={settings.setOpenRouterKey}
+      openRouterModel={settings.openRouterModel}
+      setOpenRouterModel={settings.setOpenRouterModel}
+      openRouterIsFree={settings.openRouterIsFree}
+      setOpenRouterIsFree={settings.setOpenRouterIsFree}
+      openRouterContextSize={settings.openRouterContextSize}
+      setOpenRouterContextSize={settings.setOpenRouterContextSize}
       environment={settings.environment}
       onRefreshEnv={() => projectActions.refresh(projectActions.detail?.project.id)}
       pullInputModel={settings.pullInputModel}
@@ -248,6 +260,14 @@ export function App() {
         setLmstudioModel={settings.setLmstudioModel}
         lmstudioBaseUrl={settings.lmstudioBaseUrl}
         setLmstudioBaseUrl={settings.setLmstudioBaseUrl}
+        openRouterKey={settings.openRouterKey}
+        setOpenRouterKey={settings.setOpenRouterKey}
+        openRouterModel={settings.openRouterModel}
+        setOpenRouterModel={settings.setOpenRouterModel}
+        openRouterIsFree={settings.openRouterIsFree}
+        setOpenRouterIsFree={settings.setOpenRouterIsFree}
+        openRouterContextSize={settings.openRouterContextSize}
+        setOpenRouterContextSize={settings.setOpenRouterContextSize}
         environment={settings.environment}
         onRefreshEnv={() => projectActions.refresh(projectActions.detail?.project.id)}
         pullInputModel={settings.pullInputModel}

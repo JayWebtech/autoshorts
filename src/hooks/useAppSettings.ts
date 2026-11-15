@@ -42,6 +42,37 @@ export function useAppSettings() {
     return localStorage.getItem("autoshorts_lmstudio_base_url") || "http://127.0.0.1:1234/v1";
   });
 
+  const [openRouterKey, setOpenRouterKey] = useState(() => {
+    return localStorage.getItem("autoshorts_openrouter_key") || "";
+  });
+  const [openRouterModel, setOpenRouterModel] = useState(() => {
+    return localStorage.getItem("autoshorts_openrouter_model") || "openrouter/free";
+  });
+  const [openRouterIsFree, setOpenRouterIsFree] = useState<boolean>(() => {
+    const saved = localStorage.getItem("autoshorts_openrouter_is_free");
+    return saved !== null ? saved === "true" : true;
+  });
+  const [openRouterContextSize, setOpenRouterContextSize] = useState<number>(() => {
+    const saved = localStorage.getItem("autoshorts_openrouter_context_size");
+    return saved ? Number(saved) : 16384;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_openrouter_key", openRouterKey);
+  }, [openRouterKey]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_openrouter_model", openRouterModel);
+  }, [openRouterModel]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_openrouter_is_free", String(openRouterIsFree));
+  }, [openRouterIsFree]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_openrouter_context_size", String(openRouterContextSize));
+  }, [openRouterContextSize]);
+
   const [whisperModel, setWhisperModel] = useState<string>(() => {
     return localStorage.getItem("autoshorts_whisper_model") || "large-v3-turbo";
   });
@@ -90,7 +121,11 @@ export function useAppSettings() {
   const canUseActiveLlm =
     llmEngine === "local"
       ? Boolean(environment?.hasOllama)
-      : canUseLmStudio;
+      : llmEngine === "lmstudio"
+      ? canUseLmStudio
+      : llmEngine === "openrouter"
+      ? Boolean(openRouterKey && openRouterKey.trim().length > 0)
+      : false;
 
   const pullModelDirectly = async (modelName: string) => {
     setDownloadingModelName(modelName);
@@ -370,6 +405,14 @@ export function useAppSettings() {
     setLmstudioModel,
     lmstudioBaseUrl,
     setLmstudioBaseUrl,
+    openRouterKey,
+    setOpenRouterKey,
+    openRouterModel,
+    setOpenRouterModel,
+    openRouterIsFree,
+    setOpenRouterIsFree,
+    openRouterContextSize,
+    setOpenRouterContextSize,
     whisperModel,
     setWhisperModel,
     whisperModelsList,

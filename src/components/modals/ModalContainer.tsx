@@ -38,6 +38,14 @@ export interface ModalContainerProps {
   setLmstudioModel: (model: string) => void;
   lmstudioBaseUrl: string;
   setLmstudioBaseUrl: (url: string) => void;
+  openRouterKey?: string;
+  setOpenRouterKey?: (key: string) => void;
+  openRouterModel?: string;
+  setOpenRouterModel?: (model: string) => void;
+  openRouterIsFree?: boolean;
+  setOpenRouterIsFree?: (isFree: boolean) => void;
+  openRouterContextSize?: number;
+  setOpenRouterContextSize?: (size: number) => void;
   environment: EnvironmentStatus | null;
   onRefreshEnv: () => Promise<void>;
   pullInputModel: string;
@@ -130,6 +138,14 @@ export function ModalContainer(props: ModalContainerProps) {
         setLmstudioModel={props.setLmstudioModel}
         lmstudioBaseUrl={props.lmstudioBaseUrl}
         setLmstudioBaseUrl={props.setLmstudioBaseUrl}
+        openRouterKey={props.openRouterKey}
+        setOpenRouterKey={props.setOpenRouterKey}
+        openRouterModel={props.openRouterModel}
+        setOpenRouterModel={props.setOpenRouterModel}
+        openRouterIsFree={props.openRouterIsFree}
+        setOpenRouterIsFree={props.setOpenRouterIsFree}
+        openRouterContextSize={props.openRouterContextSize}
+        setOpenRouterContextSize={props.setOpenRouterContextSize}
         environment={props.environment}
         onRefreshEnv={props.onRefreshEnv}
         pullInputModel={props.pullInputModel}
@@ -167,6 +183,8 @@ export function ModalContainer(props: ModalContainerProps) {
         lmstudioModel={props.lmstudioModel}
         setLmstudioModel={props.setLmstudioModel}
         canUseLmStudio={props.canUseLmStudio}
+        openRouterModel={props.openRouterModel}
+        openRouterIsFree={props.openRouterIsFree}
         transcriptionEngine={props.transcriptionEngine}
         whisperModel={props.whisperModel}
         setWhisperModel={props.setWhisperModel}
@@ -209,6 +227,8 @@ export function ModalContainer(props: ModalContainerProps) {
         llmEngine={props.llmEngine}
         localLlmModel={props.localLlmModel}
         lmstudioModel={props.lmstudioModel}
+        openRouterKey={props.openRouterKey}
+        openRouterModel={props.openRouterModel}
       />
 
       <CandidatePreviewModal

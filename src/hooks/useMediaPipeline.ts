@@ -54,6 +54,10 @@ interface UseMediaPipelineOptions {
   targetDuration: TargetDuration;
   autoDetectMoments: boolean;
   pullModelDirectly: (modelName: string) => Promise<void>;
+  openRouterKey?: string;
+  openRouterModel?: string;
+  openRouterIsFree?: boolean;
+  openRouterContextSize?: number;
 }
 
 export function useMediaPipeline(options: UseMediaPipelineOptions) {
@@ -75,6 +79,10 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
     targetDuration,
     autoDetectMoments,
     pullModelDirectly,
+    openRouterKey = "",
+    openRouterModel = "openrouter/free",
+    openRouterIsFree = true,
+    openRouterContextSize = 16384,
   } = options;
 
   const cancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -177,9 +185,12 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
         ? localLlmModel.trim()
         : llmEngine === "lmstudio"
         ? lmstudioModel.trim() || null
+        : llmEngine === "openrouter"
+        ? (openRouterModel || "openrouter/free").trim()
         : null;
-    return { activeLlmKey: "", activeLlmModel };
-  }, [llmEngine, localLlmModel, lmstudioModel]);
+    const activeLlmKey = llmEngine === "openrouter" ? (openRouterKey || "").trim() : "";
+    return { activeLlmKey, activeLlmModel };
+  }, [llmEngine, localLlmModel, lmstudioModel, openRouterModel, openRouterKey]);
 
   const transcribe = useCallback(async () => {
     if (!detail) return;
@@ -311,6 +322,8 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           customPrompt: customMomentsPrompt.trim() || null,
           gamingSubgenre,
           gameContext,
+          isFree: openRouterIsFree,
+          contextSize: openRouterContextSize,
         });
         await refresh(detail.project.id);
       } catch (err) {
@@ -339,6 +352,9 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
       customMomentsPrompt,
       localLlmModel,
       pullModelDirectly,
+      openRouterKey,
+      openRouterIsFree,
+      openRouterContextSize,
       refresh,
       setError,
       setBusy,
@@ -406,6 +422,12 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           setBusy("idle");
           return;
         }
+      } else if (llmEngine === "openrouter") {
+        if (!openRouterKey || !openRouterKey.trim()) {
+          setError("Debes configurar tu API Key de OpenRouter en Ajustes para buscar momentos.");
+          setBusy("idle");
+          return;
+        }
       }
 
       try {
@@ -424,6 +446,8 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
           customPrompt: customMomentsPrompt.trim() || null,
           gamingSubgenre,
           gameContext,
+          isFree: openRouterIsFree,
+          contextSize: openRouterContextSize,
         });
         await refresh(projectId);
       } catch (err) {
@@ -454,6 +478,9 @@ export function useMediaPipeline(options: UseMediaPipelineOptions) {
       customMomentsPrompt,
       localLlmModel,
       pullModelDirectly,
+      openRouterKey,
+      openRouterIsFree,
+      openRouterContextSize,
       refresh,
       setError,
       setBusy,

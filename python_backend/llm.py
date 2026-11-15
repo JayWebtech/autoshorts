@@ -47,6 +47,8 @@ def get_available_context_size(
     Detects the active context window limit from LM Studio or Ollama.
     Returns 8192 by default if not discoverable.
     """
+    if provider == "openrouter":
+        return 16384
     if provider == "lmstudio":
         try:
             raw_url = (lmstudio_base_url or os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")).rstrip("/")
@@ -845,6 +847,114 @@ def call_lmstudio(
     return content
 
 
+def call_openrouter(
+    prompt: str,
+    model_name: Optional[str] = None,
+    api_key: Optional[str] = None,
+    content_type: str = "gaming",
+    target_duration: str = "60s",
+    custom_prompt: Optional[str] = None,
+    gaming_subgenre: Optional[str] = None,
+    game_context: Optional[str] = None,
+    is_free: bool = True,
+    timeout: int = 120,
+) -> str:
+    """
+    Realiza inferencia con OpenRouter (Cloud API) compatible con OpenAI.
+    Maneja cuota Free (50 reqs/día), rate limits por minuto, backoff exponencial y circuit breaker.
+    """
+    key = (api_key or os.getenv("OPENROUTER_API_KEY", "")).strip()
+    if not key:
+        raise ModelFatalError("API Key de OpenRouter no configurada. Por favor ingresa tu API Key en la pantalla de Ajustes.")
+
+    model = (model_name or "openrouter/free").strip()
+    system_prompt = build_system_prompt(
+        content_type,
+        target_duration,
+        custom_prompt=custom_prompt,
+        gaming_subgenre=gaming_subgenre,
+        game_context=game_context
+    )
+    system_prompt += "\n\n[INSTRUCCIÓN CRÍTICA]: Responde ÚNICAMENTE con el objeto JSON solicitado, sin explicaciones ni texto adicional."
+
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://autoshorts.local",
+        "X-Title": "AutoShorts",
+    }
+    payload: Dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.2,
+    }
+
+    max_retries = 2 if is_free else 1
+    attempt = 0
+    resp = None
+
+    while True:
+        attempt += 1
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            raise ModelFatalError(f"Sin conexión a internet: No se pudo conectar a OpenRouter ({e}). Verifica tu conexión o utiliza un motor local (Ollama / LM Studio).")
+        except Exception as e:
+            raise RuntimeError(f"Error al enviar petición a OpenRouter: {e}")
+
+        if resp.ok:
+            break
+
+        err_text = resp.text
+
+        # 401 Unauthorized
+        if resp.status_code == 401:
+            raise ModelFatalError(f"API Key de OpenRouter inválida o no autorizada (HTTP 401): {err_text}")
+
+        # 402 Payment Required
+        if resp.status_code == 402:
+            raise ModelFatalError(f"Créditos insuficientes en tu cuenta de OpenRouter (HTTP 402): {err_text}")
+
+        # 429 Rate Limit vs Daily Quota
+        if resp.status_code == 429:
+            err_lower = err_text.lower()
+            if any(kw in err_lower for kw in ["daily limit", "free model limit", "quota", "50 requests"]):
+                raise ModelFatalError("Has alcanzado el límite diario de 50 peticiones en OpenRouter Free. Prueba mañana o utiliza Ollama/LM Studio local.")
+
+            if attempt <= max_retries:
+                delay = 3.0 * attempt
+                print(f"[OpenRouter] Rate limit temporal por minuto (HTTP 429). Esperando {delay}s antes de reintentar (intento {attempt}/{max_retries})...")
+                log_buffer.push(f"[OpenRouter] Esperando {delay}s por límite de ráfaga...", "warning")
+                time.sleep(delay)
+                continue
+            else:
+                raise ModelFatalError(f"Límite de peticiones de OpenRouter excedido tras reintentos (HTTP 429): {err_text}")
+
+        raise RuntimeError(f"Llamada a OpenRouter falló ({resp.status_code}): {err_text}")
+
+    data = resp.json()
+    choices = data.get("choices", [])
+    if not choices:
+        raise RuntimeError(f"OpenRouter no devolvió opciones (choices): {resp.text}")
+
+    msg_obj = choices[0].get("message", {})
+    content = msg_obj.get("content") or ""
+    if not content:
+        rc = msg_obj.get("reasoning") or msg_obj.get("reasoning_content") or ""
+        m = re.search(r"(\{.*\"candidates\".*\})", rc, re.DOTALL)
+        content = m.group(1) if m else rc
+
+    if "<think>" in content:
+        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        content = re.sub(r"<think>.*$", "", content, flags=re.DOTALL).strip()
+
+    return content
+
+
 
 def deduplicate_candidates(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     if not candidates:
@@ -924,7 +1034,9 @@ def _analyze_chunk_adaptively(
     context_limit: int,
     depth: int = 0,
     gaming_subgenre: Optional[str] = None,
-    game_context: Optional[str] = None
+    game_context: Optional[str] = None,
+    api_key: Optional[str] = None,
+    is_free: bool = True
 ) -> List[Dict[str, Any]]:
     if not chunk:
         return []
@@ -951,9 +1063,9 @@ def _analyze_chunk_adaptively(
     min_clip_dur = dur_info["min"]
     chunk_span = chunk_end - chunk_start
 
-    # Use macro compacting for long-form clips or low context models (<= 4k tokens)
-    # This compresses 30 minutes of speech into ~1200 tokens so 4GB VRAM hardware doesn't overflow
-    if target_duration in ["10m", "15m"] or context_limit <= 4096:
+    # Use macro compacting for long-form clips, low context models (<= 4k tokens) or OpenRouter Free
+    # This compresses 15-30 minutes of speech into ~600-1200 tokens so we avoid quota burning
+    if target_duration in ["10m", "15m"] or context_limit <= 4096 or (provider == "openrouter" and is_free):
         transcript_body = macro_compact_segments(
             chunk,
             block_sec=60.0 if target_duration in ["10m", "15m"] else 30.0,
@@ -979,12 +1091,24 @@ def _analyze_chunk_adaptively(
         mid = len(chunk) // 2
         left_chunk = chunk[:mid + 1]
         right_chunk = chunk[max(0, mid - 1):]
-        res_left = _analyze_chunk_adaptively(left_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, context_limit, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context)
-        res_right = _analyze_chunk_adaptively(right_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, context_limit, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context)
+        res_left = _analyze_chunk_adaptively(left_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, context_limit, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context, api_key=api_key, is_free=is_free)
+        res_right = _analyze_chunk_adaptively(right_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, context_limit, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context, api_key=api_key, is_free=is_free)
         return res_left + res_right
 
     try:
-        if provider == "lmstudio":
+        if provider == "openrouter":
+            resp_text = call_openrouter(
+                prompt_text,
+                model_name=model_name,
+                api_key=api_key,
+                content_type=content_type,
+                target_duration=target_duration,
+                custom_prompt=custom_prompt,
+                gaming_subgenre=gaming_subgenre,
+                game_context=game_context,
+                is_free=is_free
+            )
+        elif provider == "lmstudio":
             resp_text = call_lmstudio(
                 prompt_text,
                 model_name=model_name,
@@ -1023,8 +1147,8 @@ def _analyze_chunk_adaptively(
             mid = len(chunk) // 2
             left_chunk = chunk[:mid + 1]
             right_chunk = chunk[max(0, mid - 1):]
-            res_left = _analyze_chunk_adaptively(left_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, new_ctx, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context)
-            res_right = _analyze_chunk_adaptively(right_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, new_ctx, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context)
+            res_left = _analyze_chunk_adaptively(left_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, new_ctx, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context, api_key=api_key, is_free=is_free)
+            res_right = _analyze_chunk_adaptively(right_chunk, provider, model_name, content_type, target_duration, custom_prompt, enable_thinking, action_peaks, new_ctx, depth + 1, gaming_subgenre=gaming_subgenre, game_context=game_context, api_key=api_key, is_free=is_free)
             return res_left + res_right
         else:
             print(f"[ALERTA] Bloque [{chunk_start_fmt} - {chunk_end_fmt}] excede el contexto ({new_ctx} tokens) y no puede dividirse mas. Omitiendo.")
@@ -1051,11 +1175,13 @@ def detect_candidates_pipeline(
     audio_path: Optional[str] = None,
     custom_prompt: Optional[str] = None,
     gaming_subgenre: Optional[str] = None,
-    game_context: Optional[str] = None
+    game_context: Optional[str] = None,
+    is_free: bool = False,
+    context_size: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
     Main detection pipeline using Adaptive Dynamic Chunking ("Divide y Vencerás").
-    Runs 100% locally with Ollama or LM Studio.
+    Supports local inference (Ollama, LM Studio) and cloud inference (OpenRouter).
     """
     segments = transcript.get("segments", [])
     if not segments:
@@ -1075,10 +1201,19 @@ def detect_candidates_pipeline(
     if provider == "lmstudio":
         ensure_model_loaded(provider=provider, model_name=model_name)
 
-    # Detect active context size from LM Studio / Ollama
-    available_ctx = get_available_context_size(provider=provider, model_name=model_name)
-    log_buffer.push(f"[Contexto IA] Contexto detectado: {available_ctx} tokens.")
-    if target_duration == "15m":
+    # Detect active context size from LM Studio / Ollama / OpenRouter
+    if provider == "openrouter":
+        available_ctx = context_size or 16384
+    else:
+        available_ctx = get_available_context_size(provider=provider, model_name=model_name)
+
+    log_buffer.push(f"[Contexto IA] Contexto detectado: {available_ctx} tokens ({provider}).")
+
+    if provider == "openrouter" and is_free:
+        # Macro chunks of 15 minutes to guarantee <= 2-3 API calls for 30-45m recordings
+        chunk_dur = 900.0
+        overlap = 60.0
+    elif target_duration == "15m":
         chunk_dur = 1800.0  # 30 min chunk for 15 min clip target
         overlap = 240.0     # 4 min overlap
     elif target_duration == "10m":
@@ -1098,13 +1233,17 @@ def detect_candidates_pipeline(
     total_chunks = len(chunks)
     all_drafts = []
 
-    print(f"Dividing stream into {total_chunks} chunk(s) of {int(chunk_dur//60)} min for {content_type} detection (Context: {available_ctx} tokens)...")
+    print(f"Dividing stream into {total_chunks} chunk(s) of {int(chunk_dur//60)} min for {content_type} detection (Context: {available_ctx} tokens, Provider: {provider})...")
 
     try:
         for idx, chunk in enumerate(chunks, start=1):
             if is_cancelled and is_cancelled():
                 print("[CANCELADO] Proceso de detección cancelado por el usuario.")
                 break
+
+            # En modo Free de OpenRouter, pausar 2.5s entre bloques para evitar HTTP 429 de ráfaga
+            if idx > 1 and provider == "openrouter" and is_free:
+                time.sleep(2.5)
 
             chunk_start_fmt = f"{int(chunk[0]['start'] // 60):02d}:{int(chunk[0]['start'] % 60):02d}"
             chunk_end_fmt = f"{int(chunk[-1]['end'] // 60):02d}:{int(chunk[-1]['end'] % 60):02d}"
@@ -1125,7 +1264,9 @@ def detect_candidates_pipeline(
                     action_peaks=action_peaks,
                     context_limit=available_ctx,
                     gaming_subgenre=gaming_subgenre,
-                    game_context=game_context
+                    game_context=game_context,
+                    api_key=api_key,
+                    is_free=is_free
                 )
                 all_drafts.extend(chunk_candidates)
             except ModelFatalError as e:
@@ -1211,7 +1352,34 @@ def refine_transcript_with_llm(
             user_prompt = f"Corrige las siguientes líneas:\n" + "\n".join(formatted_lines)
 
             raw_resp = ""
-            if provider == "lmstudio":
+            if provider == "openrouter":
+                key = (api_key or os.getenv("OPENROUTER_API_KEY", "")).strip()
+                if not key:
+                    raise ModelFatalError("API Key de OpenRouter no configurada.")
+                url = "https://openrouter.ai/api/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://autoshorts.local",
+                    "X-Title": "AutoShorts",
+                }
+                payload = {
+                    "model": model_name or "openrouter/free",
+                    "messages": [
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.1
+                }
+                try:
+                    resp = requests.post(url, json=payload, headers=headers, timeout=120)
+                    if resp.ok:
+                        choices = resp.json().get("choices", [])
+                        if choices:
+                            raw_resp = choices[0]["message"]["content"]
+                except Exception as e:
+                    print(f"OpenRouter refine error: {e}")
+            elif provider == "lmstudio":
                 url = (os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")).rstrip("/") + "/chat/completions"
                 payload = {
                     "model": model_name or "local-model",
@@ -1319,7 +1487,45 @@ Escribe en Español natural, directo y sin guiones largos (em dashes)."""
 
     content = ""
     try:
-        if provider == "lmstudio":
+        if provider == "openrouter":
+            key = (api_key or os.getenv("OPENROUTER_API_KEY", "")).strip()
+            if not key:
+                raise ModelFatalError("API Key de OpenRouter no configurada.")
+            url = "https://openrouter.ai/api/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://autoshorts.local",
+                "X-Title": "AutoShorts",
+            }
+            payload = {
+                "model": model_name or "openrouter/free",
+                "messages": [
+                    {"role": "system", "content": system_prompt + "\n\nResponde ÚNICAMENTE en JSON válido."},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "temperature": 0.5,
+            }
+            resp = requests.post(url, json=payload, headers=headers, timeout=120)
+            if not resp.ok:
+                err_text = resp.text
+                if resp.status_code == 401:
+                    raise ModelFatalError(f"API Key de OpenRouter inválida (HTTP 401): {err_text}")
+                if resp.status_code == 402:
+                    raise ModelFatalError(f"Créditos insuficientes en OpenRouter (HTTP 402): {err_text}")
+                if resp.status_code == 429:
+                    raise ModelFatalError(f"Límite de peticiones de OpenRouter excedido (HTTP 429): {err_text}")
+                raise RuntimeError(f"OpenRouter social copy failed ({resp.status_code}): {err_text}")
+            choices = resp.json().get("choices", [])
+            content = choices[0]["message"]["content"] if choices else ""
+            if not content and choices:
+                rc = choices[0]["message"].get("reasoning") or choices[0]["message"].get("reasoning_content") or ""
+                m = re.search(r"(\{.*\})", rc, re.DOTALL)
+                content = m.group(1) if m else rc
+            if "<think>" in content:
+                content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+                content = re.sub(r"<think>.*$", "", content, flags=re.DOTALL).strip()
+        elif provider == "lmstudio":
             url = (os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")).rstrip("/") + "/chat/completions"
             direct_hint = "\n\n[MODO DIRECTO]: PROHIBIDO usar <think> o razonar." if not has_thinking else ""
             payload = {
@@ -1368,7 +1574,7 @@ Escribe en Español natural, directo y sin guiones largos (em dashes)."""
             content = resp.json().get("message", {}).get("content", "")
 
     finally:
-        if not keep_loaded:
+        if not keep_loaded and provider != "openrouter":
             if provider == "lmstudio":
                 unload_all_lmstudio_models()
             else:

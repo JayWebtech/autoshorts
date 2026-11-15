@@ -274,3 +274,22 @@
   7. **Antislop UI Integral en Modal de Previsualización (`CandidatePreviewModal.tsx`):**
      - Erradicar emojis decorativos en formatos, presets de estilo de subtítulos, animaciones y opciones de CTA.
 - **Motivo:** Garantizar que los clips cortados en lote respeten rigurosamente los ajustes finos del creador, eliminar estados inconsistentes en base de datos y disco, proteger la experiencia de usuario ante fallos de red/render y ofrecer una interfaz sobria y profesional de grado NLE.
+
+## D-031: Fix de Terminal en Portable (Subsystem 2 GUI) e Integración de OpenRouter (Free / Paid) con Macro-Chunks
+- **Decisión:**
+  1. **Fix Definitivo del Subsistema PE en Ejecutable Portable (`build_portable.py`):**
+     - Restaurar `runw.exe` en el bootloader de PyInstaller con `Subsystem = 2` (`IMAGE_SUBSYSTEM_WINDOWS_GUI`).
+     - Incorporar en `build_portable.py` la rutina `ensure_gui_subsystem` ejecutada en el Paso 2.5 antes de la compresión en `.tar.gz`, forzando `pe.OPTIONAL_HEADER.Subsystem = 2` de forma in-place para que Windows nunca más abra una consola CMD al iniciar `AutoShorts.exe`.
+  2. **Integración de OpenRouter Cloud API sin Romper la Filosofía Local-First:**
+     - Mantener la transcripción con **faster-whisper 100% local** sobre GPU CUDA / CPU INT8 (cero audio enviado a la nube, privacidad total y latencia cero).
+     - Incorporar OpenRouter como motor de inferencia LLM alternativo y opcional en `python_backend/llm.py` y `api.py` para usuarios que carecen de hardware local para correr modelos 7B/14B en Ollama o LM Studio.
+  3. **Protección de Cuota Diaria (50 reqs/día) y Rate Limits en OpenRouter Free:**
+     - En modo Free con ventana de contexto de **16k tokens**, forzar `macro_compact_segments` y bloques de 15 minutos (`chunk_dur = 900.0s`), reduciendo las llamadas a la API a **2 o 3 peticiones por video** de 30-45 minutos (ahorro del 95% de la cuota).
+     - Incorporar delay de 2.5s entre bloques analizados para prevenir el rate limit de ráfaga por minuto.
+     - Implementar en `call_openrouter` reintentos defensivos con backoff ante HTTP 429 transitorios y un *Circuit Breaker* inmediato ante 401 (clave inválida), 402 (sin créditos) y 429 de cuota diaria agotada (50 peticiones alcanzadas), cortando el bucle sin reintentos inútiles.
+     - Soportar modelos de razonamiento (CoT) saneando etiquetas `<think>` y extrayendo respuestas desde `message["reasoning"]` / `reasoning_content`.
+  4. **Experiencia de Usuario Profesional Antislop en Frontend (`src/`):**
+     - En `SettingsPanel.tsx`, desplegar selector de 3 motores (`repeat(3, 1fr)`) y subpanel dedicado para OpenRouter con campo de API Key con toggle de visibilidad (icono `Eye` / `EyeOff`), selector de modelo con presets rápidos (`openrouter/free`, `meta-llama/llama-3.3-70b-instruct:free`, `google/gemini-2.0-flash-exp:free`, `deepseek/deepseek-chat`), toggle Free vs Pago y selector de context window (16k vs 8k).
+     - En `StyleModal.tsx` y `QuickCopyModal.tsx`, agregar soporte fluido a OpenRouter con indicador del modelo activo.
+     - Corregir `canUseActiveLlm` en `useAppSettings.ts` para que dependa exclusivamente de la presencia de la clave configurada al seleccionar OpenRouter.
+- **Motivo:** Garantizar que el software portable abra con una ventana de escritorio pura y limpia sin terminales parásitas en Windows, y brindar a los creadores flexibilidad para usar modelos gratuitos de OpenRouter sin saturar su cuota diaria.

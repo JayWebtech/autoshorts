@@ -38,6 +38,8 @@ interface StyleModalProps {
   lmstudioModel?: string;
   setLmstudioModel?: (model: string) => void;
   canUseLmStudio?: boolean;
+  openRouterModel?: string;
+  openRouterIsFree?: boolean;
   transcriptionEngine: TranscriptionEngine;
   whisperModel: string;
   setWhisperModel: (model: string) => void;
@@ -76,6 +78,8 @@ export function StyleModal({
   lmstudioModel = "",
   setLmstudioModel,
   canUseLmStudio = false,
+  openRouterModel = "openrouter/free",
+  openRouterIsFree = true,
   transcriptionEngine,
   whisperModel,
   setWhisperModel,
@@ -437,16 +441,26 @@ export function StyleModal({
                       <option value="lmstudio">
                         LM Studio {environment?.hasLmStudio ? `(En línea: ${environment.installedLmStudioModels?.length || 0} modelos)` : "(Desconectado)"}
                       </option>
+                      <option value="openrouter">
+                        OpenRouter (Cloud API)
+                      </option>
                     </select>
                   </div>
 
                   {/* Model Selector / Input */}
                   <div>
                     <label style={{ fontSize: "0.72rem", opacity: 0.7, display: "block", marginBottom: "0.2rem" }}>
-                      {llmEngine === "local" ? "Modelo de Ollama instalado" : "Modelo de LM Studio"}
+                      {llmEngine === "local" ? "Modelo de Ollama instalado" : llmEngine === "lmstudio" ? "Modelo de LM Studio" : "Modelo de OpenRouter"}
                     </label>
 
-                    {llmEngine === "local" ? (
+                    {llmEngine === "openrouter" ? (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.45rem 0.6rem", background: "rgba(255,255,255,0.03)", borderRadius: "6px", border: "1px solid #27272a" }}>
+                        <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#38bdf8" }}>{openRouterModel || "openrouter/free"}</span>
+                        <span style={{ fontSize: "0.7rem", color: openRouterIsFree ? "#34d399" : "#60a5fa" }}>
+                          {openRouterIsFree ? "Modo Free (15m chunks)" : "Modo Pago"}
+                        </span>
+                      </div>
+                    ) : llmEngine === "local" ? (
                       environment?.installedOllamaModels && environment.installedOllamaModels.length > 0 ? (
                         <select
                           className="form-select"

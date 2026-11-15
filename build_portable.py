@@ -10,12 +10,39 @@ import hashlib
 import tarfile
 import subprocess
 from pathlib import Path
+import pefile
 
 # Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from python_backend.version import __version__, APP_NAME
+
+
+def ensure_gui_subsystem(exe_path: Path):
+    """
+    Inspecciona y fuerza la cabecera PE de AutoShorts.exe a Subsystem: 2 (IMAGE_SUBSYSTEM_WINDOWS_GUI).
+    Evita de forma permanente que Windows abra una terminal CMD obligatoria al lanzar el portable.
+    """
+    print(f"\n[*] Verificando cabecera PE en {exe_path.name}...")
+    pe = pefile.PE(str(exe_path))
+    curr_sub = pe.OPTIONAL_HEADER.Subsystem
+    if curr_sub != 2:
+        print(f"[*] Ajustando Subsystem PE de {curr_sub} a 2 (IMAGE_SUBSYSTEM_WINDOWS_GUI)...")
+        pe.OPTIONAL_HEADER.Subsystem = 2
+        pe.OPTIONAL_HEADER.CheckSum = pe.generate_checksum()
+        pe_offset = pe.DOS_HEADER.e_lfanew
+        opt_offset = pe_offset + 4 + 20
+        subsystem_offset = opt_offset + 68
+        pe.close()
+        with open(exe_path, "r+b") as f:
+            f.seek(subsystem_offset)
+            f.write((2).to_bytes(2, byteorder="little"))
+        print("    Cabecera PE corregida exitosamente a Subsystem 2 (GUI pura).")
+    else:
+        pe.close()
+        print("    Cabecera PE ya es Subsystem 2 (GUI pura, sin terminal).")
+
 
 
 def compute_sha256(file_path: Path) -> str:
@@ -63,6 +90,9 @@ def main():
     if not output_dir.exists() or not (output_dir / "AutoShorts.exe").exists():
         print("\n[ERROR] No se encontró el ejecutable generado en dist/AutoShorts/AutoShorts.exe")
         sys.exit(1)
+
+    # 2.5 Asegurar que el ejecutable tenga Subsystem = 2 (GUI, sin terminal CMD)
+    ensure_gui_subsystem(output_dir / "AutoShorts.exe")
 
     # 3. Crear archivo marcador portable.mode y carpeta data inicial
     portable_marker = output_dir / "portable.mode"

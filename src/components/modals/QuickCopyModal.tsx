@@ -9,6 +9,8 @@ interface QuickCopyModalProps {
   llmEngine: string;
   localLlmModel: string;
   lmstudioModel?: string;
+  openRouterKey?: string;
+  openRouterModel?: string;
 }
 
 function cleanSrtClientText(content: string): string {
@@ -33,6 +35,8 @@ export function QuickCopyModal({
   llmEngine,
   localLlmModel,
   lmstudioModel = "",
+  openRouterKey = "",
+  openRouterModel = "openrouter/free",
 }: QuickCopyModalProps) {
   const [activeTab, setActiveTab] = useState<"srt" | "text" | "media">("srt");
   const [srtFile, setSrtFile] = useState<{ name: string; path?: string; text: string; wordsCount: number } | null>(null);
@@ -141,7 +145,10 @@ export function QuickCopyModal({
         ? localLlmModel.trim()
         : llmEngine === "lmstudio"
         ? lmstudioModel.trim() || null
+        : llmEngine === "openrouter"
+        ? (openRouterModel || "openrouter/free").trim()
         : null;
+    const activeLlmKey = llmEngine === "openrouter" ? (openRouterKey || "").trim() || null : null;
 
     try {
       const result = await invoke<CopyResult>("generate_quick_copy", {
@@ -150,7 +157,7 @@ export function QuickCopyModal({
         extraContext: extraContext.trim() || null,
         provider: llmEngine,
         modelName: activeLlmModel,
-        apiKey: null,
+        apiKey: activeLlmKey,
       });
       setCopyResult(result);
     } catch (err) {
@@ -165,6 +172,8 @@ export function QuickCopyModal({
       ? `LM Studio ${lmstudioModel ? `(${lmstudioModel})` : "(Auto)"}`
       : llmEngine === "local"
       ? localLlmModel || "Ollama"
+      : llmEngine === "openrouter"
+      ? `OpenRouter (${openRouterModel || "openrouter/free"})`
       : llmEngine.toUpperCase();
 
   return (
