@@ -1,6 +1,6 @@
 [![Fund my work on FLOSSAfrica](https://flossafrica.com/badge.svg)](https://flossafrica.com/m/jaywebtech?p=autoshorts)
 
-Trade on Bags.fm: https://bags.fm/EPF7HuCUh4KgBFykokstPTR1ESrFPWDm66BDZzCwBAGS
+Trade on pump.fun: [https://bags.fm/EPF7HuCUh4KgBFykokstPTR1ESrFPWDm66BDZzCwBAGS](https://pump.fun/coin/62U4Ar7WBBjwUKWUaj4pTj52fAwW9hXypWRwvmwnpump)
 
 # AutoShorts
 
