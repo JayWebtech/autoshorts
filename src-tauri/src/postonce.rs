@@ -11,11 +11,15 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 const DEFAULT_BASE_URL: &str = "https://postonce.to/api/public";
+
+/// API calls are small; the clip upload itself has no time limit (slow connections).
+const API_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Where "Get a free API key" leads.
 pub const SIGNUP_URL: &str =
@@ -68,6 +72,7 @@ pub struct PostOnceResult {
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent(concat!("AutoShorts/", env!("CARGO_PKG_VERSION")))
+        .connect_timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| e.to_string())
 }
@@ -81,7 +86,8 @@ async fn read_json(response: reqwest::Response, action: &str) -> Result<Value, S
     }
     let message = body["error"]["message"].as_str().unwrap_or("Request failed");
     let hint = body["error"]["hint"].as_str().unwrap_or("");
-    let mut text = format!("PostOnce could not {action}: {message}");
+    let mut text = format!("PostOnce could not {action}: {}", message.trim_end_matches('.'));
+    text.push('.');
     if status == reqwest::StatusCode::UNAUTHORIZED {
         text.push_str(" Check your PostOnce API key in API Settings.");
     } else if !hint.is_empty() {
@@ -108,6 +114,7 @@ pub async fn list_accounts(api_key: &str) -> Result<Vec<PostOnceAccount>, String
     let key = require_key(api_key)?;
     let response = client()?
         .get(format!("{}/v1/accounts", base_url()))
+        .timeout(API_TIMEOUT)
         .bearer_auth(&key)
         .send()
         .await
@@ -181,6 +188,7 @@ async fn upload_clip(
 
     let response = http
         .post(format!("{base}/v1/media/uploads"))
+        .timeout(API_TIMEOUT)
         .bearer_auth(key)
         .json(&json!({ "filename": filename, "content_type": "video/mp4" }))
         .send()
@@ -209,6 +217,7 @@ async fn upload_clip(
 
     let response = http
         .get(format!("{base}/v1/media/{media_id}"))
+        .timeout(API_TIMEOUT)
         .bearer_auth(key)
         .send()
         .await
@@ -263,6 +272,7 @@ pub async fn post_clip(
     }
     let response = http
         .post(format!("{base}/v1/posts"))
+        .timeout(API_TIMEOUT)
         .bearer_auth(&key)
         .header(
             "Idempotency-Key",
@@ -272,6 +282,19 @@ pub async fn post_clip(
         .send()
         .await
         .map_err(|e| format!("Could not reach PostOnce: {e}"))?;
+    if response.status() == reqwest::StatusCode::CONFLICT {
+        // The key covers this clip version, caption, accounts and time, so a reused key
+        // means this exact post was already sent (for example before an app restart).
+        let body: Value = response.json().await.unwrap_or(Value::Null);
+        if body["error"]["code"].as_str() == Some("idempotency_key_reused") {
+            return Ok(PostOnceResult {
+                post_id: String::new(),
+                status: "already_sent".to_string(),
+            });
+        }
+        let message = body["error"]["message"].as_str().unwrap_or("Request failed");
+        return Err(format!("PostOnce could not create the post: {message}"));
+    }
     let post = read_json(response, "create the post").await?;
     Ok(PostOnceResult {
         post_id: post["data"]["id"].as_str().unwrap_or("").to_string(),

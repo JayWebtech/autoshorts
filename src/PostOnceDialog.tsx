@@ -97,7 +97,7 @@ export function PostOnceDialog({
         ? new Date(start.getTime() + index * 24 * 60 * 60 * 1000).toISOString()
         : null;
       try {
-        await invoke<PostResult>("post_clip_to_postonce", {
+        const result = await invoke<PostResult>("post_clip_to_postonce", {
           candidateId: clip.candidateId,
           apiKey,
           caption: single ? caption : clip.hook,
@@ -107,7 +107,11 @@ export function PostOnceDialog({
         posted += 1;
         onPosted(
           clip.candidateId,
-          publishAt ? `Scheduled ${new Date(publishAt).toLocaleString()}` : "Sent to PostOnce",
+          result.status === "already_sent"
+            ? "Already sent to PostOnce"
+            : publishAt
+              ? `Scheduled ${new Date(publishAt).toLocaleString()}`
+              : "Sent to PostOnce",
         );
       } catch (err) {
         setError(errorText(err));
@@ -159,7 +163,7 @@ export function PostOnceDialog({
           <div className="postonce-loading">
             <Loader2 className="spin" size={16} /> Loading your accounts…
           </div>
-        ) : (
+        ) : accounts.length === 0 && error ? null : (
           <>
             {accounts.length > 0 ? (
               <div className="postonce-accounts">
@@ -178,7 +182,7 @@ export function PostOnceDialog({
                 ))}
               </div>
             ) : (
-              !error && <small>No accounts yet. Connect TikTok, YouTube or Instagram in PostOnce first.</small>
+              <small>No accounts yet. Connect TikTok, YouTube or Instagram in PostOnce first.</small>
             )}
 
             {single ? (
@@ -200,7 +204,7 @@ export function PostOnceDialog({
                   type="datetime-local"
                   value={scheduleAt}
                   onChange={(event) => setScheduleAt(event.target.value)}
-                  disabled={busy}
+                  readOnly={busy}
                 />
               )}
               {schedule && !single && <small>One clip per day from this time.</small>}
