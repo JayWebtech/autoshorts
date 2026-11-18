@@ -88,7 +88,7 @@ When you first launch the application, you will be greeted by an **Onboarding Wi
 
 #### Option A: Fully Offline (Ollama + Whisper)
 1. **Ollama Setup**: Select a local model card (`llama3.2 3B`, `qwen2.5 3B`, or `qwen2.5 7B`). The application will check if Ollama is running and automatically pull the model weights, showing a downloader progress bar.
-2. **Local Whisper**: Follow the prompt instructions to verify Python is installed and run `pip3 install openai-whisper` to enable fully offline transcription.
+2. **Local Whisper**: Click **Instalar Whisper**. The app creates a virtualenv under its data directory (`python-venv`) and installs `openai-whisper` into it, so nothing is added to your system Python. The first install downloads PyTorch (~1–2 GB). Only a Python 3 interpreter is required — the Linux packages declare `python3`/`python3-venv` as dependencies.
 
 #### Option B: Cloud API Keys
 1. Enter your API credentials for:
@@ -96,6 +96,14 @@ When you first launch the application, you will be greeted by an **Onboarding Wi
    * **DeepSeek**: (Highly Recommended) For cheap, high-quality cloud moment detection.
    * **Claude**: For premium copywriting, hooks, and moment detection.
 2. Click **Save & Start** to immediately load the dashboard.
+
+#### Option C: Any OpenAI-Compatible Endpoint
+Select **OpenAI-Compatible (Custom Base URL)** in **API Settings** and provide:
+* **Base URL**: the API root, e.g. `http://localhost:1234/v1` (LM Studio), `http://localhost:8000/v1` (vLLM), `http://localhost:8080/v1` (llama.cpp), or a hosted provider URL.
+* **Model Name**: the model identifier that endpoint expects.
+* **API Key**: optional; leave empty for local servers that do not require auth.
+
+The app calls `POST {Base URL}/chat/completions` and retries without `response_format` if the server rejects JSON mode.
 
 ---
 
@@ -125,8 +133,14 @@ DEEPGRAM_API_KEY=your-deepgram-api-key
 DEEPSEEK_API_KEY=your-deepseek-api-key
 ANTHROPIC_API_KEY=your-anthropic-api-key
 
-# Choose your default AI analysis provider ("deepseek" or "claude")
+# Choose your default AI analysis provider
+# ("deepseek", "claude", "gemini", "openai", "openrouter", "groq", "local" or "openai-compatible")
 LLM_PROVIDER=deepseek
+
+# Only for LLM_PROVIDER=openai-compatible
+OPENAI_BASE_URL=http://localhost:1234/v1
+OPENAI_COMPATIBLE_MODEL=qwen2.5-7b-instruct
+OPENAI_COMPATIBLE_API_KEY=
 ```
 
 ### 2. Run in Development Mode
@@ -142,6 +156,62 @@ To build and package the native macOS app bundle (`.app` and `.dmg` installer):
 npm run tauri:build
 ```
 The output installers will be built under `src-tauri/target/release/bundle/`.
+
+### 4. Run the Tests
+Rust unit tests live next to the code they cover (`#[cfg(test)]` modules in
+`src-tauri/src/*.rs`); the SQLite layer is covered end to end from
+`src-tauri/tests/db_integration.rs` against a temporary database file:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml
+# or
+npm run test:rust
+```
+
+Frontend tests use Vitest + Testing Library with a jsdom environment:
+
+```bash
+npm test              # single run
+npm run test:watch    # watch mode
+```
+
+Test layout:
+
+| Path | Kind | Covers |
+| --- | --- | --- |
+| `src-tauri/src/lib.rs` | unit | SRT/ASS caption generation, slug + extension validation |
+| `src-tauri/src/media.rs` | unit | ffmpeg progress parsing, ASS filter escaping, path handling |
+| `src-tauri/src/transcription.rs` | unit | Whisper/Deepgram normalization, segment building, download progress |
+| `src-tauri/src/llm.rs` | unit | LLM response parsing, SSE streaming, URL normalization |
+| `src-tauri/tests/db_integration.rs` | integration | projects, transcripts, candidates, clips, cascade deletes, migrations |
+| `src/lib/format.test.ts` | unit | duration/size/file-name formatting helpers |
+| `src/components/common.test.tsx` | component | `PipelineStep`, `EmptyState`, `StatusPill` |
+| `src/App.integration.test.tsx` | integration | onboarding gate, sidebar rendering, project detail loading (Tauri IPC mocked) |
+
+### 5. Multi-Platform Build (Windows + Linux + macOS)
+One command attempts every platform the current host can actually target:
+```bash
+npm run build:all
+```
+Each platform is detected first; unsupported ones are skipped with the reason instead of aborting the run. Successful bundles are copied to `artifacts/<platform>/`.
+
+```bash
+npm run build:linux     # .deb / .rpm / .AppImage
+npm run build:windows   # .msi / NSIS .exe
+npm run build:macos     # .dmg / .app (macOS only)
+
+npm run build:all -- --only=linux,macos     # subset
+npm run build:all -- --skip=windows         # exclude one
+npm run build:all -- --dry-run              # print commands only
+```
+
+Host capability matrix:
+
+| Target | Requires |
+| --- | --- |
+| Linux | Linux host + `webkit2gtk-4.1`, `gtk+-3.0`, `libsoup-3.0` (pkg-config) |
+| Windows | Windows host, **or** WSL with Windows `cargo.exe` + `node.exe` + MSVC Build Tools. From WSL the source is mirrored to `%USERPROFILE%\autoshorts-build` and built by the Windows toolchain. |
+| macOS | macOS + Xcode only. Cannot be produced from Linux/WSL — use a Mac or the `Release App` GitHub workflow. |
 
 <a id="support"></a>
 

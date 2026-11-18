@@ -9,7 +9,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use uuid::Uuid;
 
 use crate::models::{
-    Candidate, CandidateDraft, Clip, ClipCopy, Project, ProjectDetail, Transcript,
+    Candidate, CandidateDraft, Clip, ClipCopy, ClipEdit, Project, ProjectDetail, Transcript,
 };
 
 #[derive(Clone)]
@@ -95,10 +95,28 @@ impl Database {
                 scheduled_for TEXT,
                 status TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS clip_edits (
+                candidate_id TEXT PRIMARY KEY REFERENCES candidates(id) ON DELETE CASCADE,
+                aspect_ratio TEXT NOT NULL,
+                crop_x REAL NOT NULL,
+                crop_y REAL NOT NULL,
+                captions_json TEXT NOT NULL,
+                caption_style TEXT,
+                updated_at TEXT NOT NULL
+            );
             ",
         )?;
         let _ = conn.execute("ALTER TABLE projects ADD COLUMN name TEXT", []);
         let _ = conn.execute("ALTER TABLE projects ADD COLUMN caption_style TEXT", []);
+        // Fine-grained caption look (colour, font, position) edited per clip.
+        let _ = conn.execute("ALTER TABLE clip_edits ADD COLUMN caption_override_json TEXT", []);
+        // Automatic tight-cut settings (silence removal + pacing).
+        let _ = conn.execute("ALTER TABLE clip_edits ADD COLUMN auto_edit_json TEXT", []);
+        // No ffmpeg process survives an app restart, so any clip still marked
+        // `cutting` was interrupted. Reset it instead of showing a render that
+        // can never finish.
+        let _ = conn.execute("UPDATE clips SET status = 'pending' WHERE status = 'cutting'", []);
         Ok(())
     }
 
@@ -171,6 +189,7 @@ impl Database {
         let candidates = self.list_candidates(project_id)?;
         let clips = self.list_clips_for_project(project_id)?;
         let copy = self.list_copy_for_project(project_id)?;
+        let clip_edits = self.list_clip_edits(project_id)?;
 
         Ok(ProjectDetail {
             project,
@@ -178,6 +197,7 @@ impl Database {
             candidates,
             clips,
             copy,
+            clip_edits,
         })
     }
 
@@ -395,6 +415,37 @@ impl Database {
         self.list_candidates(project_id)
     }
 
+    /// Move a candidate's clip window, keeping its rank/score untouched.
+    ///
+    /// The editor lets the user stretch a moment when the transcript cut lands
+    /// mid-sentence; only the two timestamps change here.
+    pub fn update_candidate_range(
+        &self,
+        candidate_id: &str,
+        start_sec: f64,
+        end_sec: f64,
+    ) -> Result<Candidate> {
+        let start = if start_sec.is_finite() {
+            start_sec.max(0.0)
+        } else {
+            0.0
+        };
+        let end = if end_sec.is_finite() { end_sec } else { start };
+        let end = end.max(start + 0.1);
+        let conn = self.conn.lock().expect("database mutex poisoned");
+        conn.execute(
+            "UPDATE candidates SET start_sec = ?1, end_sec = ?2 WHERE id = ?3",
+            params![start, end, candidate_id],
+        )?;
+        let candidate = conn.query_row(
+            "SELECT id, project_id, start_sec, end_sec, score, hook, rationale, rank, selected
+             FROM candidates WHERE id = ?1",
+            params![candidate_id],
+            candidate_from_row,
+        )?;
+        Ok(candidate)
+    }
+
     fn list_clips_for_project(&self, project_id: &str) -> Result<Vec<Clip>> {
         let conn = self.conn.lock().expect("database mutex poisoned");
         let mut stmt = conn.prepare(
@@ -442,6 +493,81 @@ impl Database {
             .map_err(Into::into)
     }
 
+    /// Saved clip edit for a candidate, if the user ever changed its framing.
+    pub fn clip_edit(&self, candidate_id: &str) -> Result<Option<ClipEdit>> {
+        let conn = self.conn.lock().expect("database mutex poisoned");
+        let edit = conn
+            .query_row(
+                "SELECT candidate_id, aspect_ratio, crop_x, crop_y, captions_json, caption_style,
+                        caption_override_json, auto_edit_json
+                 FROM clip_edits WHERE candidate_id = ?1",
+                params![candidate_id],
+                clip_edit_from_row,
+            )
+            .optional()?;
+        Ok(edit.map(ClipEdit::sanitized))
+    }
+
+    /// Upsert the edit for its own `candidate_id`, storing the sanitized value.
+    pub fn save_clip_edit(&self, edit: &ClipEdit) -> Result<ClipEdit> {
+        let stored = edit.clone().sanitized();
+        let captions_json = serde_json::to_string(&stored.captions)?;
+        let override_json = match stored.caption_override.as_ref() {
+            Some(value) => Some(serde_json::to_string(value)?),
+            None => None,
+        };
+        let auto_edit_json = match stored.auto_edit.as_ref() {
+            Some(value) => Some(serde_json::to_string(value)?),
+            None => None,
+        };
+        let now = Utc::now().to_rfc3339();
+        let conn = self.conn.lock().expect("database mutex poisoned");
+        conn.execute(
+            "INSERT INTO clip_edits
+                (candidate_id, aspect_ratio, crop_x, crop_y, captions_json, caption_style,
+                 caption_override_json, auto_edit_json, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             ON CONFLICT(candidate_id) DO UPDATE SET
+                aspect_ratio = excluded.aspect_ratio,
+                crop_x = excluded.crop_x,
+                crop_y = excluded.crop_y,
+                captions_json = excluded.captions_json,
+                caption_style = excluded.caption_style,
+                caption_override_json = excluded.caption_override_json,
+                auto_edit_json = excluded.auto_edit_json,
+                updated_at = excluded.updated_at",
+            params![
+                stored.candidate_id,
+                stored.aspect_ratio,
+                stored.crop_x,
+                stored.crop_y,
+                captions_json,
+                stored.caption_style,
+                override_json,
+                auto_edit_json,
+                now
+            ],
+        )?;
+        Ok(stored)
+    }
+
+    /// Every saved edit belonging to a project, ordered like the candidates.
+    pub fn list_clip_edits(&self, project_id: &str) -> Result<Vec<ClipEdit>> {
+        let conn = self.conn.lock().expect("database mutex poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT clip_edits.candidate_id, clip_edits.aspect_ratio, clip_edits.crop_x,
+                    clip_edits.crop_y, clip_edits.captions_json, clip_edits.caption_style,
+                    clip_edits.caption_override_json, clip_edits.auto_edit_json
+             FROM clip_edits
+             INNER JOIN candidates ON candidates.id = clip_edits.candidate_id
+             WHERE candidates.project_id = ?1
+             ORDER BY candidates.rank ASC",
+        )?;
+        let rows = stmt.query_map(params![project_id], clip_edit_from_row)?;
+        let edits = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(edits.into_iter().map(ClipEdit::sanitized).collect())
+    }
+
     pub fn delete_project(&self, project_id: &str) -> Result<()> {
         let conn = self.conn.lock().expect("database mutex poisoned");
         conn.execute("DELETE FROM projects WHERE id = ?1", params![project_id])?;
@@ -470,6 +596,22 @@ fn project_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Project> {
         created_at: row.get(6)?,
         updated_at: row.get(7)?,
         caption_style: row.get(8)?,
+    })
+}
+
+fn clip_edit_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClipEdit> {
+    let captions_json: String = row.get(4)?;
+    let override_json: Option<String> = row.get(6)?;
+    let auto_edit_json: Option<String> = row.get(7)?;
+    Ok(ClipEdit {
+        candidate_id: row.get(0)?,
+        aspect_ratio: row.get(1)?,
+        crop_x: row.get(2)?,
+        crop_y: row.get(3)?,
+        captions: serde_json::from_str(&captions_json).unwrap_or_default(),
+        caption_style: row.get(5)?,
+        caption_override: override_json.and_then(|json| serde_json::from_str(&json).ok()),
+        auto_edit: auto_edit_json.and_then(|json| serde_json::from_str(&json).ok()),
     })
 }
 
