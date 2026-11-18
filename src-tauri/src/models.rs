@@ -13,6 +13,7 @@ pub struct EnvironmentStatus {
     pub has_openai_key: bool,
     pub has_openrouter_key: bool,
     pub has_groq_key: bool,
+    pub has_postonce_key: bool,
     pub llm_provider: String,
     pub has_local_whisper_model: bool,
     pub has_ollama: bool,

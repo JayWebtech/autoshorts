@@ -1714,3 +1714,122 @@ button:disabled {
   font-weight: 700;
   color: var(--accent-primary);
 }
+
+/* PostOnce posting */
+.post-button {
+  margin-left: 6px;
+}
+
+.posted-label {
+  margin-top: 10px;
+  color: var(--color-success-text);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.postonce-modal {
+  width: 480px;
+}
+
+.postonce-modal small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.postonce-connect,
+.postonce-field {
+  display: grid;
+  gap: 10px;
+}
+
+.postonce-connect label,
+.postonce-field {
+  display: grid;
+  gap: 6px;
+}
+
+.postonce-connect span,
+.postonce-field span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.postonce-connect input,
+.postonce-field textarea,
+.postonce-when input[type="datetime-local"] {
+  width: 100%;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.postonce-accounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.postonce-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.postonce-account span {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.postonce-account.selected {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  background: rgba(142, 230, 199, 0.06);
+}
+
+.postonce-when {
+  display: grid;
+  gap: 8px;
+}
+
+.postonce-when label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.postonce-loading,
+.postonce-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.postonce-done {
+  color: var(--color-success-text);
+}
+
+.postonce-modal .style-modal-actions .btn-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

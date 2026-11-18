@@ -2,6 +2,7 @@ mod db;
 mod llm;
 mod media;
 mod models;
+mod postonce;
 mod transcription;
 
 use std::path::PathBuf;
@@ -55,6 +56,7 @@ async fn environment_status(state: tauri::State<'_, AppState>) -> Result<Environ
         has_openai_key: std::env::var("OPENAI_API_KEY").is_ok(),
         has_openrouter_key: std::env::var("OPENROUTER_API_KEY").is_ok(),
         has_groq_key: std::env::var("GROQ_API_KEY").is_ok(),
+        has_postonce_key: std::env::var("POSTONCE_API_KEY").is_ok(),
         llm_provider,
         has_local_whisper_model,
         has_ollama,
@@ -646,6 +648,40 @@ async fn render_flat_clip_for_candidate(
 }
 
 #[tauri::command]
+async fn postonce_list_accounts(api_key: String) -> Result<Vec<postonce::PostOnceAccount>, String> {
+    postonce::list_accounts(&api_key).await
+}
+
+#[tauri::command]
+fn open_postonce_signup() -> Result<(), String> {
+    postonce::open_signup_page()
+}
+
+#[tauri::command]
+async fn post_clip_to_postonce(
+    state: tauri::State<'_, AppState>,
+    candidate_id: String,
+    api_key: String,
+    caption: String,
+    account_ids: Vec<String>,
+    publish_at: Option<String>,
+) -> Result<postonce::PostOnceResult, String> {
+    let path = state
+        .db
+        .clip_output_path(&candidate_id)
+        .map_err(to_command_error)?
+        .ok_or_else(|| "Cut this clip before posting it.".to_string())?;
+    postonce::post_clip(
+        &api_key,
+        std::path::Path::new(&path),
+        caption.trim(),
+        &account_ids,
+        publish_at.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
 fn delete_project(state: tauri::State<'_, AppState>, project_id: String) -> Result<(), String> {
     state.db.delete_project(&project_id).map_err(to_command_error)
 }
@@ -692,7 +728,10 @@ pub fn run() {
             delete_project,
             rename_project,
             check_youtube_copyright,
-            download_youtube_video
+            download_youtube_video,
+            postonce_list_accounts,
+            post_clip_to_postonce,
+            open_postonce_signup
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoShorts");

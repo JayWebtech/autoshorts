@@ -24,7 +24,9 @@ import {
   Cloud,
   Youtube,
   AlertTriangle,
+  Send,
 } from "lucide-react";
+import { PostOnceDialog, type PostableClip } from "./PostOnceDialog";
 import "./styles.css";
 
 type EnvironmentStatus = {
@@ -38,6 +40,7 @@ type EnvironmentStatus = {
   hasOpenaiKey: boolean;
   hasOpenrouterKey: boolean;
   hasGroqKey: boolean;
+  hasPostonceKey: boolean;
   llmProvider: string;
   hasLocalWhisperModel: boolean;
   hasOllama: boolean;
@@ -123,6 +126,9 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [renderingCandidateId, setRenderingCandidateId] = useState<string | null>(null);
+  const [postonceKey, setPostonceKey] = useState(() => localStorage.getItem("autoshorts_postonce_key") || "");
+  const [postClips, setPostClips] = useState<PostableClip[] | null>(null);
+  const [postedLabels, setPostedLabels] = useState<Record<string, string>>({});
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState("modern-box");
   const [mediaPathToImport, setMediaPathToImport] = useState<string | null>(null);
@@ -193,6 +199,12 @@ function App() {
     const clip = clipByCandidate.get(candidate.id);
     return clip?.status === "done" && Boolean(clip.outputPath);
   }).length;
+  const cutClips: PostableClip[] = (detail?.candidates ?? [])
+    .filter((candidate) => {
+      const clip = clipByCandidate.get(candidate.id);
+      return clip?.status === "done" && Boolean(clip.outputPath);
+    })
+    .map((candidate) => ({ candidateId: candidate.id, hook: candidate.hook }));
   const selectedCaptionsCount = selectedCandidates.filter((candidate) => {
     const clip = clipByCandidate.get(candidate.id);
     return clip?.status === "done" && Boolean(clip.captionAssPath);
@@ -282,6 +294,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("autoshorts_openrouter_model", openrouterModel);
   }, [openrouterModel]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_postonce_key", postonceKey);
+  }, [postonceKey]);
 
   const pullModelDirectly = async (modelName: string) => {
     setDownloadingModelName(modelName);
@@ -902,6 +918,15 @@ function App() {
                         </div>
                       </label>
                     )}
+                    <label>
+                      <span>PostOnce API Key (posting)</span>
+                      <input
+                        value={postonceKey}
+                        onChange={(event) => setPostonceKey(event.target.value.trim())}
+                        placeholder={environment?.hasPostonceKey ? "Loaded from env" : "Optional, to post clips"}
+                        type="password"
+                      />
+                    </label>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
                     <button
@@ -971,6 +996,12 @@ function App() {
                       <p>{detail.candidates.length ? `${selectedCount} selected` : "No candidates"}</p>
                     </div>
                     <div className="button-pair">
+                      {cutClips.length > 0 && (
+                        <button onClick={() => setPostClips(cutClips)} disabled={busy !== "idle"}>
+                          <Send size={16} />
+                          Post all
+                        </button>
+                      )}
                       <button onClick={cutSelected} disabled={busy !== "idle" || selectedCount === 0 || !environment?.hasFfmpeg}>
                         {busy === "cut" ? <Loader2 className="spin" size={16} /> : <Scissors size={16} />}
                         Cut
@@ -1059,7 +1090,18 @@ function App() {
                                 )}
                                 {renderingCandidateId === candidate.id ? "Cutting..." : isCut ? "Re-cut" : "Cut"}
                               </button>
+                              {isCut && (
+                                <button
+                                  className="cut-button post-button"
+                                  onClick={() => setPostClips([{ candidateId: candidate.id, hook: candidate.hook }])}
+                                  disabled={busy !== "idle"}
+                                >
+                                  <Send size={14} />
+                                  Post
+                                </button>
+                              )}
                             </div>
+                            {postedLabels[candidate.id] && <div className="posted-label">{postedLabels[candidate.id]}</div>}
                             {clip?.outputPath && <div className="output-path">{clip.outputPath}</div>}
                             {clip?.captionAssPath && (
                               <div className="output-path" style={{ background: "rgba(142, 230, 199, 0.05)", borderColor: "var(--accent-primary)", color: "var(--accent-primary)", marginTop: "4px" }}>
@@ -1342,6 +1384,16 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+      {postClips && (
+        <PostOnceDialog
+          clips={postClips}
+          apiKey={postonceKey}
+          hasEnvKey={Boolean(environment?.hasPostonceKey)}
+          onSaveKey={setPostonceKey}
+          onClose={() => setPostClips(null)}
+          onPosted={(candidateId, label) => setPostedLabels((labels) => ({ ...labels, [candidateId]: label }))}
+        />
       )}
     </div>
   );
