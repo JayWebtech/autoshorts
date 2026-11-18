@@ -1,7 +1,5 @@
 [![Fund my work on FLOSSAfrica](https://flossafrica.com/badge.svg)](https://flossafrica.com/m/jaywebtech?p=autoshorts)
 
-Trade on pump.fun: https://pump.fun/coin/62U4Ar7WBBjwUKWUaj4pTj52fAwW9hXypWRwvmwnpump
-
 # AutoShorts
 
 AutoShorts is a local-first desktop application for turning long-form video or audio recordings into high-impact, vertical short-form clip candidates (9:16 portrait) with AI-powered viral moment ranking.
