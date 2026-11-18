@@ -21,9 +21,9 @@ const DEFAULT_BASE_URL: &str = "https://postonce.to/api/public";
 /// API calls are small; the clip upload itself has no time limit (slow connections).
 const API_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Where "Get a free API key" leads.
+/// Where "Get a free API key" leads: PostOnce's AutoShorts setup page (sign-up lands on the API keys tab).
 pub const SIGNUP_URL: &str =
-    "https://postonce.to/?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium=app&utm_campaign=autoshorts";
+    "https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium=app&utm_campaign=autoshorts";
 
 /// Opens the fixed PostOnce sign-up page in the default browser.
 pub fn open_signup_page() -> Result<(), String> {

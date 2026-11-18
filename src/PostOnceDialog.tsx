@@ -153,7 +153,7 @@ export function PostOnceDialog({
                 autoFocus
               />
             </label>
-            <small>Connect your social accounts in PostOnce, then create a key in Preferences → API.</small>
+            <small>Sign up, connect your social accounts, then copy your API key here.</small>
           </div>
         ) : done ? (
           <div className="postonce-done">
