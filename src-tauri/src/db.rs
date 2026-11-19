@@ -381,6 +381,18 @@ impl Database {
         Ok(())
     }
 
+    pub fn clip_output_path(&self, candidate_id: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().expect("database mutex poisoned");
+        let path = conn
+            .query_row(
+                "SELECT output_path FROM clips WHERE candidate_id = ?1 AND status = 'done'",
+                params![candidate_id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?;
+        Ok(path.flatten())
+    }
+
     pub fn set_selected_clip_count(
         &self,
         project_id: &str,

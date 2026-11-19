@@ -1714,3 +1714,267 @@ button:disabled {
   font-weight: 700;
   color: var(--accent-primary);
 }
+
+/* PostOnce posting */
+.post-button {
+  margin-left: 6px;
+}
+
+.posted-label {
+  margin-top: 10px;
+  color: var(--color-success-text);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.postonce-modal {
+  width: 480px;
+}
+
+.postonce-modal small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.postonce-connect,
+.postonce-field {
+  display: grid;
+  gap: 10px;
+}
+
+.postonce-connect label,
+.postonce-field {
+  display: grid;
+  gap: 6px;
+}
+
+.postonce-connect span,
+.postonce-field span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.postonce-connect input,
+.postonce-field textarea,
+.postonce-when input[type="datetime-local"] {
+  width: 100%;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.postonce-accounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.postonce-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.postonce-account span {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.postonce-account.selected {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  background: rgba(142, 230, 199, 0.06);
+}
+
+.postonce-when {
+  display: grid;
+  gap: 8px;
+}
+
+.postonce-when label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.postonce-loading,
+.postonce-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.postonce-done {
+  color: var(--color-success-text);
+}
+
+.postonce-modal .style-modal-actions .btn-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* PostOnce spots: sidebar card (bottom left) and intro screen card */
+.postonce-side-card,
+.postonce-welcome {
+  border: 1px solid rgba(46, 144, 255, 0.35);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.postonce-side-card:hover:not(:disabled),
+.postonce-welcome:hover {
+  border-color: rgba(46, 144, 255, 0.6);
+}
+
+.postonce-side-card {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(0, 123, 255, 0.16), rgba(0, 123, 255, 0.04));
+}
+
+.postonce-side-card:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.postonce-side-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.postonce-side-card img,
+.postonce-welcome img {
+  flex: none;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9);
+}
+
+.postonce-side-card img {
+  width: 28px;
+  height: 28px;
+}
+
+.postonce-side-card b,
+.postonce-welcome b {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.postonce-side-card small,
+.postonce-welcome small {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.postonce-side-cta,
+.postonce-welcome-go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #007bff;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.postonce-side-cta {
+  min-height: 32px;
+}
+
+.postonce-side-card:hover:not(:disabled) .postonce-side-cta,
+.postonce-welcome:hover .postonce-welcome-go {
+  background: #2e90ff;
+}
+
+.postonce-side-ok {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--color-success-text);
+}
+
+.postonce-side-ok::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success-text);
+}
+
+.postonce-welcome {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: linear-gradient(100deg, rgba(0, 123, 255, 0.14), rgba(0, 123, 255, 0.03));
+}
+
+.postonce-welcome img {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+
+.postonce-welcome-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.postonce-welcome b {
+  font-size: 14px;
+}
+
+.postonce-welcome small {
+  font-size: 12px;
+}
+
+.postonce-welcome-optional {
+  flex: none;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.postonce-welcome-go {
+  flex: none;
+  padding: 9px 14px;
+}

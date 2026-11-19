@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&utm_source=github&utm_medium=readme_banner&utm_campaign=autoshorts">
+    <img src=".github/assets/postonce-banner.png" alt="PostOnce: post your AutoShorts clips to TikTok, Reels, Shorts and more" width="100%">
+  </a>
+</p>
+
 [![Fund my work on FLOSSAfrica](https://flossafrica.com/badge.svg)](https://flossafrica.com/m/jaywebtech?p=autoshorts)
 
 # AutoShorts
@@ -18,6 +24,18 @@ This repository implements the desktop app foundation using **Tauri 2 + React + 
 - **Native Project Manager**: Create, open, rename, and delete projects from the dashboard.
 - **Portrait Auto-Cropping**: Automatically center-crops landscape videos to vertical H.264 portrait clips using native `ffmpeg` integration.
 - **Key Warnings**: Built-in visual warnings that identify missing environment variables and prompt you directly in the UI.
+- **Post Clips Everywhere (optional)**: Post or schedule cut clips to TikTok, YouTube Shorts, Instagram Reels and more with [PostOnce](https://postonce.to/?ref=AUTOSHORTS&utm_source=github&utm_campaign=autoshorts).
+
+---
+
+## Post Your Clips (Optional)
+
+AutoShorts can publish finished clips through [PostOnce](https://postonce.to/?ref=AUTOSHORTS&utm_source=github&utm_campaign=autoshorts), which posts one video to TikTok, YouTube Shorts, Instagram Reels and other networks through their official APIs.
+
+1. Start a free PostOnce trial from the [AutoShorts setup page](https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&utm_source=github&utm_campaign=autoshorts) and connect your social accounts.
+2. Create an API key. After sign-up, PostOnce opens the API keys page for you.
+3. Paste it into **API Settings → PostOnce API Key** in AutoShorts, or set `POSTONCE_API_KEY` in your environment.
+4. Click **Post** on a cut clip, or **Post all**. Pick the accounts, edit the caption (the clip's hook by default), and post now or schedule. Scheduled batches go out one clip per day.
 
 ---
 
