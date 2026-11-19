@@ -22,11 +22,21 @@ const DEFAULT_BASE_URL: &str = "https://postonce.to/api/public";
 const API_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Where "Get a free API key" leads: PostOnce's AutoShorts setup page (sign-up lands on the API keys tab).
-pub const SIGNUP_URL: &str =
-    "https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium=app&utm_campaign=autoshorts";
+/// `utm_medium` says which spot in the app the click came from.
+fn signup_url(placement: Option<&str>) -> String {
+    let medium = match placement {
+        Some("welcome") => "app_welcome",
+        Some("sidebar") => "app_sidebar",
+        _ => "app",
+    };
+    format!(
+        "https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium={medium}&utm_campaign=autoshorts"
+    )
+}
 
-/// Opens the fixed PostOnce sign-up page in the default browser.
-pub fn open_signup_page() -> Result<(), String> {
+/// Opens the PostOnce sign-up page in the default browser.
+pub fn open_signup_page(placement: Option<&str>) -> Result<(), String> {
+    let url = signup_url(placement);
     #[cfg(target_os = "macos")]
     let mut command = std::process::Command::new("open");
     #[cfg(target_os = "windows")]
@@ -38,10 +48,10 @@ pub fn open_signup_page() -> Result<(), String> {
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     let mut command = std::process::Command::new("xdg-open");
     command
-        .arg(SIGNUP_URL)
+        .arg(&url)
         .spawn()
         .map(|_| ())
-        .map_err(|e| format!("Could not open your browser: {e}. Visit {SIGNUP_URL}"))
+        .map_err(|e| format!("Could not open your browser: {e}. Visit {url}"))
 }
 
 fn base_url() -> String {
@@ -300,4 +310,23 @@ pub async fn post_clip(
         post_id: post["data"]["id"].as_str().unwrap_or("").to_string(),
         status: post["data"]["status"].as_str().unwrap_or("queued").to_string(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::signup_url;
+
+    #[test]
+    fn signup_url_tags_each_spot_and_keeps_the_ref_code() {
+        for (placement, medium) in [
+            (Some("welcome"), "utm_medium=app_welcome"),
+            (Some("sidebar"), "utm_medium=app_sidebar"),
+            (None, "utm_medium=app&"),
+            (Some("anything-else"), "utm_medium=app&"),
+        ] {
+            let url = signup_url(placement);
+            assert!(url.starts_with("https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&"));
+            assert!(url.contains(medium), "{url}");
+        }
+    }
 }

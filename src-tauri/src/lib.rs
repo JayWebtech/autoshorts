@@ -653,8 +653,8 @@ async fn postonce_list_accounts(api_key: String) -> Result<Vec<postonce::PostOnc
 }
 
 #[tauri::command]
-fn open_postonce_signup() -> Result<(), String> {
-    postonce::open_signup_page()
+fn open_postonce_signup(placement: Option<String>) -> Result<(), String> {
+    postonce::open_signup_page(placement.as_deref())
 }
 
 #[tauri::command]

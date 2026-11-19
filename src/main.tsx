@@ -129,6 +129,7 @@ function App() {
   const [postonceKey, setPostonceKey] = useState(() => localStorage.getItem("autoshorts_postonce_key") || "");
   const [postClips, setPostClips] = useState<PostableClip[] | null>(null);
   const [postedLabels, setPostedLabels] = useState<Record<string, string>>({});
+  const [postFromSidebar, setPostFromSidebar] = useState(false);
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState("modern-box");
   const [mediaPathToImport, setMediaPathToImport] = useState<string | null>(null);
@@ -746,6 +747,31 @@ function App() {
               </button>
             ))}
           </section>
+
+          <button
+            type="button"
+            className="postonce-side-card"
+            onClick={() => {
+              setPostFromSidebar(true);
+              setPostClips(cutClips);
+            }}
+            disabled={busy !== "idle"}
+          >
+            <span className="postonce-side-row">
+              <img src="/postonce-logo.png" alt="" />
+              <span>
+                <b>Post clips everywhere</b>
+                <small>TikTok, Reels, Shorts and more</small>
+              </span>
+            </span>
+            {postonceKey || environment?.hasPostonceKey ? (
+              <span className="postonce-side-ok">
+                PostOnce connected{cutClips.length > 0 ? ` · Post all ${cutClips.length}` : ""}
+              </span>
+            ) : (
+              <span className="postonce-side-cta">Get a free PostOnce key</span>
+            )}
+          </button>
         </aside>
 
         <section className="workspace">
@@ -1391,7 +1417,11 @@ function App() {
           apiKey={postonceKey}
           hasEnvKey={Boolean(environment?.hasPostonceKey)}
           onSaveKey={setPostonceKey}
-          onClose={() => setPostClips(null)}
+          placement={postFromSidebar ? "sidebar" : undefined}
+          onClose={() => {
+            setPostClips(null);
+            setPostFromSidebar(false);
+          }}
           onPosted={(candidateId, label) => setPostedLabels((labels) => ({ ...labels, [candidateId]: label }))}
         />
       )}
@@ -1630,6 +1660,20 @@ function Onboarding({
                 <div className="choice-badge cloud">API Keys Required</div>
               </div>
             </div>
+
+            <button
+              type="button"
+              className="postonce-welcome"
+              onClick={() => void invoke("open_postonce_signup", { placement: "welcome" }).catch(() => undefined)}
+            >
+              <img src="/postonce-logo.png" alt="" />
+              <span className="postonce-welcome-text">
+                <b>Then post your clips everywhere</b>
+                <small>PostOnce sends each clip to TikTok, Reels and Shorts.</small>
+              </span>
+              <span className="postonce-welcome-optional">Optional</span>
+              <span className="postonce-welcome-go">Try free</span>
+            </button>
           </>
         )}
 

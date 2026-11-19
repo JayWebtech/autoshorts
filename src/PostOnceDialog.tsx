@@ -39,8 +39,11 @@ export function PostOnceDialog({
   onSaveKey,
   onClose,
   onPosted,
+  placement,
 }: {
   clips: PostableClip[];
+  /** Where the dialog was opened from, for the sign-up link. */
+  placement?: "sidebar";
   apiKey: string;
   hasEnvKey: boolean;
   onSaveKey: (key: string) => void;
@@ -57,6 +60,8 @@ export function PostOnceDialog({
   const [progress, setProgress] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const single = clips.length === 1;
+  // Opened from the sidebar before any clip is cut: connect only, nothing to post yet.
+  const noClips = clips.length === 0;
   const connected = Boolean(apiKey) || hasEnvKey;
 
   useEffect(() => {
@@ -134,13 +139,13 @@ export function PostOnceDialog({
     <div className="style-modal-overlay" onClick={busy ? undefined : onClose}>
       <div className="style-modal postonce-modal" onClick={(event) => event.stopPropagation()}>
         <div className="style-modal-header">
-          <h3>{single ? "Post this clip" : `Post ${clips.length} clips`}</h3>
+          <h3>{noClips ? "Connect PostOnce" : single ? "Post this clip" : `Post ${clips.length} clips`}</h3>
           <p>Publish to TikTok, YouTube Shorts, Instagram Reels and more with PostOnce.</p>
         </div>
 
         {!connected ? (
           <div className="postonce-connect">
-            <button type="button" className="icon-button" onClick={() => void invoke("open_postonce_signup").catch((err) => setError(errorText(err)))}>
+            <button type="button" className="icon-button" onClick={() => void invoke("open_postonce_signup", { placement }).catch((err) => setError(errorText(err)))}>
               <ExternalLink size={14} /> Get a free PostOnce API key
             </button>
             <label>
@@ -185,7 +190,9 @@ export function PostOnceDialog({
               <small>No accounts yet. Connect TikTok, YouTube or Instagram in PostOnce first.</small>
             )}
 
-            {single ? (
+            {noClips ? (
+              <small>PostOnce is connected. Cut a clip, then click Post on it.</small>
+            ) : single ? (
               <label className="postonce-field">
                 <span>Caption</span>
                 <textarea value={caption} onChange={(event) => setCaption(event.target.value)} rows={3} disabled={busy} />
@@ -194,7 +201,7 @@ export function PostOnceDialog({
               <small>Each clip uses its hook as the caption.</small>
             )}
 
-            <div className="postonce-when">
+            {!noClips && <div className="postonce-when">
               <label>
                 <input type="checkbox" checked={schedule} onChange={(event) => setSchedule(event.target.checked)} disabled={busy} />
                 <CalendarClock size={14} /> Schedule
@@ -208,7 +215,7 @@ export function PostOnceDialog({
                 />
               )}
               {schedule && !single && <small>One clip per day from this time.</small>}
-            </div>
+            </div>}
           </>
         )}
 
@@ -216,14 +223,14 @@ export function PostOnceDialog({
 
         <div className="style-modal-actions">
           <button type="button" className="btn-cancel" onClick={onClose} disabled={busy}>
-            {done ? "Close" : "Cancel"}
+            {done || (connected && noClips) ? "Close" : "Cancel"}
           </button>
           {!connected ? (
             <button type="button" className="btn-confirm" disabled={!draftKey.trim()} onClick={() => onSaveKey(draftKey.trim())}>
               Continue
             </button>
           ) : (
-            !done && (
+            !done && !noClips && (
               <button
                 type="button"
                 className="btn-confirm"
