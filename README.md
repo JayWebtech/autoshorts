@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&utm_source=github&utm_medium=readme_banner&utm_campaign=autoshorts">
+    <img src=".github/assets/postonce-banner.png" alt="PostOnce: post your AutoShorts clips to TikTok, Reels, Shorts and more" width="100%">
+  </a>
+</p>
+
 [![Fund my work on FLOSSAfrica](https://flossafrica.com/badge.svg)](https://flossafrica.com/m/jaywebtech?p=autoshorts)
 
 # AutoShorts
