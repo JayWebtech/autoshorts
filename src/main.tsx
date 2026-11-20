@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -26,7 +26,7 @@ import {
   AlertTriangle,
   Send,
 } from "lucide-react";
-import { PostOnceDialog, type PostableClip } from "./PostOnceDialog";
+import { PostOnceConnectButton, PostOnceDialog, PostOnceSignInButton, usePostOnceAccounts, type PostableClip } from "./PostOnceDialog";
 import "./styles.css";
 
 type EnvironmentStatus = {
@@ -129,7 +129,6 @@ function App() {
   const [postonceKey, setPostonceKey] = useState(() => localStorage.getItem("autoshorts_postonce_key") || "");
   const [postClips, setPostClips] = useState<PostableClip[] | null>(null);
   const [postedLabels, setPostedLabels] = useState<Record<string, string>>({});
-  const [postFromSidebar, setPostFromSidebar] = useState(false);
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState("modern-box");
   const [mediaPathToImport, setMediaPathToImport] = useState<string | null>(null);
@@ -210,6 +209,36 @@ function App() {
     const clip = clipByCandidate.get(candidate.id);
     return clip?.status === "done" && Boolean(clip.captionAssPath);
   }).length;
+  const [postonceSignedIn, setPostonceSignedIn] = useState(false);
+  // Right after signing in, open the connect page if there are no accounts yet.
+  const connectAfterSignIn = useRef(false);
+  useEffect(() => {
+    const check = () =>
+      void invoke<boolean>("postonce_signed_in")
+        .then(setPostonceSignedIn)
+        .catch(() => undefined);
+    check();
+    window.addEventListener("focus", check);
+    return () => window.removeEventListener("focus", check);
+  }, []);
+  const handlePostonceSignedIn = () => {
+    connectAfterSignIn.current = true;
+    setPostonceSignedIn(true);
+  };
+  const postonceConnected = Boolean(postonceKey || environment?.hasPostonceKey || postonceSignedIn);
+  const {
+    accounts: postonceAccounts,
+    error: postonceError,
+    reload: reloadPostonceAccounts,
+  } = usePostOnceAccounts(postonceKey, postonceConnected);
+  const postonceKeyProblem = Boolean(postonceError?.includes("API key"));
+  useEffect(() => {
+    if (!connectAfterSignIn.current || !postonceAccounts) return;
+    connectAfterSignIn.current = false;
+    if (postonceAccounts.length === 0) {
+      void invoke("postonce_connect_accounts", { apiKey: postonceKey }).catch((err) => setError(String(err)));
+    }
+  }, [postonceAccounts, postonceKey]);
   const canUseCloudKey = environment?.hasDeepgramKey || deepgramKey.trim().length > 0;
   const canUseClaude = environment?.hasAnthropicKey || anthropicKey.trim().length > 0;
   const canUseDeepseek = environment?.hasDeepseekKey || deepseekKey.trim().length > 0;
@@ -748,15 +777,7 @@ function App() {
             ))}
           </section>
 
-          <button
-            type="button"
-            className="postonce-side-card"
-            onClick={() => {
-              setPostFromSidebar(true);
-              setPostClips(cutClips);
-            }}
-            disabled={busy !== "idle"}
-          >
+          <div className="postonce-side-card">
             <span className="postonce-side-row">
               <img src="/postonce-logo.png" alt="" />
               <span>
@@ -764,14 +785,73 @@ function App() {
                 <small>TikTok, Reels, Shorts and more</small>
               </span>
             </span>
-            {postonceKey || environment?.hasPostonceKey ? (
-              <span className="postonce-side-ok">
-                PostOnce connected{cutClips.length > 0 ? ` · Post all ${cutClips.length}` : ""}
-              </span>
+            {!postonceConnected ? (
+              <>
+                <PostOnceSignInButton onSignedIn={handlePostonceSignedIn} onError={setError} />
+                <button type="button" className="postonce-link" onClick={() => setPostClips(cutClips)}>
+                  Use an API key
+                </button>
+              </>
+            ) : postonceError && !postonceAccounts?.length ? (
+              <>
+                <span className="postonce-side-warn">
+                  {!postonceKeyProblem
+                    ? "Couldn't load your accounts"
+                    : postonceKey
+                      ? "Your PostOnce key isn't working"
+                      : "Your PostOnce sign-in expired"}
+                </span>
+                {postonceKeyProblem && !postonceKey && !environment?.hasPostonceKey ? (
+                  <PostOnceSignInButton onSignedIn={handlePostonceSignedIn} onError={setError} label="Sign in again" />
+                ) : postonceKeyProblem ? (
+                  <button
+                    type="button"
+                    className="postonce-platform"
+                    onClick={() => {
+                      setPostonceKey("");
+                      setPostClips(cutClips);
+                    }}
+                  >
+                    Update key
+                  </button>
+                ) : (
+                  <button type="button" className="postonce-platform" onClick={reloadPostonceAccounts}>
+                    Retry
+                  </button>
+                )}
+              </>
+            ) : postonceAccounts?.length === 0 ? (
+              <PostOnceConnectButton apiKey={postonceKey} onError={setError} />
             ) : (
-              <span className="postonce-side-cta">Get a free PostOnce key</span>
+              <>
+                <span className="postonce-side-ok">
+                  {postonceAccounts
+                    ? `${postonceAccounts.length} ${postonceAccounts.length === 1 ? "account" : "accounts"}`
+                    : "PostOnce connected"}
+                </span>
+                <span className="postonce-side-actions">
+                  {cutClips.length > 0 && (
+                    <button
+                      type="button"
+                      className="postonce-platform"
+                      disabled={busy !== "idle"}
+                      onClick={() => {
+                        setPostClips(cutClips);
+                      }}
+                    >
+                      Post all {cutClips.length}
+                    </button>
+                  )}
+                  <PostOnceConnectButton
+                    apiKey={postonceKey}
+                    onError={setError}
+                    className="postonce-platform postonce-secondary"
+                    label="Add"
+                  />
+                </span>
+              </>
             )}
-          </button>
+          </div>
         </aside>
 
         <section className="workspace">
@@ -944,15 +1024,39 @@ function App() {
                         </div>
                       </label>
                     )}
+                    <div className="postonce-settings-field">
                     <label>
                       <span>PostOnce API Key (posting)</span>
                       <input
                         value={postonceKey}
                         onChange={(event) => setPostonceKey(event.target.value.trim())}
-                        placeholder={environment?.hasPostonceKey ? "Loaded from env" : "Optional, to post clips"}
+                        placeholder={
+                          postonceSignedIn
+                            ? "Not needed, you're signed in"
+                            : environment?.hasPostonceKey
+                              ? "Loaded from env"
+                              : "Optional, to post clips"
+                        }
                         type="password"
                       />
                     </label>
+                    {postonceSignedIn && (
+                      <div className="postonce-signed-in">
+                        <span>Signed in with PostOnce</span>
+                        <button
+                          type="button"
+                          className="postonce-link"
+                          onClick={() =>
+                            void invoke("postonce_sign_out")
+                              .then(() => setPostonceSignedIn(false))
+                              .catch((err) => setError(String(err)))
+                          }
+                        >
+                          Sign out
+                        </button>
+                      </div>
+                    )}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
                     <button
@@ -1223,6 +1327,16 @@ function App() {
             <span className={`indicator ${canUseCloudKey ? "active" : ""}`} title="Deepgram Key status">Deepgram</span>
             <span className={`indicator ${canUseClaude ? "active" : ""}`} title="Claude Key status">Claude</span>
             <span className={`indicator ${canUseDeepseek ? "active" : ""}`} title="DeepSeek Key status">DeepSeek</span>
+            <span
+              className={`indicator ${postonceAccounts?.length ? "active" : ""}`}
+              title={
+                postonceAccounts?.length
+                  ? `PostOnce: ${postonceAccounts.length} connected ${postonceAccounts.length === 1 ? "account" : "accounts"}`
+                  : "PostOnce status"
+              }
+            >
+              PostOnce
+            </span>
           </div>
         </div>
       </footer>
@@ -1416,11 +1530,11 @@ function App() {
           clips={postClips}
           apiKey={postonceKey}
           hasEnvKey={Boolean(environment?.hasPostonceKey)}
+          signedIn={postonceSignedIn}
+          onSignedIn={handlePostonceSignedIn}
           onSaveKey={setPostonceKey}
-          placement={postFromSidebar ? "sidebar" : undefined}
           onClose={() => {
             setPostClips(null);
-            setPostFromSidebar(false);
           }}
           onPosted={(candidateId, label) => setPostedLabels((labels) => ({ ...labels, [candidateId]: label }))}
         />
@@ -1664,7 +1778,7 @@ function Onboarding({
             <button
               type="button"
               className="postonce-welcome"
-              onClick={() => void invoke("open_postonce_signup", { placement: "welcome" }).catch(() => undefined)}
+              onClick={() => void invoke("postonce_sign_in").catch(() => undefined)}
             >
               <img src="/postonce-logo.png" alt="" />
               <span className="postonce-welcome-text">
@@ -1672,7 +1786,7 @@ function Onboarding({
                 <small>PostOnce sends each clip to TikTok, Reels and Shorts.</small>
               </span>
               <span className="postonce-welcome-optional">Optional</span>
-              <span className="postonce-welcome-go">Try free</span>
+              <span className="postonce-welcome-go">Sign in</span>
             </button>
           </>
         )}

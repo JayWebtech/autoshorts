@@ -1729,6 +1729,8 @@ button:disabled {
 
 .postonce-modal {
   width: 480px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
 }
 
 .postonce-modal small {
@@ -1775,6 +1777,14 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.postonce-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .postonce-account {
@@ -1845,12 +1855,12 @@ button:disabled {
   transition: border-color 0.2s ease;
 }
 
-.postonce-side-card:hover:not(:disabled),
 .postonce-welcome:hover {
   border-color: rgba(46, 144, 255, 0.6);
 }
 
 .postonce-side-card {
+  cursor: default;
   display: grid;
   gap: 10px;
   width: 100%;
@@ -1977,4 +1987,109 @@ button:disabled {
 .postonce-welcome-go {
   flex: none;
   padding: 9px 14px;
+}
+
+.postonce-platform {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  background: #007bff;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.postonce-platform:hover:not(:disabled) {
+  background: #0069d9;
+}
+
+.postonce-platform:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+
+.postonce-side-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.postonce-side-actions .postonce-platform {
+  flex: 1;
+}
+
+.postonce-platform.postonce-secondary {
+  background: transparent;
+  color: #4da3ff;
+  box-shadow: inset 0 0 0 1px rgba(77, 163, 255, 0.45);
+}
+
+.postonce-platform.postonce-secondary:hover:not(:disabled) {
+  background: rgba(0, 123, 255, 0.12);
+}
+
+.postonce-side-warn {
+  font-size: 12px;
+  color: var(--color-warning-text, #f5b74f);
+}
+
+.postonce-add {
+  border-style: dashed;
+}
+
+.postonce-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text-secondary, #9aa4b2);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  justify-self: center;
+}
+
+.postonce-link:hover {
+  color: var(--text-primary);
+}
+
+.postonce-key-option summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary, #9aa4b2);
+}
+
+.postonce-key-option label {
+  margin-top: 8px;
+}
+
+.postonce-signed-in {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--color-success-text);
+}
+
+.postonce-settings-field {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.postonce-signed-in span {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 13px;
+}
+
+.postonce-signed-in .postonce-link {
+  white-space: nowrap;
 }

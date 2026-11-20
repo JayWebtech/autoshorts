@@ -1,6 +1,19 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { CalendarClock, Check, ExternalLink, Loader2, Send } from "lucide-react";
+
+const SELECTION_KEY = "autoshorts_postonce_selected";
+/** Up to this many accounts are all ticked the first time; more start unticked. */
+const FEW_ACCOUNTS = 5;
+
+function readSavedSelection(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(SELECTION_KEY) || "[]");
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 export type PostableClip = { candidateId: string; hook: string };
 
@@ -24,6 +37,114 @@ function errorText(err: unknown) {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * Connected PostOnce accounts. Reloads when the window gets focus again, so an
+ * account connected in the browser shows up as soon as the user comes back.
+ */
+export function usePostOnceAccounts(apiKey: string, connected: boolean) {
+  const [accounts, setAccounts] = useState<Account[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const loaded = useRef(false);
+  const load = useCallback(
+    (quiet: boolean) => {
+      if (!connected) return;
+      if (!quiet) {
+        loaded.current = false;
+        setAccounts(null);
+        setError(null);
+      }
+      invoke<Account[]>("postonce_list_accounts", { apiKey })
+        .then((list) => {
+          loaded.current = true;
+          setAccounts(list);
+          setError(null);
+        })
+        .catch((err) => {
+          // A failed background refresh keeps the last list instead of flashing an error.
+          if (quiet && loaded.current) return;
+          setAccounts((current) => current ?? []);
+          setError(errorText(err));
+        });
+    },
+    [apiKey, connected],
+  );
+  useEffect(() => {
+    if (!connected) {
+      setAccounts(null);
+      return;
+    }
+    load(false);
+    const onFocus = () => load(true);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [connected, load]);
+  const reload = useCallback(() => load(false), [load]);
+  return { accounts, error, reload };
+}
+
+/** Opens the browser to sign in or sign up, then waits for the user to approve AutoShorts. */
+export function PostOnceSignInButton({
+  onSignedIn,
+  onError,
+  className = "postonce-platform",
+  label = "Sign in with PostOnce",
+}: {
+  onSignedIn: () => void;
+  onError: (message: string) => void;
+  className?: string;
+  label?: string;
+}) {
+  const [waiting, setWaiting] = useState(false);
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled={waiting}
+      onClick={() => {
+        setWaiting(true);
+        invoke("postonce_sign_in")
+          .then(onSignedIn)
+          .catch((err) => onError(errorText(err)))
+          .finally(() => setWaiting(false));
+      }}
+    >
+      {waiting ? <Loader2 className="spin" size={14} /> : null}
+      {waiting ? "Finish in your browser…" : label}
+    </button>
+  );
+}
+
+/** One button: opens the PostOnce page where the user picks platforms to connect. */
+export function PostOnceConnectButton({
+  apiKey,
+  onError,
+  className = "postonce-platform",
+  label = "Connect accounts",
+}: {
+  apiKey: string;
+  onError: (message: string) => void;
+  className?: string;
+  label?: string;
+}) {
+  const [opening, setOpening] = useState(false);
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled={opening}
+      onClick={() => {
+        setOpening(true);
+        invoke("postonce_connect_accounts", { apiKey })
+          .catch((err) => onError(errorText(err)))
+          .finally(() => setOpening(false));
+      }}
+    >
+      {opening ? <Loader2 className="spin" size={14} /> : <ExternalLink size={14} />}
+      {label}
+    </button>
+  );
+}
+
 /** Local "YYYY-MM-DDTHH:mm" for a datetime-local input, one hour from now. */
 function defaultScheduleValue() {
   const date = new Date(Date.now() + 60 * 60 * 1000);
@@ -36,22 +157,22 @@ export function PostOnceDialog({
   clips,
   apiKey,
   hasEnvKey,
+  signedIn,
+  onSignedIn,
   onSaveKey,
   onClose,
   onPosted,
-  placement,
 }: {
   clips: PostableClip[];
-  /** Where the dialog was opened from, for the sign-up link. */
-  placement?: "sidebar";
   apiKey: string;
   hasEnvKey: boolean;
+  signedIn: boolean;
+  onSignedIn: () => void;
   onSaveKey: (key: string) => void;
   onClose: () => void;
   onPosted: (candidateId: string, label: string) => void;
 }) {
   const [draftKey, setDraftKey] = useState("");
-  const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [caption, setCaption] = useState(clips[0]?.hook ?? "");
   const [schedule, setSchedule] = useState(false);
@@ -62,28 +183,52 @@ export function PostOnceDialog({
   const single = clips.length === 1;
   // Opened from the sidebar before any clip is cut: connect only, nothing to post yet.
   const noClips = clips.length === 0;
-  const connected = Boolean(apiKey) || hasEnvKey;
+  const connected = Boolean(apiKey) || hasEnvKey || signedIn;
 
+  const { accounts, error: accountsError } = usePostOnceAccounts(apiKey, connected);
+  const shownError = error ?? accountsError;
+  const [selectedFor, setSelectedFor] = useState<Account[] | null>(null);
+  // First list: last time's picks, or every account when there are only a few.
+  // Accounts connected while the dialog is open are ticked.
   useEffect(() => {
-    if (!connected) return;
-    setAccounts(null);
-    setError(null);
-    invoke<Account[]>("postonce_list_accounts", { apiKey })
-      .then((list) => {
-        setAccounts(list);
-        setSelected(new Set(list.map((account) => account.id)));
-      })
-      .catch((err) => {
-        setAccounts([]);
-        setError(errorText(err));
+    if (!accounts || accounts === selectedFor) return;
+    if (selectedFor === null) {
+      const ids = new Set(accounts.map((account) => account.id));
+      const saved = readSavedSelection().filter((id) => ids.has(id));
+      setSelected(
+        new Set(
+          saved.length > 0
+            ? saved
+            : accounts.length <= FEW_ACCOUNTS
+              ? accounts.map((account) => account.id)
+              : [],
+        ),
+      );
+    } else {
+      const known = new Set(selectedFor.map((account) => account.id));
+      setSelected((current) => {
+        const next = new Set(current);
+        for (const account of accounts) if (!known.has(account.id)) next.add(account.id);
+        return next;
       });
-  }, [apiKey, connected]);
+    }
+    setSelectedFor(accounts);
+  }, [accounts, selectedFor]);
+
+  function choose(next: Set<string>) {
+    setSelected(next);
+    try {
+      localStorage.setItem(SELECTION_KEY, JSON.stringify([...next]));
+    } catch {
+      // Remembering the picks is a convenience only.
+    }
+  }
 
   function toggle(id: string) {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
-    setSelected(next);
+    choose(next);
   }
 
   async function post() {
@@ -145,20 +290,20 @@ export function PostOnceDialog({
 
         {!connected ? (
           <div className="postonce-connect">
-            <button type="button" className="icon-button" onClick={() => void invoke("open_postonce_signup", { placement }).catch((err) => setError(errorText(err)))}>
-              <ExternalLink size={14} /> Get a free PostOnce API key
-            </button>
-            <label>
-              <span>PostOnce API key</span>
-              <input
-                value={draftKey}
-                onChange={(event) => setDraftKey(event.target.value)}
-                placeholder="po_live_…"
-                type="password"
-                autoFocus
-              />
-            </label>
-            <small>Sign up, connect your social accounts, then copy your API key here.</small>
+            <PostOnceSignInButton onSignedIn={onSignedIn} onError={setError} />
+            <small>Free to start. Approve AutoShorts, then pick where to post.</small>
+            <details className="postonce-key-option">
+              <summary>Use an API key instead</summary>
+              <label>
+                <span>PostOnce API key</span>
+                <input
+                  value={draftKey}
+                  onChange={(event) => setDraftKey(event.target.value)}
+                  placeholder="po_live_…"
+                  type="password"
+                />
+              </label>
+            </details>
           </div>
         ) : done ? (
           <div className="postonce-done">
@@ -168,8 +313,27 @@ export function PostOnceDialog({
           <div className="postonce-loading">
             <Loader2 className="spin" size={16} /> Loading your accounts…
           </div>
-        ) : accounts.length === 0 && error ? null : (
+        ) : accounts.length === 0 && shownError ? null : (
           <>
+            {accounts.length > FEW_ACCOUNTS && (
+              <div className="postonce-select-row">
+                <small>{selected.size === 0 ? "Pick where to post" : `${selected.size} of ${accounts.length} selected`}</small>
+                <button
+                  type="button"
+                  className="postonce-link"
+                  disabled={busy}
+                  onClick={() =>
+                    choose(
+                      selected.size === accounts.length
+                        ? new Set()
+                        : new Set(accounts.map((account) => account.id)),
+                    )
+                  }
+                >
+                  {selected.size === accounts.length ? "Select none" : "Select all"}
+                </button>
+              </div>
+            )}
             {accounts.length > 0 ? (
               <div className="postonce-accounts">
                 {accounts.map((account) => (
@@ -185,13 +349,24 @@ export function PostOnceDialog({
                     <span>@{account.username}</span>
                   </button>
                 ))}
+                {!busy && (
+                  <PostOnceConnectButton
+                    apiKey={apiKey}
+                    onError={setError}
+                    className="postonce-account postonce-add"
+                    label="Add"
+                  />
+                )}
               </div>
             ) : (
-              <small>No accounts yet. Connect TikTok, YouTube or Instagram in PostOnce first.</small>
+              <div className="postonce-connect">
+                <small>No accounts yet. Pick where to post, then come back here.</small>
+                <PostOnceConnectButton apiKey={apiKey} onError={setError} />
+              </div>
             )}
 
             {noClips ? (
-              <small>PostOnce is connected. Cut a clip, then click Post on it.</small>
+              accounts.length > 0 && <small>PostOnce is connected. Cut a clip, then click Post on it.</small>
             ) : single ? (
               <label className="postonce-field">
                 <span>Caption</span>
@@ -219,16 +394,18 @@ export function PostOnceDialog({
           </>
         )}
 
-        {error && <div className="error-banner">{error}</div>}
+        {shownError && <div className="error-banner">{shownError}</div>}
 
         <div className="style-modal-actions">
           <button type="button" className="btn-cancel" onClick={onClose} disabled={busy}>
             {done || (connected && noClips) ? "Close" : "Cancel"}
           </button>
           {!connected ? (
-            <button type="button" className="btn-confirm" disabled={!draftKey.trim()} onClick={() => onSaveKey(draftKey.trim())}>
-              Continue
-            </button>
+            draftKey.trim() && (
+              <button type="button" className="btn-confirm" onClick={() => onSaveKey(draftKey.trim())}>
+                Continue
+              </button>
+            )
           ) : (
             !done && !noClips && (
               <button
