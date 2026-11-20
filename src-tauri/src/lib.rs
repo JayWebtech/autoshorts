@@ -3,6 +3,7 @@ mod llm;
 mod media;
 mod models;
 mod postonce;
+mod postonce_auth;
 mod transcription;
 
 use std::path::PathBuf;
@@ -658,8 +659,18 @@ async fn postonce_connect_accounts(api_key: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_postonce_signup(placement: Option<String>) -> Result<(), String> {
-    postonce::open_signup_page(placement.as_deref())
+async fn postonce_sign_in() -> Result<(), String> {
+    postonce_auth::sign_in().await
+}
+
+#[tauri::command]
+async fn postonce_sign_out() -> Result<(), String> {
+    postonce_auth::sign_out().await
+}
+
+#[tauri::command]
+fn postonce_signed_in() -> bool {
+    postonce_auth::is_signed_in()
 }
 
 #[tauri::command]
@@ -713,6 +724,7 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir).context("creating app data directory")?;
             std::fs::create_dir_all(data_dir.join("models")).context("creating models directory")?;
             let db = Database::open(&data_dir.join("autoshorts.sqlite"))?;
+            postonce_auth::init(data_dir.clone());
             app.manage(AppState { db, data_dir });
             Ok(())
         })
@@ -736,8 +748,10 @@ pub fn run() {
             download_youtube_video,
             postonce_list_accounts,
             post_clip_to_postonce,
-            open_postonce_signup,
-            postonce_connect_accounts
+            postonce_connect_accounts,
+            postonce_sign_in,
+            postonce_sign_out,
+            postonce_signed_in
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoShorts");

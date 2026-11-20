@@ -21,25 +21,7 @@ const DEFAULT_BASE_URL: &str = "https://postonce.to/api/public";
 /// API calls are small; the clip upload itself has no time limit (slow connections).
 const API_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Where "Get a free API key" leads: PostOnce's AutoShorts setup page (sign-up lands on the API keys tab).
-/// `utm_medium` says which spot in the app the click came from.
-fn signup_url(placement: Option<&str>) -> String {
-    let medium = match placement {
-        Some("welcome") => "app_welcome",
-        Some("sidebar") => "app_sidebar",
-        _ => "app",
-    };
-    format!(
-        "https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium={medium}&utm_campaign=autoshorts"
-    )
-}
-
-/// Opens the PostOnce sign-up page in the default browser.
-pub fn open_signup_page(placement: Option<&str>) -> Result<(), String> {
-    open_in_browser(&signup_url(placement))
-}
-
-fn open_in_browser(url: &str) -> Result<(), String> {
+pub(crate) fn open_in_browser(url: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let mut command = std::process::Command::new("open");
     #[cfg(target_os = "windows")]
@@ -61,7 +43,7 @@ fn open_in_browser(url: &str) -> Result<(), String> {
 /// without signing in to PostOnce in the browser. Falls back to the PostOnce accounts page
 /// if that page isn't available (for example, the user turned their client link off).
 pub async fn connect_accounts(api_key: &str) -> Result<(), String> {
-    let key = require_key(api_key)?;
+    let key = require_key(api_key).await?;
     let response = client()?
         .post(format!("{}/v1/accounts/connect-link", base_url()))
         .timeout(API_TIMEOUT)
@@ -88,7 +70,7 @@ fn accounts_page_url() -> &'static str {
     "https://postonce.to/dashboard/accounts?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium=app_accounts&utm_campaign=autoshorts"
 }
 
-fn base_url() -> String {
+pub(crate) fn base_url() -> String {
     std::env::var("POSTONCE_API_URL")
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -133,7 +115,7 @@ async fn read_json(response: reqwest::Response, action: &str) -> Result<Value, S
     let mut text = format!("PostOnce could not {action}: {}", message.trim_end_matches('.'));
     text.push('.');
     if status == reqwest::StatusCode::UNAUTHORIZED {
-        text.push_str(" Check your PostOnce API key in API Settings.");
+        text.push_str(" Sign in to PostOnce again, or check your API key in API Settings.");
     } else if !hint.is_empty() {
         text.push(' ');
         text.push_str(hint);
@@ -141,21 +123,24 @@ async fn read_json(response: reqwest::Response, action: &str) -> Result<Value, S
     Err(text)
 }
 
-/// The key from API Settings, or POSTONCE_API_KEY from the environment.
-fn require_key(api_key: &str) -> Result<String, String> {
+/// The key from API Settings, then POSTONCE_API_KEY from the environment, then the
+/// "Sign in with PostOnce" token.
+async fn require_key(api_key: &str) -> Result<String, String> {
     let key = match api_key.trim() {
         "" => std::env::var("POSTONCE_API_KEY").unwrap_or_default(),
         key => key.to_string(),
     };
-    if key.trim().is_empty() {
-        return Err("Add your PostOnce API key in API Settings first.".to_string());
+    if !key.trim().is_empty() {
+        return Ok(key.trim().to_string());
     }
-    Ok(key.trim().to_string())
+    super::postonce_auth::access_token()
+        .await
+        .ok_or_else(|| "Sign in with PostOnce first.".to_string())
 }
 
 /// Connected accounts that can publish video.
 pub async fn list_accounts(api_key: &str) -> Result<Vec<PostOnceAccount>, String> {
-    let key = require_key(api_key)?;
+    let key = require_key(api_key).await?;
     let response = client()?
         .get(format!("{}/v1/accounts", base_url()))
         .timeout(API_TIMEOUT)
@@ -280,7 +265,7 @@ pub async fn post_clip(
     account_ids: &[String],
     publish_at: Option<&str>,
 ) -> Result<PostOnceResult, String> {
-    let key = require_key(api_key)?;
+    let key = require_key(api_key).await?;
     if account_ids.is_empty() {
         return Err("Pick at least one account to post to.".to_string());
     }
@@ -344,23 +329,4 @@ pub async fn post_clip(
         post_id: post["data"]["id"].as_str().unwrap_or("").to_string(),
         status: post["data"]["status"].as_str().unwrap_or("queued").to_string(),
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::signup_url;
-
-    #[test]
-    fn signup_url_tags_each_spot_and_keeps_the_ref_code() {
-        for (placement, medium) in [
-            (Some("welcome"), "utm_medium=app_welcome"),
-            (Some("sidebar"), "utm_medium=app_sidebar"),
-            (None, "utm_medium=app&"),
-            (Some("anything-else"), "utm_medium=app&"),
-        ] {
-            let url = signup_url(placement);
-            assert!(url.starts_with("https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&"));
-            assert!(url.contains(medium), "{url}");
-        }
-    }
 }

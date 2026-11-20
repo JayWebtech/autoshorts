@@ -2033,3 +2033,37 @@ button:disabled {
 .postonce-add {
   border-style: dashed;
 }
+
+.postonce-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text-secondary, #9aa4b2);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  justify-self: center;
+}
+
+.postonce-link:hover {
+  color: var(--text-primary);
+}
+
+.postonce-key-option summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary, #9aa4b2);
+}
+
+.postonce-key-option label {
+  margin-top: 8px;
+}
+
+.postonce-signed-in {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--color-success-text);
+}

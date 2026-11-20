@@ -69,6 +69,38 @@ export function usePostOnceAccounts(apiKey: string, connected: boolean) {
   return { accounts, error, reload };
 }
 
+/** Opens the browser to sign in or sign up, then waits for the user to approve AutoShorts. */
+export function PostOnceSignInButton({
+  onSignedIn,
+  onError,
+  className = "postonce-platform",
+  label = "Sign in with PostOnce",
+}: {
+  onSignedIn: () => void;
+  onError: (message: string) => void;
+  className?: string;
+  label?: string;
+}) {
+  const [waiting, setWaiting] = useState(false);
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled={waiting}
+      onClick={() => {
+        setWaiting(true);
+        invoke("postonce_sign_in")
+          .then(onSignedIn)
+          .catch((err) => onError(errorText(err)))
+          .finally(() => setWaiting(false));
+      }}
+    >
+      {waiting ? <Loader2 className="spin" size={14} /> : null}
+      {waiting ? "Finish in your browser…" : label}
+    </button>
+  );
+}
+
 /** One button: opens the PostOnce page where the user picks platforms to connect. */
 export function PostOnceConnectButton({
   apiKey,
@@ -112,16 +144,17 @@ export function PostOnceDialog({
   clips,
   apiKey,
   hasEnvKey,
+  signedIn,
+  onSignedIn,
   onSaveKey,
   onClose,
   onPosted,
-  placement,
 }: {
   clips: PostableClip[];
-  /** Where the dialog was opened from, for the sign-up link. */
-  placement?: "sidebar";
   apiKey: string;
   hasEnvKey: boolean;
+  signedIn: boolean;
+  onSignedIn: () => void;
   onSaveKey: (key: string) => void;
   onClose: () => void;
   onPosted: (candidateId: string, label: string) => void;
@@ -137,7 +170,7 @@ export function PostOnceDialog({
   const single = clips.length === 1;
   // Opened from the sidebar before any clip is cut: connect only, nothing to post yet.
   const noClips = clips.length === 0;
-  const connected = Boolean(apiKey) || hasEnvKey;
+  const connected = Boolean(apiKey) || hasEnvKey || signedIn;
 
   const { accounts, error: accountsError } = usePostOnceAccounts(apiKey, connected);
   const shownError = error ?? accountsError;
@@ -220,20 +253,20 @@ export function PostOnceDialog({
 
         {!connected ? (
           <div className="postonce-connect">
-            <button type="button" className="icon-button" onClick={() => void invoke("open_postonce_signup", { placement }).catch((err) => setError(errorText(err)))}>
-              <ExternalLink size={14} /> Get a free PostOnce API key
-            </button>
-            <label>
-              <span>PostOnce API key</span>
-              <input
-                value={draftKey}
-                onChange={(event) => setDraftKey(event.target.value)}
-                placeholder="po_live_…"
-                type="password"
-                autoFocus
-              />
-            </label>
-            <small>Sign up, connect your social accounts, then copy your API key here.</small>
+            <PostOnceSignInButton onSignedIn={onSignedIn} onError={setError} />
+            <small>Free to start. Approve AutoShorts, then pick where to post.</small>
+            <details className="postonce-key-option">
+              <summary>Use an API key instead</summary>
+              <label>
+                <span>PostOnce API key</span>
+                <input
+                  value={draftKey}
+                  onChange={(event) => setDraftKey(event.target.value)}
+                  placeholder="po_live_…"
+                  type="password"
+                />
+              </label>
+            </details>
           </div>
         ) : done ? (
           <div className="postonce-done">
@@ -312,9 +345,11 @@ export function PostOnceDialog({
             {done || (connected && noClips) ? "Close" : "Cancel"}
           </button>
           {!connected ? (
-            <button type="button" className="btn-confirm" disabled={!draftKey.trim()} onClick={() => onSaveKey(draftKey.trim())}>
-              Continue
-            </button>
+            draftKey.trim() && (
+              <button type="button" className="btn-confirm" onClick={() => onSaveKey(draftKey.trim())}>
+                Continue
+              </button>
+            )
           ) : (
             !done && !noClips && (
               <button
