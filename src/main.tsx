@@ -1273,6 +1273,16 @@ function App() {
             <span className={`indicator ${canUseCloudKey ? "active" : ""}`} title="Deepgram Key status">Deepgram</span>
             <span className={`indicator ${canUseClaude ? "active" : ""}`} title="Claude Key status">Claude</span>
             <span className={`indicator ${canUseDeepseek ? "active" : ""}`} title="DeepSeek Key status">DeepSeek</span>
+            <span
+              className={`indicator ${postonceAccounts?.length ? "active" : ""}`}
+              title={
+                postonceAccounts?.length
+                  ? `PostOnce: ${postonceAccounts.length} connected ${postonceAccounts.length === 1 ? "account" : "accounts"}`
+                  : "PostOnce status"
+              }
+            >
+              PostOnce
+            </span>
           </div>
         </div>
       </footer>
