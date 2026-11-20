@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { CalendarClock, Check, ExternalLink, Loader2, Send } from "lucide-react";
 
@@ -31,19 +31,24 @@ function errorText(err: unknown) {
 export function usePostOnceAccounts(apiKey: string, connected: boolean) {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const loaded = useRef(false);
   const load = useCallback(
     (quiet: boolean) => {
       if (!connected) return;
       if (!quiet) {
+        loaded.current = false;
         setAccounts(null);
         setError(null);
       }
       invoke<Account[]>("postonce_list_accounts", { apiKey })
         .then((list) => {
+          loaded.current = true;
           setAccounts(list);
           setError(null);
         })
         .catch((err) => {
+          // A failed background refresh keeps the last list instead of flashing an error.
+          if (quiet && loaded.current) return;
           setAccounts((current) => current ?? []);
           setError(errorText(err));
         });
@@ -60,7 +65,8 @@ export function usePostOnceAccounts(apiKey: string, connected: boolean) {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [connected, load]);
-  return { accounts, error };
+  const reload = useCallback(() => load(false), [load]);
+  return { accounts, error, reload };
 }
 
 /** One button: opens the PostOnce page where the user picks platforms to connect. */
@@ -68,10 +74,12 @@ export function PostOnceConnectButton({
   apiKey,
   onError,
   className = "postonce-platform",
+  label = "Connect accounts",
 }: {
   apiKey: string;
   onError: (message: string) => void;
   className?: string;
+  label?: string;
 }) {
   const [opening, setOpening] = useState(false);
   return (
@@ -87,7 +95,7 @@ export function PostOnceConnectButton({
       }}
     >
       {opening ? <Loader2 className="spin" size={14} /> : <ExternalLink size={14} />}
-      Connect accounts
+      {label}
     </button>
   );
 }
@@ -252,6 +260,14 @@ export function PostOnceDialog({
                     <span>@{account.username}</span>
                   </button>
                 ))}
+                {!busy && (
+                  <PostOnceConnectButton
+                    apiKey={apiKey}
+                    onError={setError}
+                    className="postonce-account postonce-add"
+                    label="Add"
+                  />
+                )}
               </div>
             ) : (
               <div className="postonce-connect">

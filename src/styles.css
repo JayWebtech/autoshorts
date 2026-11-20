@@ -1845,12 +1845,12 @@ button:disabled {
   transition: border-color 0.2s ease;
 }
 
-.postonce-side-card:hover:not(:disabled),
 .postonce-welcome:hover {
   border-color: rgba(46, 144, 255, 0.6);
 }
 
 .postonce-side-card {
+  cursor: default;
   display: grid;
   gap: 10px;
   width: 100%;
@@ -2005,6 +2005,31 @@ button:disabled {
   cursor: default;
 }
 
-.postonce-side-connect {
-  cursor: default;
+
+.postonce-side-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.postonce-side-actions .postonce-platform {
+  flex: 1;
+}
+
+.postonce-platform.postonce-secondary {
+  background: transparent;
+  color: #4da3ff;
+  box-shadow: inset 0 0 0 1px rgba(77, 163, 255, 0.45);
+}
+
+.postonce-platform.postonce-secondary:hover:not(:disabled) {
+  background: rgba(0, 123, 255, 0.12);
+}
+
+.postonce-side-warn {
+  font-size: 12px;
+  color: var(--color-warning-text, #f5b74f);
+}
+
+.postonce-add {
+  border-style: dashed;
 }

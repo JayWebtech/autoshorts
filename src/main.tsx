@@ -211,7 +211,12 @@ function App() {
     return clip?.status === "done" && Boolean(clip.captionAssPath);
   }).length;
   const postonceConnected = Boolean(postonceKey || environment?.hasPostonceKey);
-  const { accounts: postonceAccounts } = usePostOnceAccounts(postonceKey, postonceConnected);
+  const {
+    accounts: postonceAccounts,
+    error: postonceError,
+    reload: reloadPostonceAccounts,
+  } = usePostOnceAccounts(postonceKey, postonceConnected);
+  const postonceKeyProblem = Boolean(postonceError?.includes("API key"));
   const canUseCloudKey = environment?.hasDeepgramKey || deepgramKey.trim().length > 0;
   const canUseClaude = environment?.hasAnthropicKey || anthropicKey.trim().length > 0;
   const canUseDeepseek = environment?.hasDeepseekKey || deepseekKey.trim().length > 0;
@@ -750,46 +755,73 @@ function App() {
             ))}
           </section>
 
-          {postonceConnected && postonceAccounts?.length === 0 ? (
-            <div className="postonce-side-card postonce-side-connect">
-              <span className="postonce-side-row">
-                <img src="/postonce-logo.png" alt="" />
-                <span>
-                  <b>Connect where to post</b>
-                  <small>TikTok, Reels, Shorts and more</small>
-                </span>
+          <div className="postonce-side-card">
+            <span className="postonce-side-row">
+              <img src="/postonce-logo.png" alt="" />
+              <span>
+                <b>Post clips everywhere</b>
+                <small>TikTok, Reels, Shorts and more</small>
               </span>
+            </span>
+            {!postonceConnected ? (
+              <button type="button" className="postonce-platform" onClick={() => setPostClips(cutClips)}>
+                Get a free PostOnce key
+              </button>
+            ) : postonceError && !postonceAccounts?.length ? (
+              <>
+                <span className="postonce-side-warn">
+                  {postonceKeyProblem ? "Your PostOnce key isn't working" : "Couldn't load your accounts"}
+                </span>
+                {postonceKeyProblem ? (
+                  <button
+                    type="button"
+                    className="postonce-platform"
+                    onClick={() => {
+                      setPostonceKey("");
+                      setPostClips(cutClips);
+                    }}
+                  >
+                    Update key
+                  </button>
+                ) : (
+                  <button type="button" className="postonce-platform" onClick={reloadPostonceAccounts}>
+                    Retry
+                  </button>
+                )}
+              </>
+            ) : postonceAccounts?.length === 0 ? (
               <PostOnceConnectButton apiKey={postonceKey} onError={setError} />
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="postonce-side-card"
-              onClick={() => {
-                setPostFromSidebar(true);
-                setPostClips(cutClips);
-              }}
-              disabled={busy !== "idle"}
-            >
-              <span className="postonce-side-row">
-                <img src="/postonce-logo.png" alt="" />
-                <span>
-                  <b>Post clips everywhere</b>
-                  <small>TikTok, Reels, Shorts and more</small>
-                </span>
-              </span>
-              {postonceConnected ? (
+            ) : (
+              <>
                 <span className="postonce-side-ok">
-                  {postonceAccounts?.length
+                  {postonceAccounts
                     ? `${postonceAccounts.length} ${postonceAccounts.length === 1 ? "account" : "accounts"}`
                     : "PostOnce connected"}
-                  {cutClips.length > 0 ? ` · Post all ${cutClips.length}` : ""}
                 </span>
-              ) : (
-                <span className="postonce-side-cta">Get a free PostOnce key</span>
-              )}
-            </button>
-          )}
+                <span className="postonce-side-actions">
+                  {cutClips.length > 0 && (
+                    <button
+                      type="button"
+                      className="postonce-platform"
+                      disabled={busy !== "idle"}
+                      onClick={() => {
+                        setPostFromSidebar(true);
+                        setPostClips(cutClips);
+                      }}
+                    >
+                      Post all {cutClips.length}
+                    </button>
+                  )}
+                  <PostOnceConnectButton
+                    apiKey={postonceKey}
+                    onError={setError}
+                    className="postonce-platform postonce-secondary"
+                    label="Add"
+                  />
+                </span>
+              </>
+            )}
+          </div>
         </aside>
 
         <section className="workspace">
