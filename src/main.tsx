@@ -26,7 +26,7 @@ import {
   AlertTriangle,
   Send,
 } from "lucide-react";
-import { PostOnceDialog, type PostableClip } from "./PostOnceDialog";
+import { PostOnceConnectButton, PostOnceDialog, usePostOnceAccounts, type PostableClip } from "./PostOnceDialog";
 import "./styles.css";
 
 type EnvironmentStatus = {
@@ -210,6 +210,8 @@ function App() {
     const clip = clipByCandidate.get(candidate.id);
     return clip?.status === "done" && Boolean(clip.captionAssPath);
   }).length;
+  const postonceConnected = Boolean(postonceKey || environment?.hasPostonceKey);
+  const { accounts: postonceAccounts } = usePostOnceAccounts(postonceKey, postonceConnected);
   const canUseCloudKey = environment?.hasDeepgramKey || deepgramKey.trim().length > 0;
   const canUseClaude = environment?.hasAnthropicKey || anthropicKey.trim().length > 0;
   const canUseDeepseek = environment?.hasDeepseekKey || deepseekKey.trim().length > 0;
@@ -748,30 +750,46 @@ function App() {
             ))}
           </section>
 
-          <button
-            type="button"
-            className="postonce-side-card"
-            onClick={() => {
-              setPostFromSidebar(true);
-              setPostClips(cutClips);
-            }}
-            disabled={busy !== "idle"}
-          >
-            <span className="postonce-side-row">
-              <img src="/postonce-logo.png" alt="" />
-              <span>
-                <b>Post clips everywhere</b>
-                <small>TikTok, Reels, Shorts and more</small>
+          {postonceConnected && postonceAccounts?.length === 0 ? (
+            <div className="postonce-side-card postonce-side-connect">
+              <span className="postonce-side-row">
+                <img src="/postonce-logo.png" alt="" />
+                <span>
+                  <b>Connect where to post</b>
+                  <small>TikTok, Reels, Shorts and more</small>
+                </span>
               </span>
-            </span>
-            {postonceKey || environment?.hasPostonceKey ? (
-              <span className="postonce-side-ok">
-                PostOnce connected{cutClips.length > 0 ? ` · Post all ${cutClips.length}` : ""}
+              <PostOnceConnectButton apiKey={postonceKey} onError={setError} />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="postonce-side-card"
+              onClick={() => {
+                setPostFromSidebar(true);
+                setPostClips(cutClips);
+              }}
+              disabled={busy !== "idle"}
+            >
+              <span className="postonce-side-row">
+                <img src="/postonce-logo.png" alt="" />
+                <span>
+                  <b>Post clips everywhere</b>
+                  <small>TikTok, Reels, Shorts and more</small>
+                </span>
               </span>
-            ) : (
-              <span className="postonce-side-cta">Get a free PostOnce key</span>
-            )}
-          </button>
+              {postonceConnected ? (
+                <span className="postonce-side-ok">
+                  {postonceAccounts?.length
+                    ? `${postonceAccounts.length} ${postonceAccounts.length === 1 ? "account" : "accounts"}`
+                    : "PostOnce connected"}
+                  {cutClips.length > 0 ? ` · Post all ${cutClips.length}` : ""}
+                </span>
+              ) : (
+                <span className="postonce-side-cta">Get a free PostOnce key</span>
+              )}
+            </button>
+          )}
         </aside>
 
         <section className="workspace">

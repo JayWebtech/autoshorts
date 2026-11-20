@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { CalendarClock, Check, ExternalLink, Loader2, RefreshCw, Send } from "lucide-react";
+import { CalendarClock, Check, ExternalLink, Loader2, Send } from "lucide-react";
 
 export type PostableClip = { candidateId: string; hook: string };
 
@@ -22,6 +22,74 @@ const PLATFORM_NAMES: Record<string, string> = {
 
 function errorText(err: unknown) {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Connected PostOnce accounts. Reloads when the window gets focus again, so an
+ * account connected in the browser shows up as soon as the user comes back.
+ */
+export function usePostOnceAccounts(apiKey: string, connected: boolean) {
+  const [accounts, setAccounts] = useState<Account[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(
+    (quiet: boolean) => {
+      if (!connected) return;
+      if (!quiet) {
+        setAccounts(null);
+        setError(null);
+      }
+      invoke<Account[]>("postonce_list_accounts", { apiKey })
+        .then((list) => {
+          setAccounts(list);
+          setError(null);
+        })
+        .catch((err) => {
+          setAccounts((current) => current ?? []);
+          setError(errorText(err));
+        });
+    },
+    [apiKey, connected],
+  );
+  useEffect(() => {
+    if (!connected) {
+      setAccounts(null);
+      return;
+    }
+    load(false);
+    const onFocus = () => load(true);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [connected, load]);
+  return { accounts, error };
+}
+
+/** One button: opens the PostOnce page where the user picks platforms to connect. */
+export function PostOnceConnectButton({
+  apiKey,
+  onError,
+  className = "postonce-platform",
+}: {
+  apiKey: string;
+  onError: (message: string) => void;
+  className?: string;
+}) {
+  const [opening, setOpening] = useState(false);
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled={opening}
+      onClick={() => {
+        setOpening(true);
+        invoke("postonce_connect_accounts", { apiKey })
+          .catch((err) => onError(errorText(err)))
+          .finally(() => setOpening(false));
+      }}
+    >
+      {opening ? <Loader2 className="spin" size={14} /> : <ExternalLink size={14} />}
+      Connect accounts
+    </button>
+  );
 }
 
 /** Local "YYYY-MM-DDTHH:mm" for a datetime-local input, one hour from now. */
@@ -51,7 +119,6 @@ export function PostOnceDialog({
   onPosted: (candidateId: string, label: string) => void;
 }) {
   const [draftKey, setDraftKey] = useState("");
-  const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [caption, setCaption] = useState(clips[0]?.hook ?? "");
   const [schedule, setSchedule] = useState(false);
@@ -59,28 +126,25 @@ export function PostOnceDialog({
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
-  // Bumped by "Refresh" after connecting accounts in the browser.
-  const [reload, setReload] = useState(0);
-  const [openedAccounts, setOpenedAccounts] = useState(false);
   const single = clips.length === 1;
   // Opened from the sidebar before any clip is cut: connect only, nothing to post yet.
   const noClips = clips.length === 0;
   const connected = Boolean(apiKey) || hasEnvKey;
 
+  const { accounts, error: accountsError } = usePostOnceAccounts(apiKey, connected);
+  const shownError = error ?? accountsError;
+  const [selectedFor, setSelectedFor] = useState<Account[] | null>(null);
+  // Tick every account the first time a list arrives, and newly connected ones after that.
   useEffect(() => {
-    if (!connected) return;
-    setAccounts(null);
-    setError(null);
-    invoke<Account[]>("postonce_list_accounts", { apiKey })
-      .then((list) => {
-        setAccounts(list);
-        setSelected(new Set(list.map((account) => account.id)));
-      })
-      .catch((err) => {
-        setAccounts([]);
-        setError(errorText(err));
-      });
-  }, [apiKey, connected, reload]);
+    if (!accounts || accounts === selectedFor) return;
+    const known = new Set((selectedFor ?? []).map((account) => account.id));
+    setSelected((current) => {
+      const next = new Set(current);
+      for (const account of accounts) if (!known.has(account.id)) next.add(account.id);
+      return next;
+    });
+    setSelectedFor(accounts);
+  }, [accounts, selectedFor]);
 
   function toggle(id: string) {
     const next = new Set(selected);
@@ -171,7 +235,7 @@ export function PostOnceDialog({
           <div className="postonce-loading">
             <Loader2 className="spin" size={16} /> Loading your accounts…
           </div>
-        ) : accounts.length === 0 && error ? null : (
+        ) : accounts.length === 0 && shownError ? null : (
           <>
             {accounts.length > 0 ? (
               <div className="postonce-accounts">
@@ -191,24 +255,8 @@ export function PostOnceDialog({
               </div>
             ) : (
               <div className="postonce-connect">
-                <small>No accounts yet. Connect TikTok, YouTube or Instagram in PostOnce.</small>
-                {openedAccounts ? (
-                  <button type="button" className="icon-button" onClick={() => setReload((count) => count + 1)}>
-                    <RefreshCw size={14} /> Refresh accounts
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={() =>
-                      void invoke("open_postonce_signup", { placement: "accounts" })
-                        .then(() => setOpenedAccounts(true))
-                        .catch((err) => setError(errorText(err)))
-                    }
-                  >
-                    <ExternalLink size={14} /> Connect accounts
-                  </button>
-                )}
+                <small>No accounts yet. Pick where to post, then come back here.</small>
+                <PostOnceConnectButton apiKey={apiKey} onError={setError} />
               </div>
             )}
 
@@ -241,7 +289,7 @@ export function PostOnceDialog({
           </>
         )}
 
-        {error && <div className="error-banner">{error}</div>}
+        {shownError && <div className="error-banner">{shownError}</div>}
 
         <div className="style-modal-actions">
           <button type="button" className="btn-cancel" onClick={onClose} disabled={busy}>

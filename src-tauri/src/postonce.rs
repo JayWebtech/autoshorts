@@ -22,23 +22,24 @@ const DEFAULT_BASE_URL: &str = "https://postonce.to/api/public";
 const API_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Where "Get a free API key" leads: PostOnce's AutoShorts setup page (sign-up lands on the API keys tab).
-/// "accounts" opens the page where social accounts are connected instead.
 /// `utm_medium` says which spot in the app the click came from.
 fn signup_url(placement: Option<&str>) -> String {
-    let (path, medium) = match placement {
-        Some("welcome") => ("integrations/autoshorts", "app_welcome"),
-        Some("sidebar") => ("integrations/autoshorts", "app_sidebar"),
-        Some("accounts") => ("dashboard/accounts", "app_accounts"),
-        _ => ("integrations/autoshorts", "app"),
+    let medium = match placement {
+        Some("welcome") => "app_welcome",
+        Some("sidebar") => "app_sidebar",
+        _ => "app",
     };
     format!(
-        "https://postonce.to/{path}?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium={medium}&utm_campaign=autoshorts"
+        "https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium={medium}&utm_campaign=autoshorts"
     )
 }
 
 /// Opens the PostOnce sign-up page in the default browser.
 pub fn open_signup_page(placement: Option<&str>) -> Result<(), String> {
-    let url = signup_url(placement);
+    open_in_browser(&signup_url(placement))
+}
+
+fn open_in_browser(url: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let mut command = std::process::Command::new("open");
     #[cfg(target_os = "windows")]
@@ -50,10 +51,41 @@ pub fn open_signup_page(placement: Option<&str>) -> Result<(), String> {
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     let mut command = std::process::Command::new("xdg-open");
     command
-        .arg(&url)
+        .arg(url)
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("Could not open your browser: {e}. Visit {url}"))
+}
+
+/// Opens the user's PostOnce connection page, where they pick the platforms to connect
+/// without signing in to PostOnce in the browser. Falls back to the PostOnce accounts page
+/// if that page isn't available (for example, the user turned their client link off).
+pub async fn connect_accounts(api_key: &str) -> Result<(), String> {
+    let key = require_key(api_key)?;
+    let response = client()?
+        .post(format!("{}/v1/accounts/connect-link", base_url()))
+        .timeout(API_TIMEOUT)
+        .bearer_auth(&key)
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach PostOnce: {e}"))?;
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return read_json(response, "open the connection page").await.map(|_| ());
+    }
+    let link = if response.status().is_success() {
+        let body: Value = response.json().await.unwrap_or(Value::Null);
+        body["data"]["url"]
+            .as_str()
+            .filter(|url| url.starts_with("https://") || url.starts_with("http://127.0.0.1"))
+            .map(str::to_string)
+    } else {
+        None
+    };
+    open_in_browser(&link.unwrap_or_else(|| accounts_page_url().to_string()))
+}
+
+fn accounts_page_url() -> &'static str {
+    "https://postonce.to/dashboard/accounts?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium=app_accounts&utm_campaign=autoshorts"
 }
 
 fn base_url() -> String {
@@ -330,13 +362,5 @@ mod tests {
             assert!(url.starts_with("https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&"));
             assert!(url.contains(medium), "{url}");
         }
-    }
-
-    #[test]
-    fn accounts_link_opens_the_connect_page_with_the_ref_code() {
-        assert_eq!(
-            signup_url(Some("accounts")),
-            "https://postonce.to/dashboard/accounts?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium=app_accounts&utm_campaign=autoshorts"
-        );
     }
 }

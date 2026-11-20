@@ -1978,3 +1978,33 @@ button:disabled {
   flex: none;
   padding: 9px 14px;
 }
+
+.postonce-platform {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  background: #007bff;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.postonce-platform:hover:not(:disabled) {
+  background: #0069d9;
+}
+
+.postonce-platform:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.postonce-side-connect {
+  cursor: default;
+}

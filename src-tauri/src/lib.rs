@@ -653,6 +653,11 @@ async fn postonce_list_accounts(api_key: String) -> Result<Vec<postonce::PostOnc
 }
 
 #[tauri::command]
+async fn postonce_connect_accounts(api_key: String) -> Result<(), String> {
+    postonce::connect_accounts(&api_key).await
+}
+
+#[tauri::command]
 fn open_postonce_signup(placement: Option<String>) -> Result<(), String> {
     postonce::open_signup_page(placement.as_deref())
 }
@@ -731,7 +736,8 @@ pub fn run() {
             download_youtube_video,
             postonce_list_accounts,
             post_clip_to_postonce,
-            open_postonce_signup
+            open_postonce_signup,
+            postonce_connect_accounts
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoShorts");
