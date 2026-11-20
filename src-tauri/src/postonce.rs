@@ -22,15 +22,17 @@ const DEFAULT_BASE_URL: &str = "https://postonce.to/api/public";
 const API_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Where "Get a free API key" leads: PostOnce's AutoShorts setup page (sign-up lands on the API keys tab).
+/// "accounts" opens the page where social accounts are connected instead.
 /// `utm_medium` says which spot in the app the click came from.
 fn signup_url(placement: Option<&str>) -> String {
-    let medium = match placement {
-        Some("welcome") => "app_welcome",
-        Some("sidebar") => "app_sidebar",
-        _ => "app",
+    let (path, medium) = match placement {
+        Some("welcome") => ("integrations/autoshorts", "app_welcome"),
+        Some("sidebar") => ("integrations/autoshorts", "app_sidebar"),
+        Some("accounts") => ("dashboard/accounts", "app_accounts"),
+        _ => ("integrations/autoshorts", "app"),
     };
     format!(
-        "https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium={medium}&utm_campaign=autoshorts"
+        "https://postonce.to/{path}?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium={medium}&utm_campaign=autoshorts"
     )
 }
 
@@ -328,5 +330,13 @@ mod tests {
             assert!(url.starts_with("https://postonce.to/integrations/autoshorts?ref=AUTOSHORTS&"));
             assert!(url.contains(medium), "{url}");
         }
+    }
+
+    #[test]
+    fn accounts_link_opens_the_connect_page_with_the_ref_code() {
+        assert_eq!(
+            signup_url(Some("accounts")),
+            "https://postonce.to/dashboard/accounts?ref=AUTOSHORTS&utm_source=autoshorts&utm_medium=app_accounts&utm_campaign=autoshorts"
+        );
     }
 }

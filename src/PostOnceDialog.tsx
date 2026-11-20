@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { CalendarClock, Check, ExternalLink, Loader2, Send } from "lucide-react";
+import { CalendarClock, Check, ExternalLink, Loader2, RefreshCw, Send } from "lucide-react";
 
 export type PostableClip = { candidateId: string; hook: string };
 
@@ -59,6 +59,9 @@ export function PostOnceDialog({
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // Bumped by "Refresh" after connecting accounts in the browser.
+  const [reload, setReload] = useState(0);
+  const [openedAccounts, setOpenedAccounts] = useState(false);
   const single = clips.length === 1;
   // Opened from the sidebar before any clip is cut: connect only, nothing to post yet.
   const noClips = clips.length === 0;
@@ -77,7 +80,7 @@ export function PostOnceDialog({
         setAccounts([]);
         setError(errorText(err));
       });
-  }, [apiKey, connected]);
+  }, [apiKey, connected, reload]);
 
   function toggle(id: string) {
     const next = new Set(selected);
@@ -187,11 +190,30 @@ export function PostOnceDialog({
                 ))}
               </div>
             ) : (
-              <small>No accounts yet. Connect TikTok, YouTube or Instagram in PostOnce first.</small>
+              <div className="postonce-connect">
+                <small>No accounts yet. Connect TikTok, YouTube or Instagram in PostOnce.</small>
+                {openedAccounts ? (
+                  <button type="button" className="icon-button" onClick={() => setReload((count) => count + 1)}>
+                    <RefreshCw size={14} /> Refresh accounts
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() =>
+                      void invoke("open_postonce_signup", { placement: "accounts" })
+                        .then(() => setOpenedAccounts(true))
+                        .catch((err) => setError(errorText(err)))
+                    }
+                  >
+                    <ExternalLink size={14} /> Connect accounts
+                  </button>
+                )}
+              </div>
             )}
 
             {noClips ? (
-              <small>PostOnce is connected. Cut a clip, then click Post on it.</small>
+              accounts.length > 0 && <small>PostOnce is connected. Cut a clip, then click Post on it.</small>
             ) : single ? (
               <label className="postonce-field">
                 <span>Caption</span>
