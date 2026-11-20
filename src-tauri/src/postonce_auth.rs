@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-const SCOPES: &str = "accounts:read accounts:write media:read media:write posts:read posts:write";
+const SCOPES: &str = "accounts:read accounts:write media:read media:write posts:write";
 /// Referral code sent with sign-in so a new PostOnce account is credited to AutoShorts.
 const REFERRAL_CODE: &str = "AUTOSHORTS";
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(10 * 60);

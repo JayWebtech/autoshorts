@@ -153,8 +153,9 @@ pub async fn list_accounts(api_key: &str) -> Result<Vec<PostOnceAccount>, String
     Ok(accounts
         .iter()
         .filter(|account| account["status"].as_str() == Some("active"))
-        .filter(|account| account["capabilities"]["destination"].as_bool() != Some(false))
-        .filter(|account| account["capabilities"]["video"].as_bool() != Some(false))
+        // Only accounts PostOnce can publish video to (sources such as Google Drive have none).
+        .filter(|account| account["capabilities"]["destination"].as_bool() == Some(true))
+        .filter(|account| account["capabilities"]["video"].as_bool() == Some(true))
         .filter_map(|account| {
             Some(PostOnceAccount {
                 id: account["id"].as_str()?.to_string(),

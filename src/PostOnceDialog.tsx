@@ -2,6 +2,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { CalendarClock, Check, ExternalLink, Loader2, Send } from "lucide-react";
 
+const SELECTION_KEY = "autoshorts_postonce_selected";
+/** Up to this many accounts are all ticked the first time; more start unticked. */
+const FEW_ACCOUNTS = 5;
+
+function readSavedSelection(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(SELECTION_KEY) || "[]");
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export type PostableClip = { candidateId: string; hook: string };
 
 type Account = { id: string; platform: string; username: string };
@@ -175,23 +188,47 @@ export function PostOnceDialog({
   const { accounts, error: accountsError } = usePostOnceAccounts(apiKey, connected);
   const shownError = error ?? accountsError;
   const [selectedFor, setSelectedFor] = useState<Account[] | null>(null);
-  // Tick every account the first time a list arrives, and newly connected ones after that.
+  // First list: last time's picks, or every account when there are only a few.
+  // Accounts connected while the dialog is open are ticked.
   useEffect(() => {
     if (!accounts || accounts === selectedFor) return;
-    const known = new Set((selectedFor ?? []).map((account) => account.id));
-    setSelected((current) => {
-      const next = new Set(current);
-      for (const account of accounts) if (!known.has(account.id)) next.add(account.id);
-      return next;
-    });
+    if (selectedFor === null) {
+      const ids = new Set(accounts.map((account) => account.id));
+      const saved = readSavedSelection().filter((id) => ids.has(id));
+      setSelected(
+        new Set(
+          saved.length > 0
+            ? saved
+            : accounts.length <= FEW_ACCOUNTS
+              ? accounts.map((account) => account.id)
+              : [],
+        ),
+      );
+    } else {
+      const known = new Set(selectedFor.map((account) => account.id));
+      setSelected((current) => {
+        const next = new Set(current);
+        for (const account of accounts) if (!known.has(account.id)) next.add(account.id);
+        return next;
+      });
+    }
     setSelectedFor(accounts);
   }, [accounts, selectedFor]);
+
+  function choose(next: Set<string>) {
+    setSelected(next);
+    try {
+      localStorage.setItem(SELECTION_KEY, JSON.stringify([...next]));
+    } catch {
+      // Remembering the picks is a convenience only.
+    }
+  }
 
   function toggle(id: string) {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
-    setSelected(next);
+    choose(next);
   }
 
   async function post() {
@@ -278,6 +315,25 @@ export function PostOnceDialog({
           </div>
         ) : accounts.length === 0 && shownError ? null : (
           <>
+            {accounts.length > FEW_ACCOUNTS && (
+              <div className="postonce-select-row">
+                <small>{selected.size === 0 ? "Pick where to post" : `${selected.size} of ${accounts.length} selected`}</small>
+                <button
+                  type="button"
+                  className="postonce-link"
+                  disabled={busy}
+                  onClick={() =>
+                    choose(
+                      selected.size === accounts.length
+                        ? new Set()
+                        : new Set(accounts.map((account) => account.id)),
+                    )
+                  }
+                >
+                  {selected.size === accounts.length ? "Select none" : "Select all"}
+                </button>
+              </div>
+            )}
             {accounts.length > 0 ? (
               <div className="postonce-accounts">
                 {accounts.map((account) => (

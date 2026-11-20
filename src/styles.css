@@ -1729,6 +1729,8 @@ button:disabled {
 
 .postonce-modal {
   width: 480px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
 }
 
 .postonce-modal small {
@@ -1775,6 +1777,14 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.postonce-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .postonce-account {
@@ -2066,4 +2076,20 @@ button:disabled {
   gap: 10px;
   font-size: 13px;
   color: var(--color-success-text);
+}
+
+.postonce-settings-field {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.postonce-signed-in span {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 13px;
+}
+
+.postonce-signed-in .postonce-link {
+  white-space: nowrap;
 }

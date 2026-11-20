@@ -1024,12 +1024,19 @@ function App() {
                         </div>
                       </label>
                     )}
+                    <div className="postonce-settings-field">
                     <label>
                       <span>PostOnce API Key (posting)</span>
                       <input
                         value={postonceKey}
                         onChange={(event) => setPostonceKey(event.target.value.trim())}
-                        placeholder={environment?.hasPostonceKey ? "Loaded from env" : "Optional, to post clips"}
+                        placeholder={
+                          postonceSignedIn
+                            ? "Not needed, you're signed in"
+                            : environment?.hasPostonceKey
+                              ? "Loaded from env"
+                              : "Optional, to post clips"
+                        }
                         type="password"
                       />
                     </label>
@@ -1049,6 +1056,7 @@ function App() {
                         </button>
                       </div>
                     )}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
                     <button
