@@ -1,9 +1,16 @@
-use std::collections::BTreeSet;
+use std::{
+    collections::{BTreeSet, HashSet},
+    path::{Path, PathBuf},
+    process::Stdio,
+    sync::Mutex,
+    time::Duration,
+};
 
 use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
 
 use crate::models::{NormalizedTranscript, TranscriptSegment, TranscriptWord};
+use crate::platform::{background_command, output_with_timeout, path_exists};
 
 pub async fn transcribe_deepgram(audio_path: &str, api_key: &str) -> Result<NormalizedTranscript> {
     let bytes = tokio::fs::read(audio_path)
@@ -137,60 +144,198 @@ pub fn build_segments(words: &[TranscriptWord]) -> Vec<TranscriptSegment> {
     segments
 }
 
-pub fn find_python_command() -> Option<String> {
-    let candidates: &[&str] = if cfg!(windows) {
-        &["python", "py", "python3"]
+/// Shown whenever no usable local Whisper install can be found.
+pub const WHISPER_MISSING_MESSAGE: &str = "Local Whisper was not found. Install it with `python3 -m pip install -U openai-whisper` (on Windows: `py -m pip install -U openai-whisper`), then press Refresh. If your Python is somewhere unusual, set the AUTOSHORTS_PYTHON environment variable to the full path of that python executable.";
+
+/// Exits 0 only for the openai-whisper package; a different PyPI package is
+/// also called `whisper` but has no `load_model`.
+const WHISPER_IMPORT_CHECK: &str =
+    "import sys, whisper; sys.exit(0 if hasattr(whisper, 'load_model') else 3)";
+
+/// `import whisper` pulls in torch, which can take a while the first time.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(90);
+
+static WHISPER_PYTHON: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+/// True if local transcription can run, through Python or the whisper CLI.
+pub fn whisper_available() -> bool {
+    find_whisper_python().is_some() || find_whisper_cli().is_some()
+}
+
+/// Finds a Python interpreter that can import openai-whisper.
+///
+/// Checks every python on PATH (not just the first one, which on Windows is
+/// often the Microsoft Store stub) and the usual install folders, so it works
+/// for python.org, Microsoft Store, Python install manager, Homebrew, pyenv
+/// and conda installs alike.
+pub fn find_whisper_python() -> Option<PathBuf> {
+    if let Some(cached) = WHISPER_PYTHON.lock().ok().and_then(|cached| cached.clone()) {
+        return Some(cached);
+    }
+    let found = python_candidates()
+        .into_iter()
+        .find(|python| python_has_whisper(python))?;
+    if let Ok(mut cached) = WHISPER_PYTHON.lock() {
+        *cached = Some(found.clone());
+    }
+    Some(found)
+}
+
+fn python_has_whisper(python: &Path) -> bool {
+    let mut command = background_command(python);
+    command.args(["-c", WHISPER_IMPORT_CHECK]);
+    output_with_timeout(command, PROBE_TIMEOUT)
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+fn python_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    for var in ["AUTOSHORTS_PYTHON", "WHISPER_PYTHON"] {
+        if let Some(value) = std::env::var_os(var).filter(|value| !value.is_empty()) {
+            candidates.push(PathBuf::from(value));
+        }
+    }
+
+    let names: &[&str] = if cfg!(windows) {
+        &["python.exe", "python3.exe", "py.exe"]
     } else {
         &["python3", "python"]
     };
+    candidates.extend(executables_on_path(names));
 
-    for &cmd in candidates {
-        if let Ok(out) = std::process::Command::new(cmd).args(["-c", "import whisper"]).output() {
-            if out.status.success() {
-                return Some(cmd.to_string());
-            }
-        }
+    if cfg!(windows) {
+        candidates.extend(py_launcher_interpreters());
     }
-    for &cmd in candidates {
-        if std::process::Command::new(cmd).arg("--version").output().is_ok() {
-            return Some(cmd.to_string());
-        }
-    }
-    None
+    candidates.extend(
+        well_known_pythons()
+            .into_iter()
+            .filter(|candidate| path_exists(candidate)),
+    );
+
+    let mut seen = HashSet::new();
+    candidates.retain(|candidate| {
+        let key = std::fs::canonicalize(candidate).unwrap_or_else(|_| candidate.clone());
+        seen.insert(key)
+    });
+    candidates
 }
 
-pub fn whisper_cli_exists() -> bool {
-    let candidates: &[&str] = if cfg!(windows) {
-        &["whisper", "whisper.exe"]
-    } else {
-        &["whisper"]
+/// Every match for `names` in every PATH directory, in PATH order.
+fn executables_on_path(names: &[&str]) -> Vec<PathBuf> {
+    let Some(path) = std::env::var_os("PATH") else {
+        return Vec::new();
     };
-
-    for &cmd in candidates {
-        if let Ok(out) = std::process::Command::new(cmd).arg("--help").output() {
-            if out.status.success() {
-                return true;
-            }
-        }
-    }
-    false
+    std::env::split_paths(&path)
+        .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
+        .filter(|candidate| path_exists(candidate))
+        .collect()
 }
 
-pub fn whisper_python_exists() -> bool {
-    let candidates: &[&str] = if cfg!(windows) {
-        &["python", "py", "python3"]
-    } else {
-        &["python3", "python"]
+/// Interpreters the Windows `py` launcher knows about (`py -0p`).
+fn py_launcher_interpreters() -> Vec<PathBuf> {
+    let mut command = background_command("py");
+    command.arg("-0p");
+    let Some(output) = output_with_timeout(command, Duration::from_secs(15)) else {
+        return Vec::new();
     };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            // Lines look like ` -V:3.12 *   C:\Users\me\...\python.exe`.
+            let drive = line.find(":\\")?.checked_sub(1)?;
+            let candidate = PathBuf::from(line[drive..].trim());
+            path_exists(&candidate).then_some(candidate)
+        })
+        .collect()
+}
 
-    for &cmd in candidates {
-        if let Ok(out) = std::process::Command::new(cmd).args(["-c", "import whisper"]).output() {
-            if out.status.success() {
-                return true;
+fn well_known_pythons() -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let home = dirs::home_dir();
+
+    if cfg!(windows) {
+        let env_dir = |name: &str| std::env::var_os(name).map(PathBuf::from);
+        let local = env_dir("LOCALAPPDATA");
+        if let Some(local) = &local {
+            for dir in child_dirs(&local.join("Programs").join("Python")) {
+                found.push(dir.join("python.exe"));
+            }
+            // Python install manager (the default for Python 3.14+).
+            for dir in child_dirs(&local.join("Python")) {
+                found.push(dir.join("python.exe"));
+            }
+        }
+        for root in [env_dir("ProgramFiles"), Some(PathBuf::from("C:\\"))]
+            .into_iter()
+            .flatten()
+        {
+            for dir in child_dirs(&root) {
+                let is_python = dir
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_ascii_lowercase().starts_with("python"))
+                    .unwrap_or(false);
+                if is_python {
+                    found.push(dir.join("python.exe"));
+                }
+            }
+        }
+        for base in [home.clone(), local, env_dir("ProgramData")].into_iter().flatten() {
+            for conda in ["anaconda3", "miniconda3", "miniforge3"] {
+                found.push(base.join(conda).join("python.exe"));
+            }
+        }
+    } else {
+        for path in [
+            "/opt/homebrew/bin/python3",
+            "/usr/local/bin/python3",
+            "/opt/local/bin/python3",
+            "/usr/bin/python3",
+        ] {
+            found.push(PathBuf::from(path));
+        }
+        for dir in child_dirs(Path::new("/Library/Frameworks/Python.framework/Versions")) {
+            found.push(dir.join("bin").join("python3"));
+        }
+        if let Some(home) = &home {
+            found.push(home.join(".pyenv/shims/python3"));
+            for conda in ["anaconda3", "miniconda3", "miniforge3", "opt/anaconda3", "opt/miniconda3"] {
+                found.push(home.join(conda).join("bin/python3"));
             }
         }
     }
-    false
+    found
+}
+
+/// Subdirectories of `dir`, newest-looking names first.
+fn child_dirs(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut dirs: Vec<PathBuf> = entries
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| path.is_dir())
+        .collect();
+    dirs.sort();
+    dirs.reverse();
+    dirs
+}
+
+/// Finds the openai-whisper command-line tool (for example a pipx install,
+/// where no system python can import the package).
+pub fn find_whisper_cli() -> Option<PathBuf> {
+    let names: &[&str] = if cfg!(windows) { &["whisper.exe"] } else { &["whisper"] };
+    executables_on_path(names).into_iter().find(|candidate| {
+        let mut command = background_command(candidate);
+        command.arg("--help");
+        output_with_timeout(command, PROBE_TIMEOUT)
+            .map(|output| {
+                output.status.success()
+                    && String::from_utf8_lossy(&output.stdout).contains("word_timestamps")
+            })
+            .unwrap_or(false)
+    })
 }
 
 fn normalize_whisper_raw_json(raw: serde_json::Value) -> Result<NormalizedTranscript> {
@@ -247,145 +392,270 @@ fn normalize_whisper_raw_json(raw: serde_json::Value) -> Result<NormalizedTransc
     })
 }
 
-pub async fn transcribe_local(audio_path: &str, model_path: &str) -> Result<NormalizedTranscript> {
-    let audio_path = audio_path.to_string();
-    let model_path = model_path.to_string();
+const TRANSCRIPT_BEGIN: &str = "@@AUTOSHORTS_TRANSCRIPT_BEGIN@@";
+const TRANSCRIPT_END: &str = "@@AUTOSHORTS_TRANSCRIPT_END@@";
 
-    if whisper_cli_exists() {
-        let audio_path_buf = std::path::Path::new(&audio_path);
-        let audio_dir = audio_path_buf.parent().ok_or_else(|| anyhow!("Invalid audio path parent"))?;
-        let audio_stem = audio_path_buf.file_stem().ok_or_else(|| anyhow!("Invalid audio file stem"))?.to_string_lossy();
-        
-        let output_json_path = audio_dir.join(format!("{}.json", audio_stem));
-        let output_json_path_str = output_json_path.to_string_lossy().to_string();
-        let audio_dir_str = audio_dir.to_string_lossy().to_string();
-        let audio_dir_clone = audio_dir.to_path_buf();
-        let audio_stem_clone = audio_stem.to_string();
+/// The transcript comes back on stdout rather than through a file: the
+/// Microsoft Store build of Python silently redirects files it writes under
+/// AppData to a private folder, so a JSON file written there never shows up
+/// for the app ("reading output transcript JSON", issues #22, #28).
+const TRANSCRIBE_SCRIPT: &str = r#"import json
+import sys
 
-        tokio::task::spawn_blocking(move || {
-            let output = std::process::Command::new("whisper")
-                .arg(&audio_path)
-                .args(["--model", "base"])
-                .args(["--output_format", "json"])
-                .args(["--output_dir", &audio_dir_str])
-                .args(["--word_timestamps", "True"])
-                .output()
-                .context("executing whisper CLI")?;
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                return Err(anyhow!("Whisper CLI failed:\nStderr: {}\nStdout: {}", stderr, stdout));
-            }
-
-            let json_bytes = std::fs::read(&output_json_path_str).context("reading output transcript JSON from CLI")?;
-            let raw_json: serde_json::Value = serde_json::from_slice(&json_bytes).context("parsing output transcript JSON")?;
-            
-            // Clean up the output JSON file
-            let _ = std::fs::remove_file(&output_json_path_str);
-            
-            // Clean up any extra formats whisper CLI might have written (it sometimes generates them by default)
-            for ext in &["txt", "srt", "vtt", "tsv"] {
-                let extra_file = audio_dir_clone.join(format!("{}.{}", audio_stem_clone, ext));
-                if extra_file.exists() {
-                    let _ = std::fs::remove_file(extra_file);
-                }
-            }
-
-            normalize_whisper_raw_json(raw_json)
-        })
-        .await
-        .context("spawn_blocking failed")?
-    } else {
-        // Resolve the directory where the model lives. We'll put transcribe.py there.
-        let model_dir = std::path::Path::new(&model_path)
-            .parent()
-            .ok_or_else(|| anyhow!("Invalid model path"))?;
-        
-        let script_path = model_dir.join("transcribe.py");
-        if !script_path.exists() {
-            let script_content = r#"import sys
-import json
 import whisper
 
+BEGIN = "@@AUTOSHORTS_TRANSCRIPT_BEGIN@@"
+END = "@@AUTOSHORTS_TRANSCRIPT_END@@"
+
+
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: transcribe.py <audio_path> <output_json_path> [model_name]")
+    if len(sys.argv) < 2:
+        print("Usage: transcribe.py <audio_path> [model_name]", file=sys.stderr)
         sys.exit(1)
-        
+
     audio_path = sys.argv[1]
-    output_json_path = sys.argv[2]
-    model_name = sys.argv[3] if len(sys.argv) > 3 else "base"
-    
-    # Load model. Automatically uses MPS on Apple Silicon if PyTorch supports it.
+    model_name = sys.argv[2] if len(sys.argv) > 2 else "base"
+
+    # Uses MPS on Apple Silicon or CUDA when PyTorch supports it.
     model = whisper.load_model(model_name)
-    
-    # Transcribe with word-level timestamps
     result = model.transcribe(audio_path, word_timestamps=True)
-    
+    segments = result.get("segments") or []
+
     normalized = {
-        "language": result.get("language", "en"),
-        "duration": result.get("segments", [])[-1]["end"] if result.get("segments") else 0.0,
+        "language": result.get("language") or "en",
+        "duration": segments[-1]["end"] if segments else 0.0,
         "speakers": ["S1"],
         "words": [],
-        "segments": []
+        "segments": [],
     }
-    
-    for segment in result.get("segments", []):
+
+    for segment in segments:
         normalized["segments"].append({
             "start": segment["start"],
             "end": segment["end"],
             "speaker": "S1",
-            "text": segment["text"].strip()
+            "text": segment["text"].strip(),
         })
-        
         for word in segment.get("words", []):
-            cleaned_text = word["word"].strip()
             normalized["words"].append({
-                "text": cleaned_text,
+                "text": word["word"].strip(),
                 "start": word["start"],
                 "end": word["end"],
-                "speaker": "S1"
+                "speaker": "S1",
             })
-            
-    with open(output_json_path, "w", encoding="utf-8") as f:
-        json.dump(normalized, f, indent=2, ensure_ascii=False)
+
+    sys.stdout.write("\n" + BEGIN + "\n" + json.dumps(normalized, ensure_ascii=True) + "\n" + END + "\n")
+    sys.stdout.flush()
+
 
 if __name__ == "__main__":
     main()
 "#;
-            std::fs::write(&script_path, script_content).context("writing transcribe.py script")?;
+
+/// Transcribes `audio_path` with local Whisper. `work_dir` is the app's data
+/// folder, where the helper script is written.
+pub async fn transcribe_local(audio_path: &str, work_dir: &Path) -> Result<NormalizedTranscript> {
+    let audio_path = audio_path.to_string();
+    let work_dir = work_dir.to_path_buf();
+
+    tokio::task::spawn_blocking(move || {
+        if let Some(python) = find_whisper_python() {
+            return transcribe_with_python(&python, &audio_path, &work_dir);
         }
+        if let Some(cli) = find_whisper_cli() {
+            return transcribe_with_cli(&cli, &audio_path);
+        }
+        Err(anyhow!(WHISPER_MISSING_MESSAGE))
+    })
+    .await
+    .context("local Whisper task failed")?
+}
 
-        let output_json_path = model_dir.join(format!("temp_transcript_{}.json", uuid::Uuid::new_v4()));
-        let script_path_str = script_path.to_string_lossy().to_string();
-        let output_json_path_str = output_json_path.to_string_lossy().to_string();
+fn transcribe_with_python(python: &Path, audio_path: &str, work_dir: &Path) -> Result<NormalizedTranscript> {
+    std::fs::create_dir_all(work_dir)
+        .with_context(|| format!("creating {}", work_dir.display()))?;
+    // Always rewrite, so a copy left by an older app version is replaced.
+    let script_path = work_dir.join("transcribe.py");
+    std::fs::write(&script_path, TRANSCRIBE_SCRIPT)
+        .with_context(|| format!("writing {}", script_path.display()))?;
 
-        tokio::task::spawn_blocking(move || {
-            let python_bin = find_python_command().unwrap_or_else(|| "python".to_string());
-            let output = std::process::Command::new(&python_bin)
-                .arg(&script_path_str)
-                .arg(&audio_path)
-                .arg(&output_json_path_str)
-                .arg("base") // default model size
-                .output()
-                .context("executing python transcribe.py")?;
+    let output = background_command(python)
+        .arg(&script_path)
+        .arg(audio_path)
+        .arg("base")
+        .env("PYTHONIOENCODING", "utf-8")
+        .env("PYTHONUTF8", "1")
+        .stdin(Stdio::null())
+        .output()
+        .with_context(|| format!("running Whisper with {}", python.display()))?;
 
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                return Err(anyhow!("Python transcription script failed:\nStderr: {}\nStdout: {}", stderr, stdout));
-            }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !output.status.success() {
+        return Err(anyhow!(
+            "Whisper transcription failed (python: {}):\n{}",
+            python.display(),
+            tail(&stderr, 4000)
+        ));
+    }
 
-            let json_bytes = std::fs::read(&output_json_path_str).context("reading output transcript JSON")?;
-            let transcript: NormalizedTranscript = serde_json::from_slice(&json_bytes).context("parsing output transcript JSON")?;
-            
-            // Cleanup temp file
-            let _ = std::fs::remove_file(&output_json_path_str);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json = stdout
+        .rfind(TRANSCRIPT_BEGIN)
+        .map(|begin| &stdout[begin + TRANSCRIPT_BEGIN.len()..])
+        .and_then(|rest| rest.find(TRANSCRIPT_END).map(|end| rest[..end].trim()))
+        .ok_or_else(|| {
+            anyhow!(
+                "Whisper finished but returned no transcript (python: {}).\n{}",
+                python.display(),
+                tail(&stderr, 4000)
+            )
+        })?;
+    serde_json::from_str(json).context("parsing the Whisper transcript")
+}
 
-            Ok(transcript)
-        })
-        .await
-        .context("spawn_blocking failed")?
+fn transcribe_with_cli(cli: &Path, audio_path: &str) -> Result<NormalizedTranscript> {
+    let audio = Path::new(audio_path);
+    let audio_dir = audio
+        .parent()
+        .ok_or_else(|| anyhow!("Invalid audio path {audio_path}"))?;
+    let audio_stem = audio
+        .file_stem()
+        .ok_or_else(|| anyhow!("Invalid audio file name {audio_path}"))?
+        .to_string_lossy()
+        .to_string();
+    let output_json_path = audio_dir.join(format!("{audio_stem}.json"));
+
+    let output = background_command(cli)
+        .arg(audio_path)
+        .args(["--model", "base"])
+        .args(["--output_format", "json"])
+        .arg("--output_dir")
+        .arg(audio_dir)
+        .args(["--word_timestamps", "True"])
+        .env("PYTHONIOENCODING", "utf-8")
+        .stdin(Stdio::null())
+        .output()
+        .with_context(|| format!("running {}", cli.display()))?;
+
+    if !output.status.success() {
+        return Err(anyhow!(
+            "Whisper CLI failed ({}):\n{}",
+            cli.display(),
+            tail(&String::from_utf8_lossy(&output.stderr), 4000)
+        ));
+    }
+
+    let json_bytes = std::fs::read(&output_json_path).with_context(|| {
+        format!(
+            "reading output transcript JSON from CLI at {}",
+            output_json_path.display()
+        )
+    })?;
+    let raw_json: serde_json::Value =
+        serde_json::from_slice(&json_bytes).context("parsing output transcript JSON")?;
+
+    let _ = std::fs::remove_file(&output_json_path);
+    // The CLI sometimes writes extra formats too.
+    for ext in ["txt", "srt", "vtt", "tsv"] {
+        let _ = std::fs::remove_file(audio_dir.join(format!("{audio_stem}.{ext}")));
+    }
+
+    normalize_whisper_raw_json(raw_json)
+}
+
+/// The last `max_chars` characters of `text`, for readable error messages.
+fn tail(text: &str, max_chars: usize) -> &str {
+    let text = text.trim();
+    if max_chars == 0 {
+        return "";
+    }
+    match text.char_indices().rev().nth(max_chars - 1) {
+        Some((index, _)) => &text[index..],
+        None => text,
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    const FAKE_OPENAI_WHISPER: &str = r#"
+def load_model(name):
+    return _Model()
+
+
+class _Model:
+    def transcribe(self, audio_path, word_timestamps=False):
+        print("progress chatter on stdout before the transcript")
+        return {
+            "language": "en",
+            "segments": [
+                {
+                    "start": 0.0,
+                    "end": 1.5,
+                    "text": " Hello café",
+                    "words": [
+                        {"word": " Hello", "start": 0.0, "end": 0.7},
+                        {"word": " café", "start": 0.7, "end": 1.5},
+                    ],
+                },
+            ],
+        }
+"#;
+
+    /// A `python` wrapper that sees a fake `whisper` module, like an
+    /// interpreter that has openai-whisper installed.
+    fn fake_python(test_name: &str, whisper_module: &str) -> Option<(PathBuf, PathBuf)> {
+        background_command("python3").arg("--version").output().ok()?;
+        let dir = std::env::temp_dir().join(format!(
+            "autoshorts-{test_name}-{}",
+            std::process::id()
+        ));
+        let module_dir = dir.join("modules").join("whisper");
+        std::fs::create_dir_all(&module_dir).unwrap();
+        std::fs::write(module_dir.join("__init__.py"), whisper_module).unwrap();
+        let python = dir.join("python");
+        std::fs::write(
+            &python,
+            format!(
+                "#!/bin/sh\nPYTHONPATH='{}' exec python3 \"$@\"\n",
+                dir.join("modules").display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+        Some((dir, python))
+    }
+
+    #[test]
+    fn transcribes_through_python_stdout() {
+        let Some((dir, python)) = fake_python("whisper-stdout", FAKE_OPENAI_WHISPER) else {
+            return;
+        };
+        assert!(python_has_whisper(&python));
+
+        let transcript = transcribe_with_python(&python, "audio.wav", &dir).unwrap();
+        assert_eq!(transcript.segments.len(), 1);
+        assert_eq!(transcript.segments[0].text, "Hello café");
+        assert_eq!(transcript.words.len(), 2);
+        assert_eq!(transcript.words[1].text, "café");
+        assert_eq!(transcript.duration, 1.5);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ignores_unrelated_whisper_package() {
+        let Some((dir, python)) = fake_python("whisper-unrelated", "def create(): pass\n") else {
+            return;
+        };
+        assert!(!python_has_whisper(&python));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tail_keeps_the_end() {
+        assert_eq!(tail("  abcdef  ", 3), "def");
+        assert_eq!(tail("ab", 3), "ab");
     }
 }

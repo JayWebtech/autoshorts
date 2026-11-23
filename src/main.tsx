@@ -29,6 +29,12 @@ import {
 import { PostOnceConnectButton, PostOnceDialog, PostOnceSignInButton, usePostOnceAccounts, type PostableClip } from "./PostOnceDialog";
 import "./styles.css";
 
+const IS_WINDOWS = typeof navigator !== "undefined" && /windows/i.test(navigator.userAgent);
+const WHISPER_INSTALL_COMMAND = IS_WINDOWS
+  ? "py -m pip install -U openai-whisper"
+  : "python3 -m pip install -U openai-whisper";
+const WHISPER_MISSING_HINT = `Local Whisper was not detected. Install it by running "${WHISPER_INSTALL_COMMAND}" in a terminal, then press Refresh.`;
+
 type EnvironmentStatus = {
   dataDir: string;
   hasFfmpeg: boolean;
@@ -163,6 +169,9 @@ function App() {
   });
   const [geminiKey, setGeminiKey] = useState(() => {
     return localStorage.getItem("autoshorts_gemini_key") || "";
+  });
+  const [geminiModel, setGeminiModel] = useState(() => {
+    return localStorage.getItem("autoshorts_gemini_model") || "";
   });
   const [openaiKey, setOpenaiKey] = useState(() => {
     return localStorage.getItem("autoshorts_openai_key") || "";
@@ -308,6 +317,20 @@ function App() {
   useEffect(() => {
     localStorage.setItem("autoshorts_gemini_key", geminiKey);
   }, [geminiKey]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_gemini_model", geminiModel);
+  }, [geminiModel]);
+
+  const llmModelName = (): string | null => {
+    if (llmEngine === "local") return localLlmModel.trim();
+    const model =
+      llmEngine === "deepseek" ? deepseekModel :
+      llmEngine === "openrouter" ? openrouterModel :
+      llmEngine === "gemini" ? geminiModel :
+      "";
+    return model.trim() || null;
+  };
 
   useEffect(() => {
     localStorage.setItem("autoshorts_openai_key", openaiKey);
@@ -464,7 +487,7 @@ function App() {
 
     if (transcriptionEngine === "local") {
       if (!env.hasLocalWhisperModel) {
-        setError("Import successful. Local Whisper GGML model (ggml-base.bin) is missing in your models directory. Please add it to start transcription.");
+        setError(`Import successful. ${WHISPER_MISSING_HINT}`);
         return;
       }
     } else {
@@ -537,7 +560,7 @@ function App() {
         projectId,
         apiKey: activeKey || null,
         provider: llmEngine,
-        modelName: llmEngine === "local" ? localLlmModel.trim() : (llmEngine === "deepseek" ? (deepseekModel.trim() || null) : (llmEngine === "openrouter" ? (openrouterModel.trim() || null) : null)),
+        modelName: llmModelName(),
         allowDemo: false,
       });
       await refresh(projectId);
@@ -625,7 +648,7 @@ function App() {
           projectId: detail.project.id,
           apiKey: activeKey || null,
           provider: llmEngine,
-          modelName: llmEngine === "local" ? localLlmModel.trim() : (llmEngine === "deepseek" ? (deepseekModel.trim() || null) : (llmEngine === "openrouter" ? (openrouterModel.trim() || null) : null)),
+          modelName: llmModelName(),
           allowDemo,
         });
         await refresh(detail.project.id);
@@ -948,15 +971,26 @@ function App() {
                       </>
                     )}
                     {llmEngine === "gemini" && (
-                      <label>
-                        <span>Gemini API Key</span>
-                        <input
-                          value={geminiKey}
-                          onChange={(event) => setGeminiKey(event.target.value)}
-                          placeholder={environment?.hasGeminiKey ? "Loaded from env" : "Optional (Gemini API Key)"}
-                          type="password"
-                        />
-                      </label>
+                      <>
+                        <label>
+                          <span>Gemini API Key</span>
+                          <input
+                            value={geminiKey}
+                            onChange={(event) => setGeminiKey(event.target.value)}
+                            placeholder={environment?.hasGeminiKey ? "Loaded from env" : "Optional (Gemini API Key)"}
+                            type="password"
+                          />
+                        </label>
+                        <label>
+                          <span>Gemini Model</span>
+                          <input
+                            value={geminiModel}
+                            onChange={(event) => setGeminiModel(event.target.value)}
+                            placeholder="Optional (default: gemini-flash-latest)"
+                            type="text"
+                          />
+                        </label>
+                      </>
                     )}
                     {llmEngine === "openai" && (
                       <label>
@@ -1104,7 +1138,7 @@ function App() {
                   {!canTranscribe && (
                     <div className="api-warning">
                       {transcriptionEngine === "local"
-                        ? `⚠️ Local Whisper (Python package 'openai-whisper') is not installed. Run 'pip3 install openai-whisper' in your terminal.`
+                        ? `⚠️ ${WHISPER_MISSING_HINT}`
                         : "⚠️ Deepgram API Key is missing. Transcribing will not work. Please add your key in API Settings."}
                     </div>
                   )}
@@ -1628,7 +1662,7 @@ function Onboarding({
   const [copied, setCopied] = useState(false);
 
   const copyWhisperCommand = () => {
-    navigator.clipboard.writeText("pip3 install -U openai-whisper");
+    navigator.clipboard.writeText(WHISPER_INSTALL_COMMAND);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -1807,7 +1841,7 @@ function Onboarding({
                   <h4>Install Python Whisper</h4>
                   <p>Open your terminal and run the following command to install the transcription engine:</p>
                   <div className="code-block-container">
-                    <code>pip3 install -U openai-whisper</code>
+                    <code>{WHISPER_INSTALL_COMMAND}</code>
                     <button type="button" className="copy-btn" onClick={copyWhisperCommand}>
                       {copied ? <Check size={14} /> : <Copy size={14} />}
                       {copied ? "Copied!" : "Copy"}
@@ -1816,7 +1850,7 @@ function Onboarding({
                   {environment?.hasLocalWhisperModel ? (
                     <span className="step-check success"><BadgeCheck size={14} /> Whisper installed in Python!</span>
                   ) : (
-                    <span className="step-check warning">⚠️ Python package 'whisper' not detected yet. Run the command above.</span>
+                    <span className="step-check warning">⚠️ Whisper not detected yet. Run the command above; it is checked again when you continue.</span>
                   )}
                 </div>
               </div>

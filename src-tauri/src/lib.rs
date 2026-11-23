@@ -2,6 +2,7 @@ mod db;
 mod llm;
 mod media;
 mod models;
+mod platform;
 mod postonce;
 mod postonce_auth;
 mod transcription;
@@ -37,7 +38,9 @@ async fn environment_status(state: tauri::State<'_, AppState>) -> Result<Environ
         .unwrap_or_else(|_| "deepseek".to_string())
         .to_lowercase();
 
-    let has_local_whisper_model = transcription::whisper_cli_exists() || transcription::whisper_python_exists();
+    let has_local_whisper_model = tokio::task::spawn_blocking(transcription::whisper_available)
+        .await
+        .unwrap_or(false);
 
     let has_ollama = reqwest::Client::new()
         .get("http://localhost:11434")
@@ -377,16 +380,18 @@ async fn transcribe_project(
                 .map_err(to_command_error)?
         }
         "local" => {
-            let has_whisper = transcription::whisper_cli_exists() || transcription::whisper_python_exists();
+            let has_whisper = tokio::task::spawn_blocking(transcription::whisper_available)
+                .await
+                .unwrap_or(false);
             if !has_whisper {
-                return Err("Whisper is not installed. Please install it (e.g., via Homebrew 'brew install whisper-cli' or via Python 'pip3 install openai-whisper').".to_string());
+                return Err(transcription::WHISPER_MISSING_MESSAGE.to_string());
             }
             let audio_path = media::extract_audio(
                 &project.source_path,
                 &data_dir.join("projects").join(&project_id),
             )
             .map_err(to_command_error)?;
-            transcription::transcribe_local(&audio_path.to_string_lossy(), &data_dir.to_string_lossy())
+            transcription::transcribe_local(&audio_path.to_string_lossy(), &data_dir)
                 .await
                 .map_err(to_command_error)?
         }
@@ -442,6 +447,14 @@ async fn generate_candidates(
     let normalized: NormalizedTranscript =
         serde_json::from_str(&transcript.raw_json).map_err(to_command_error)?;
 
+    // With nothing to read, models invent moments that do not exist (issue #29).
+    if normalized.segments.iter().all(|segment| segment.text.trim().is_empty()) {
+        return Err(
+            "The transcript is empty: no speech was detected in this recording, so there are no moments to find."
+                .to_string(),
+        );
+    }
+
     let active_provider = provider
         .or_else(|| std::env::var("LLM_PROVIDER").ok())
         .unwrap_or_else(|| "deepseek".to_string())
@@ -468,7 +481,7 @@ async fn generate_candidates(
             let key = api_key
                 .or_else(|| std::env::var("GEMINI_API_KEY").ok())
                 .ok_or_else(|| "Set GEMINI_API_KEY or supply Gemini API Key to generate candidates.".to_string())?;
-            llm::detect_candidates_with_gemini(&normalized, &key)
+            llm::detect_candidates_with_gemini(&normalized, &key, model_name.as_deref())
                 .await
                 .map_err(to_command_error)?
         }
@@ -505,6 +518,18 @@ async fn generate_candidates(
                 .map_err(to_command_error)?
         }
     };
+
+    // Drop clips that start after the recording ends and trim ones that run past it.
+    let duration = normalized.duration;
+    let drafts: Vec<_> = drafts
+        .into_iter()
+        .filter_map(|mut draft| {
+            if duration > 0.0 {
+                draft.end = draft.end.min(duration);
+            }
+            (draft.start >= 0.0 && draft.end > draft.start).then_some(draft)
+        })
+        .collect();
 
     if drafts.is_empty() {
         return Err("No viable clip candidates were returned for this transcript.".to_string());
@@ -546,9 +571,15 @@ async fn render_flat_clip_for_candidate(
             .update_clip_for_candidate(&candidate_id, "cutting", None, None, None)
             .map_err(to_command_error)?;
 
-        let output_path = documents_project_dir(&project)?
-            .join("clips")
-            .join(format!("clip-{:02}_flat.mp4", candidate.rank));
+        // Clips go to Documents/AutoShorts. If that folder cannot be created (for
+        // example Windows Controlled Folder Access or an unavailable OneDrive
+        // Documents folder), keep them in the app's data folder instead.
+        let clips_dir = documents_project_dir(&project)
+            .ok()
+            .map(|dir| dir.join("clips"))
+            .filter(|dir| std::fs::create_dir_all(dir).is_ok())
+            .unwrap_or_else(|| data_dir.join("projects").join(&project.id).join("clips"));
+        let output_path = clips_dir.join(format!("clip-{:02}_flat.mp4", candidate.rank));
 
         let mut srt_path = None;
         let mut drawtext_filters = None;
@@ -713,6 +744,7 @@ fn rename_project(
 
 pub fn run() {
     let _ = dotenvy::dotenv();
+    platform::augment_path_for_gui_launch();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -926,8 +958,10 @@ fn demo_transcript() -> NormalizedTranscript {
     }
 }
 
+/// `{:#}` prints an anyhow error's whole chain ("creating clip folder C:\...: The
+/// system cannot find the file specified") instead of only the outermost message.
 fn to_command_error(error: impl std::fmt::Display) -> String {
-    error.to_string()
+    format!("{error:#}")
 }
 
 fn generate_srt(words: &[TranscriptWord], start_sec: f64, end_sec: f64) -> String {
@@ -978,6 +1012,24 @@ fn format_srt_time(start: f64, end: f64) -> String {
     format!("{} --> {}", format_time(start), format_time(end))
 }
 
+/// Escapes a value (such as a font path) for use as a filter option inside an
+/// ffmpeg filtergraph. ffmpeg unescapes it twice: first when it splits the
+/// filtergraph, then when it splits the filter's `key=value:key=value` options.
+/// Quoting only covers the first pass, so a Windows drive-letter colon (`C:`)
+/// must also be backslash-escaped or it ends the option early (issues #41, #54).
+fn escape_ffmpeg_filter_value(value: &str) -> String {
+    let mut option_level = String::with_capacity(value.len() + 8);
+    for ch in value.chars() {
+        if matches!(ch, '\\' | '\'' | ':') {
+            option_level.push('\\');
+        }
+        option_level.push(ch);
+    }
+    // Inside single quotes the filtergraph parser keeps everything literal, so
+    // only a quote itself needs the close-escape-reopen treatment.
+    format!("'{}'", option_level.replace('\'', "'\\''"))
+}
+
 fn build_drawtext_filters(
     words: &[TranscriptWord],
     start_sec: f64,
@@ -1025,8 +1077,7 @@ fn build_drawtext_filters(
     for path in &font_paths {
         if std::path::Path::new(path).exists() {
             let normalized_path = path.replace('\\', "/");
-            let escaped_path = normalized_path.replace('\'', "'\\''");
-            font_option = format!("fontfile='{}':", escaped_path);
+            font_option = format!("fontfile={}:", escape_ffmpeg_filter_value(&normalized_path));
             break;
         }
     }
@@ -1153,7 +1204,23 @@ mod tests {
 
         if result.contains("fontfile=") {
             assert!(result.contains("fontfile='"));
-            assert!(!result.contains("\\:"));
         }
+    }
+
+    #[test]
+    fn test_escape_ffmpeg_filter_value_windows_drive_letter() {
+        assert_eq!(
+            escape_ffmpeg_filter_value("C:/Windows/Fonts/SegoeUIb.ttf"),
+            "'C\\:/Windows/Fonts/SegoeUIb.ttf'"
+        );
+    }
+
+    #[test]
+    fn test_escape_ffmpeg_filter_value_plain_and_quoted_paths() {
+        assert_eq!(
+            escape_ffmpeg_filter_value("/System/Library/Fonts/Avenir Next.ttc"),
+            "'/System/Library/Fonts/Avenir Next.ttc'"
+        );
+        assert_eq!(escape_ffmpeg_filter_value("a'b"), "'a\\'\\''b'");
     }
 }

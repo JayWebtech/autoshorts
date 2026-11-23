@@ -120,6 +120,7 @@ struct GeminiPart {
 pub async fn detect_candidates_with_gemini(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    model_name: Option<&str>,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
@@ -135,14 +136,23 @@ Transcript:
 {segments}"
     );
 
-    let model = std::env::var("GEMINI_MODEL").unwrap_or_else(|_| "gemini-2.5-flash".to_string());
+    // `gemini-flash-latest` is Google's alias for the current Flash model, so the
+    // default keeps working when older versions are shut down (issue #46).
+    let model = model_name
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+        .map(str::to_string)
+        .or_else(|| std::env::var("GEMINI_MODEL").ok().filter(|m| !m.trim().is_empty()))
+        .unwrap_or_else(|| "gemini-flash-latest".to_string());
+    let model = model.trim().trim_start_matches("models/").to_string();
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-        model, api_key
+        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
+        model
     );
 
     let response = reqwest::Client::new()
         .post(&url)
+        .header("x-goog-api-key", api_key)
         .json(&json!({
             "contents": [
                 {
@@ -165,7 +175,7 @@ Transcript:
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!("Gemini request failed ({status}): {body}"));
+        return Err(anyhow!("Gemini request failed for model \"{model}\" ({status}): {body}"));
     }
 
     let res_body: GeminiResponse = response.json().await.context("parsing Gemini response")?;
@@ -420,8 +430,11 @@ Transcript:
 {segments}"
     );
 
-    let model =
-        std::env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| "claude-3-5-sonnet-latest".to_string());
+    // The old default (claude-3-5-sonnet-latest) has been retired by Anthropic.
+    let model = std::env::var("ANTHROPIC_MODEL")
+        .ok()
+        .filter(|m| !m.trim().is_empty())
+        .unwrap_or_else(|| "claude-sonnet-5-5".to_string());
 
     let response = reqwest::Client::new()
         .post("https://api.anthropic.com/v1/messages")
@@ -429,7 +442,9 @@ Transcript:
         .header("anthropic-version", "2023-06-01")
         .json(&json!({
             "model": model,
-            "max_tokens": 1800,
+            // Up to 25 candidates with hooks and rationales needs more than 1800
+            // tokens; a cut-off reply is invalid JSON.
+            "max_tokens": 8192,
             "temperature": 0.2,
             "messages": [
                 ClaudeMessage {
