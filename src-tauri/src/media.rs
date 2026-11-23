@@ -1,15 +1,12 @@
-use std::{
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
 
-use crate::models::MediaProbe;
+use crate::{models::MediaProbe, platform::background_command};
 
 pub fn command_exists(name: &str) -> bool {
-    Command::new(name).arg("-version").output().is_ok()
+    background_command(name).arg("-version").output().is_ok()
 }
 
 pub fn probe_media(path: &str) -> Result<MediaProbe> {
@@ -17,7 +14,7 @@ pub fn probe_media(path: &str) -> Result<MediaProbe> {
         return Err(anyhow!("ffprobe is not installed or not available on PATH"));
     }
 
-    let output = Command::new("ffprobe")
+    let output = background_command("ffprobe")
         .args([
             "-v",
             "error",
@@ -82,10 +79,11 @@ pub fn extract_audio(source_path: &str, project_dir: &Path) -> Result<PathBuf> {
         return Err(anyhow!("ffmpeg is not installed or not available on PATH"));
     }
 
-    std::fs::create_dir_all(project_dir)?;
+    std::fs::create_dir_all(project_dir)
+        .with_context(|| format!("creating project folder {}", project_dir.display()))?;
     let output_path = project_dir.join("transcription_audio.wav");
 
-    let output = Command::new("ffmpeg")
+    let output = background_command("ffmpeg")
         .args(["-y", "-i", source_path, "-vn", "-ac", "1", "-ar", "16000"])
         .arg(&output_path)
         .output()
@@ -113,7 +111,8 @@ pub fn render_flat_clip(
     }
 
     if let Some(parent) = output_path.parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating clip folder {}", parent.display()))?;
     }
 
     let start = format!("{start_sec:.3}");
@@ -123,7 +122,7 @@ pub fn render_flat_clip(
     let probe = probe_media(source_path).ok();
     let has_video = probe.map(|p| p.has_video).unwrap_or(false);
 
-    let mut cmd = Command::new("ffmpeg");
+    let mut cmd = background_command("ffmpeg");
     cmd.args(["-y", "-ss", &start, "-i", source_path, "-t", &duration]);
 
     if has_video {

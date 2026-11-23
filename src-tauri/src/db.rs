@@ -374,7 +374,7 @@ impl Database {
              SET status = ?1,
                  output_path = COALESCE(?2, output_path),
                  caption_ass_path = COALESCE(?3, caption_ass_path),
-                 render_log = COALESCE(?4, render_log)
+                 render_log = CASE WHEN ?1 = 'cutting' THEN NULL ELSE COALESCE(?4, render_log) END
              WHERE candidate_id = ?5",
             params![status, output_path, caption_ass_path, render_log, candidate_id],
         )?;
