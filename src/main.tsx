@@ -161,6 +161,9 @@ function App() {
   const [anthropicKey, setAnthropicKey] = useState(() => {
     return localStorage.getItem("autoshorts_anthropic_key") || "";
   });
+  const [claudeModel, setClaudeModel] = useState(() => {
+    return localStorage.getItem("autoshorts_claude_model") || "";
+  });
   const [deepseekKey, setDeepseekKey] = useState(() => {
     return localStorage.getItem("autoshorts_deepseek_key") || "";
   });
@@ -176,11 +179,17 @@ function App() {
   const [openaiKey, setOpenaiKey] = useState(() => {
     return localStorage.getItem("autoshorts_openai_key") || "";
   });
+  const [openaiModel, setOpenaiModel] = useState(() => {
+    return localStorage.getItem("autoshorts_openai_model") || "";
+  });
   const [openrouterKey, setOpenrouterKey] = useState(() => {
     return localStorage.getItem("autoshorts_openrouter_key") || "";
   });
   const [groqKey, setGroqKey] = useState(() => {
     return localStorage.getItem("autoshorts_groq_key") || "";
+  });
+  const [groqModel, setGroqModel] = useState(() => {
+    return localStorage.getItem("autoshorts_groq_model") || "";
   });
   const [openrouterModel, setOpenrouterModel] = useState(() => {
     return localStorage.getItem("autoshorts_openrouter_model") || "";
@@ -328,6 +337,9 @@ function App() {
       llmEngine === "deepseek" ? deepseekModel :
       llmEngine === "openrouter" ? openrouterModel :
       llmEngine === "gemini" ? geminiModel :
+      llmEngine === "claude" ? claudeModel :
+      llmEngine === "openai" ? openaiModel :
+      llmEngine === "groq" ? groqModel :
       "";
     return model.trim() || null;
   };
@@ -347,6 +359,18 @@ function App() {
   useEffect(() => {
     localStorage.setItem("autoshorts_openrouter_model", openrouterModel);
   }, [openrouterModel]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_claude_model", claudeModel);
+  }, [claudeModel]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_openai_model", openaiModel);
+  }, [openaiModel]);
+
+  useEffect(() => {
+    localStorage.setItem("autoshorts_groq_model", groqModel);
+  }, [groqModel]);
 
   useEffect(() => {
     localStorage.setItem("autoshorts_postonce_key", postonceKey);
@@ -938,15 +962,26 @@ function App() {
                       </label>
                     )}
                     {llmEngine === "claude" && (
-                      <label>
-                        <span>Claude API Key</span>
-                        <input
-                          value={anthropicKey}
-                          onChange={(event) => setAnthropicKey(event.target.value)}
-                          placeholder={environment?.hasAnthropicKey ? "Loaded from env" : "Optional (Claude API Key)"}
-                          type="password"
-                        />
-                      </label>
+                      <>
+                        <label>
+                          <span>Claude API Key</span>
+                          <input
+                            value={anthropicKey}
+                            onChange={(event) => setAnthropicKey(event.target.value)}
+                            placeholder={environment?.hasAnthropicKey ? "Loaded from env" : "Optional (Claude API Key)"}
+                            type="password"
+                          />
+                        </label>
+                        <label>
+                          <span>Claude Model</span>
+                          <input
+                            value={claudeModel}
+                            onChange={(event) => setClaudeModel(event.target.value)}
+                            placeholder="Optional (default: claude-sonnet-5-5)"
+                            type="text"
+                          />
+                        </label>
+                      </>
                     )}
                     {llmEngine === "deepseek" && (
                       <>
@@ -964,7 +999,7 @@ function App() {
                           <input
                             value={deepseekModel}
                             onChange={(event) => setDeepseekModel(event.target.value)}
-                            placeholder="Optional (e.g. deepseek-chat, deepseek-v4-pro)"
+                            placeholder="Optional (default: deepseek-v4-flash, or deepseek-v4-pro)"
                             type="text"
                           />
                         </label>
@@ -993,15 +1028,26 @@ function App() {
                       </>
                     )}
                     {llmEngine === "openai" && (
-                      <label>
-                        <span>OpenAI API Key</span>
-                        <input
-                          value={openaiKey}
-                          onChange={(event) => setOpenaiKey(event.target.value)}
-                          placeholder={environment?.hasOpenaiKey ? "Loaded from env" : "Optional (OpenAI API Key)"}
-                          type="password"
-                        />
-                      </label>
+                      <>
+                        <label>
+                          <span>OpenAI API Key</span>
+                          <input
+                            value={openaiKey}
+                            onChange={(event) => setOpenaiKey(event.target.value)}
+                            placeholder={environment?.hasOpenaiKey ? "Loaded from env" : "Optional (OpenAI API Key)"}
+                            type="password"
+                          />
+                        </label>
+                        <label>
+                          <span>OpenAI Model</span>
+                          <input
+                            value={openaiModel}
+                            onChange={(event) => setOpenaiModel(event.target.value)}
+                            placeholder="Optional (default: gpt-4o-mini)"
+                            type="text"
+                          />
+                        </label>
+                      </>
                     )}
                     {llmEngine === "openrouter" && (
                       <>
@@ -1026,15 +1072,26 @@ function App() {
                       </>
                     )}
                     {llmEngine === "groq" && (
-                      <label>
-                        <span>Groq API Key</span>
-                        <input
-                          value={groqKey}
-                          onChange={(event) => setGroqKey(event.target.value)}
-                          placeholder={environment?.hasGroqKey ? "Loaded from env" : "Optional (Groq API Key)"}
-                          type="password"
-                        />
-                      </label>
+                      <>
+                        <label>
+                          <span>Groq API Key</span>
+                          <input
+                            value={groqKey}
+                            onChange={(event) => setGroqKey(event.target.value)}
+                            placeholder={environment?.hasGroqKey ? "Loaded from env" : "Optional (Groq API Key)"}
+                            type="password"
+                          />
+                        </label>
+                        <label>
+                          <span>Groq Model</span>
+                          <input
+                            value={groqModel}
+                            onChange={(event) => setGroqModel(event.target.value)}
+                            placeholder="Optional (default: openai/gpt-oss-120b)"
+                            type="text"
+                          />
+                        </label>
+                      </>
                     )}
 
                     {llmEngine === "local" && (
