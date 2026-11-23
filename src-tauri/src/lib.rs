@@ -465,7 +465,7 @@ async fn generate_candidates(
             let key = api_key
                 .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
                 .ok_or_else(|| "Set ANTHROPIC_API_KEY or supply Claude API Key to generate candidates.".to_string())?;
-            llm::detect_candidates_with_claude(&normalized, &key)
+            llm::detect_candidates_with_claude(&normalized, &key, model_name.as_deref())
                 .await
                 .map_err(to_command_error)?
         }
@@ -489,7 +489,7 @@ async fn generate_candidates(
             let key = api_key
                 .or_else(|| std::env::var("OPENAI_API_KEY").ok())
                 .ok_or_else(|| "Set OPENAI_API_KEY or supply OpenAI API Key to generate candidates.".to_string())?;
-            llm::detect_candidates_with_openai(&normalized, &key)
+            llm::detect_candidates_with_openai(&normalized, &key, model_name.as_deref())
                 .await
                 .map_err(to_command_error)?
         }
@@ -505,7 +505,7 @@ async fn generate_candidates(
             let key = api_key
                 .or_else(|| std::env::var("GROQ_API_KEY").ok())
                 .ok_or_else(|| "Set GROQ_API_KEY or supply Groq API Key to generate candidates.".to_string())?;
-            llm::detect_candidates_with_groq(&normalized, &key)
+            llm::detect_candidates_with_groq(&normalized, &key, model_name.as_deref())
                 .await
                 .map_err(to_command_error)?
         }

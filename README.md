@@ -120,13 +120,14 @@ When you first launch the application, you will be greeted by an **Onboarding Wi
 ### ⚙️ Modifying Settings & Resetting Onboarding
 
 * **Update Credentials**: Click the **API Settings** gear icon in the top right of your app dashboard to switch engines, select different local models, or update API keys.
+* **Change the AI model**: Every cloud provider has an optional **Model** field in API Settings. Leave it blank to use the default (DeepSeek `deepseek-v4-flash`, Claude `claude-sonnet-5-5`, Gemini `gemini-flash-latest`, OpenAI `gpt-4o-mini`, Groq `openai/gpt-oss-120b`), or type another model name if a provider retires the default.
 * **Reset Onboarding**: If you want to switch from Cloud to Offline (or vice-versa) and start setup from scratch, click the **Reset App Configuration & Onboarding** button at the bottom of the API Settings panel.
 
 > [!TIP]
 > **LLM Provider Recommendation (Local vs. Cloud)**:
 > - **Local Models (Ollama)**: While AutoShorts supports fully offline moments analysis via local Ollama models (like LLaMA 3.2 3B or Qwen 2.5 3B/7B), **local models are generally not recommended for viral moment detection**. Smaller 3B/7B models lack the context reasoning and mathematical capabilities needed to evaluate long transcripts and calculate accurate segment timestamps (often outputting fragments that are too short).
-> - **DeepSeek (Highly Recommended)**: We strongly suggest using **DeepSeek** for moment detection. It offers top-tier reasoning capabilities (matching GPT-4/Claude 3.5 Sonnet) at a **fraction of a cent per run** (under $0.001 per transcript). You can get an API key instantly at [platform.deepseek.com](https://platform.deepseek.com).
-> - **Claude (Premium Option)**: Claude 3.5 Sonnet provides the absolute best hooks copywriting and emotional resonance, but is slightly more expensive than DeepSeek (typically $0.01 – $0.05 per run).
+> - **DeepSeek (Highly Recommended)**: We strongly suggest using **DeepSeek** for moment detection. It offers top-tier reasoning capabilities (comparable to much more expensive frontier models) at a **fraction of a cent per run** (under $0.001 per transcript). You can get an API key instantly at [platform.deepseek.com](https://platform.deepseek.com).
+> - **Claude (Premium Option)**: Claude provides the absolute best hooks copywriting and emotional resonance, but is slightly more expensive than DeepSeek (typically $0.01 – $0.05 per run).
 
 ---
 

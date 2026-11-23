@@ -49,12 +49,8 @@ Transcript:
 {segments}"
     );
 
-    let default_model = "deepseek-chat".to_string();
-    let model = model_name
-        .filter(|m| !m.trim().is_empty())
-        .map(|m| m.trim().to_string())
-        .or_else(|| std::env::var("DEEPSEEK_MODEL").ok().filter(|m| !m.trim().is_empty()))
-        .unwrap_or(default_model);
+    // `deepseek-chat` was retired on 2026-07-24 and now returns 400 (issue #33).
+    let model = pick_model(model_name, "DEEPSEEK_MODEL", "deepseek-v4-flash");
 
     let response = reqwest::Client::new()
         .post("https://api.deepseek.com/chat/completions")
@@ -79,7 +75,7 @@ Transcript:
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!("DeepSeek request failed ({status}): {body}"));
+        return Err(anyhow!("DeepSeek request failed for model \"{model}\" ({status}): {body}"));
     }
 
     let res_body: DeepseekResponse = response.json().await.context("parsing DeepSeek response")?;
@@ -138,13 +134,8 @@ Transcript:
 
     // `gemini-flash-latest` is Google's alias for the current Flash model, so the
     // default keeps working when older versions are shut down (issue #46).
-    let model = model_name
-        .map(str::trim)
-        .filter(|m| !m.is_empty())
-        .map(str::to_string)
-        .or_else(|| std::env::var("GEMINI_MODEL").ok().filter(|m| !m.trim().is_empty()))
-        .unwrap_or_else(|| "gemini-flash-latest".to_string());
-    let model = model.trim().trim_start_matches("models/").to_string();
+    let model = pick_model(model_name, "GEMINI_MODEL", "gemini-flash-latest");
+    let model = model.trim_start_matches("models/").to_string();
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
         model
@@ -212,6 +203,7 @@ struct ChatCompletionMessage {
 pub async fn detect_candidates_with_openai(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    model_name: Option<&str>,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
@@ -227,7 +219,7 @@ Transcript:
 {segments}"
     );
 
-    let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
+    let model = pick_model(model_name, "OPENAI_MODEL", "gpt-4o-mini");
 
     let response = reqwest::Client::new()
         .post("https://api.openai.com/v1/chat/completions")
@@ -252,7 +244,7 @@ Transcript:
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!("OpenAI request failed ({status}): {body}"));
+        return Err(anyhow!("OpenAI request failed for model \"{model}\" ({status}): {body}"));
     }
 
     let res_body: ChatCompletionResponse =
@@ -290,12 +282,7 @@ Transcript:
 {segments}"
     );
 
-    let default_model = "google/gemini-2.5-flash".to_string();
-    let model = model_name
-        .filter(|m| !m.trim().is_empty())
-        .map(|m| m.trim().to_string())
-        .or_else(|| std::env::var("OPENROUTER_MODEL").ok().filter(|m| !m.trim().is_empty()))
-        .unwrap_or(default_model);
+    let model = pick_model(model_name, "OPENROUTER_MODEL", "google/gemini-2.5-flash");
 
     let response = reqwest::Client::new()
         .post("https://openrouter.ai/api/v1/chat/completions")
@@ -320,7 +307,7 @@ Transcript:
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!("OpenRouter request failed ({status}): {body}"));
+        return Err(anyhow!("OpenRouter request failed for model \"{model}\" ({status}): {body}"));
     }
 
     let res_body: ChatCompletionResponse = response
@@ -344,6 +331,7 @@ Transcript:
 pub async fn detect_candidates_with_groq(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    model_name: Option<&str>,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
@@ -359,8 +347,8 @@ Transcript:
 {segments}"
     );
 
-    let model =
-        std::env::var("GROQ_MODEL").unwrap_or_else(|_| "llama-3.3-70b-versatile".to_string());
+    // Groq shut down llama-3.3-70b-versatile on 2026-08-16; this is its recommended replacement.
+    let model = pick_model(model_name, "GROQ_MODEL", "openai/gpt-oss-120b");
 
     let response = reqwest::Client::new()
         .post("https://api.groq.com/openai/v1/chat/completions")
@@ -385,7 +373,7 @@ Transcript:
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!("Groq request failed ({status}): {body}"));
+        return Err(anyhow!("Groq request failed for model \"{model}\" ({status}): {body}"));
     }
 
     let res_body: ChatCompletionResponse = response
@@ -415,6 +403,7 @@ struct ClaudeMessage<'a> {
 pub async fn detect_candidates_with_claude(
     transcript: &NormalizedTranscript,
     api_key: &str,
+    model_name: Option<&str>,
 ) -> Result<Vec<CandidateDraft>> {
     let segments = compact_segments(&transcript.segments);
     let prompt = format!(
@@ -430,11 +419,8 @@ Transcript:
 {segments}"
     );
 
-    // The old default (claude-3-5-sonnet-latest) has been retired by Anthropic.
-    let model = std::env::var("ANTHROPIC_MODEL")
-        .ok()
-        .filter(|m| !m.trim().is_empty())
-        .unwrap_or_else(|| "claude-sonnet-5-5".to_string());
+    // The old default (claude-3-5-sonnet-latest) has been retired (issue #58).
+    let model = pick_model(model_name, "ANTHROPIC_MODEL", "claude-sonnet-5-5");
 
     let response = reqwest::Client::new()
         .post("https://api.anthropic.com/v1/messages")
@@ -460,7 +446,7 @@ Transcript:
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!("Claude request failed ({status}): {body}"));
+        return Err(anyhow!("Claude request failed for model \"{model}\" ({status}): {body}"));
     }
 
     let message: AnthropicMessage = response.json().await.context("parsing Claude response")?;
@@ -565,6 +551,23 @@ Ensure the 'start' and 'end' values correspond to actual timestamps in the trans
         30.0
     };
     parse_candidate_json(&res_body.message.content, min_duration)
+}
+
+/// The model chosen in API Settings, else the provider's environment variable,
+/// else `default`. Providers retire models often (issues #33, #46, #58), so the
+/// user can always switch without waiting for a new release.
+fn pick_model(model_name: Option<&str>, env_var: &str, default: &str) -> String {
+    model_name
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            std::env::var(env_var)
+                .ok()
+                .map(|model| model.trim().to_string())
+                .filter(|model| !model.is_empty())
+        })
+        .unwrap_or_else(|| default.to_string())
 }
 
 fn compact_segments(segments: &[TranscriptSegment]) -> String {
@@ -734,4 +737,17 @@ fn parse_candidate_json(text: &str, min_duration: f64) -> Result<Vec<CandidateDr
     candidates.sort_by(|a, b| b.score.total_cmp(&a.score));
     candidates.truncate(10);
     Ok(candidates)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pick_model_prefers_the_settings_value_then_the_default() {
+        const UNSET: &str = "AUTOSHORTS_TEST_MODEL_NEVER_SET";
+        assert_eq!(pick_model(Some("  deepseek-v4-pro "), UNSET, "fallback"), "deepseek-v4-pro");
+        assert_eq!(pick_model(Some("   "), UNSET, "fallback"), "fallback");
+        assert_eq!(pick_model(None, UNSET, "fallback"), "fallback");
+    }
 }
